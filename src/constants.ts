@@ -3,4 +3,4 @@ export const CIDADES_SP = Array.from(new Set([
 ])).sort();
 
 export const WHATSAPP_NUMBER = "5511947945451";
-export const WHATSAPP_MESSAGE = "Olá Deputado Rafael Saraiva! Quero saber assim que o seu novo site estiver pronto!";
+export const WHATSAPP_MESSAGE = "Olá Deputado Rafael Saraiva! Eu quero apoiar você na luta pelos animais!";
