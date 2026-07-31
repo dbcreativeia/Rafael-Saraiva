@@ -64,17 +64,6 @@ function LandingPage() {
     }
   };
 
-  const handleAdesivoClick = () => {
-    const eventId = generateEventId();
-    if (typeof window !== 'undefined') {
-      if (window.fbq) window.fbq('trackCustom', 'Click_Adesivo', {}, { eventID: eventId });
-      if (window.gtag) window.gtag('event', 'click_adesivo', { event_category: 'engagement', event_label: 'Adesivo Button' });
-    }
-    sendCAPIEvent('Click_Adesivo', eventId);
-    
-    window.open('https://gentelegal.rafaelsaraivasp.com.br', '_blank');
-  };
-
   const handleElpaClick = () => {
     const eventId = generateEventId();
     if (typeof window !== 'undefined') {
@@ -157,42 +146,18 @@ function LandingPage() {
               transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
               className="flex flex-col gap-6 md:gap-8 w-full max-w-md lg:max-w-lg relative z-20"
             >
-              {/* Novo botão: Gente Legal não Maltrata Animal */}
+              {/* Botão Destaque: Minha cidade protege os animais? */}
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
-                <button
-                  onClick={handleAdesivoClick}
-                  className="relative w-full bg-white text-dark rounded-2xl flex overflow-hidden transition-all transform hover:-translate-y-1 shadow-xl border-2 border-red-500 group-hover:border-red-400"
-                >
-                  <div className="w-[120px] sm:w-[140px] md:w-[150px] lg:w-[170px] shrink-0 border-r border-gray-100 flex p-3 md:p-4 bg-gray-50 items-center justify-center">
-                    <img 
-                      src="https://lh3.googleusercontent.com/d/12zdLm_zjNUb1w1GUlf8LZ05uFsN3zt_9" 
-                      alt="Adesivo"
-                      className="w-full h-auto object-contain rounded-lg drop-shadow-sm transition-transform group-hover:scale-105"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                  <div className="flex-1 p-4 md:p-5 flex flex-col items-start justify-center text-left bg-white">
-                    <h3 className="font-black text-base sm:text-lg lg:text-xl uppercase tracking-wider leading-tight text-red-600 mb-1.5 lg:mb-2">
-                      Gente Legal Não Maltrata Animal
-                    </h3>
-                    <div className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-bold bg-red-600 text-white px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm">
-                      <Heart className="w-3 h-3 fill-current shrink-0" />
-                      Solicite seu adesivo
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              {/* Botão: Minha cidade protege os animais? */}
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-white/40 rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
+                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-50 group-hover:opacity-70 transition duration-500"></div>
                 <Link
                   to="/codigoanimal"
-                  className="relative w-full bg-white hover:bg-gray-50 text-dark font-black py-4 md:py-5 px-6 rounded-2xl flex items-center justify-center gap-3 transition-all transform hover:-translate-y-1 shadow-xl text-base md:text-xl uppercase tracking-wider border border-gray-200"
+                  className="relative w-full bg-gradient-to-r from-primary to-secondary text-white font-black py-6 md:py-8 px-6 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all transform hover:-translate-y-1 shadow-2xl text-xl md:text-2xl uppercase tracking-wider border border-white/20 text-center leading-tight"
                 >
-                  <BookOpen className="w-6 h-6 md:w-7 md:h-7 text-primary" />
-                  Minha cidade protege os animais?
+                  <BookOpen className="w-10 h-10 md:w-12 md:h-12 text-white mb-1 drop-shadow-md" />
+                  <span>Minha cidade protege os animais?</span>
+                  <span className="text-sm md:text-base font-bold text-white/90 normal-case tracking-normal drop-shadow-sm mt-1">
+                    Descubra agora e faça a diferença
+                  </span>
                 </Link>
               </div>
 
