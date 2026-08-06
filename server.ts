@@ -17,6 +17,7 @@ async function startServer() {
   const citizensData: any[] = [];
   const petitionsData: any[] = [];
   const contraMausTratosData: any[] = [];
+  const jogoScoresData: any[] = [];
 
   let db: any = null;
   // Initialize DB in the background without blocking server startup
@@ -172,6 +173,110 @@ async function startServer() {
     const idx = citizensData.findIndex(c => c.id === id);
     if (idx !== -1) citizensData.splice(idx, 1);
     res.json({ success: true });
+  });
+
+
+  // Jogo Users
+  app.post('/api/jogo/register', async (req, res) => {
+    const { nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado } = req.body;
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    if (db) {
+      try {
+        await db.query(
+          'INSERT INTO jogo_users (id, nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado]
+        );
+        return res.json({ success: true, data: { id, nomeCompleto, usuario, email, whatsapp, cep, cidade, estado } });
+      } catch (err) {
+        console.error(err);
+        return res.status(400).json({ error: "Usuário já existe ou erro no DB" });
+      }
+    }
+    return res.status(500).json({ error: "DB offline" });
+  });
+
+  app.post('/api/jogo/login', async (req, res) => {
+    const { usuario, senha } = req.body;
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM jogo_users WHERE usuario = ? AND senha = ?', [usuario, senha]);
+        if (rows.length > 0) {
+          const user = rows[0];
+          delete user.senha; // hide password
+          return res.json({ success: true, data: user });
+        } else {
+          return res.status(401).json({ error: "Credenciais inválidas" });
+        }
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    return res.status(500).json({ error: "DB offline" });
+  });
+
+  app.get('/api/jogo/users', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM jogo_users ORDER BY createdAt DESC');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    return res.json([]);
+  });
+
+  app.delete('/api/jogo/users/:id', async (req, res) => {
+    if (db) {
+      try {
+        const [users] = await db.query('SELECT usuario FROM jogo_users WHERE id = ?', [req.params.id]);
+        if (users && users.length > 0) {
+          const usuario = users[0].usuario;
+          await db.query('DELETE FROM jogo_scores WHERE usuario = ?', [usuario]);
+        }
+        await db.query('DELETE FROM jogo_users WHERE id = ?', [req.params.id]);
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    return res.json({ success: true });
+  });
+
+  // API routing for Jogo
+  app.get('/api/jogo/scores', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM jogo_scores ORDER BY score DESC LIMIT 100');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const sorted = [...jogoScoresData].sort((a, b) => b.score - a.score).slice(0, 100);
+    res.json(sorted);
+  });
+
+  app.post('/api/jogo/scores', async (req, res) => {
+    const { nome, cidade, score, fase } = req.body;
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    const createdAt = new Date().toISOString();
+    
+    if (db) {
+      try {
+        await db.query(
+          'INSERT INTO jogo_scores (id, nome, cidade, score, fase, createdAt, usuario) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [id, req.body.nome, req.body.cidade, req.body.score, req.body.fase, createdAt, req.body.usuario]
+        );
+        return res.json({ success: true, data: { id, nome, cidade, score, fase, createdAt } });
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const newScore = { id, nome, cidade, score, fase, createdAt };
+    jogoScoresData.push(newScore);
+    res.json({ success: true, data: newScore });
   });
 
   // API routing for cities

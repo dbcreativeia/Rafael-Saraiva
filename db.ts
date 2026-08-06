@@ -59,6 +59,7 @@ export async function getDbConnection() {
         bairro VARCHAR(255),
         cidade VARCHAR(255),
         estado VARCHAR(2),
+        estado VARCHAR(2),
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -97,6 +98,31 @@ export async function getDbConnection() {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS jogo_users (
+        id VARCHAR(255) PRIMARY KEY,
+        nomeCompleto VARCHAR(255) NOT NULL,
+        usuario VARCHAR(255) NOT NULL UNIQUE,
+        senha VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        whatsapp VARCHAR(255),
+        cep VARCHAR(20),
+        cidade VARCHAR(255),
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS jogo_scores (
+        id VARCHAR(255) PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        cidade VARCHAR(255) NOT NULL,
+        usuario VARCHAR(255),
+        score INT NOT NULL,
+        fase INT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     console.log("Conectado ao MySQL com sucesso!");
     return pool;
   } catch (err) {

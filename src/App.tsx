@@ -11,6 +11,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { CodigoAnimal } from './components/CodigoAnimal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ContraMausTratos } from './components/ContraMausTratos';
+import { Jogo } from './components/Jogo';
 
 import { trackEvent, generateEventId, sendCAPIEvent } from './analytics';
 
@@ -267,6 +268,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/codigoanimal" element={<CodigoAnimal />} />
         <Route path="/contramaustratos" element={<ContraMausTratos />} />
+        <Route path="/jogo" element={<Jogo />} />
         <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>

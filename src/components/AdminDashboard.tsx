@@ -18,6 +18,8 @@ export const AdminDashboard = () => {
   const [cityFilterSolicitacoes, setCityFilterSolicitacoes] = useState('');
   const [cityFilterCitizens, setCityFilterCitizens] = useState('');
   const [cityFilterPetitions, setCityFilterPetitions] = useState('');
+  const [activeTab, setActiveTab] = useState<'PROTOCOLOS' | 'JOGO'>('PROTOCOLOS');
+  const [jogoUsersData, setJogoUsersData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'unique' | 'duplicates'>('all');
 
   // Optional cities tracking (now unused in AdminDashboard since we removed form, but kept if needed)
@@ -50,17 +52,20 @@ export const AdminDashboard = () => {
   const fetchData = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const [response, citizensResponse, petitionsResponse] = await Promise.all([
+      const [response, citizensResponse, petitionsResponse, jogoUsersResponse] = await Promise.all([
         fetch('/api/cities'),
         fetch('/api/citizens'),
-        fetch('/api/petitions')
+        fetch('/api/petitions'),
+        fetch('/api/jogo/users')
       ]);
       const result = await response.json();
       const citizensResult = await citizensResponse.json();
       const petitionsResult = await petitionsResponse.json();
+      const jogoUsersResult = await jogoUsersResponse.json();
       setData(Array.isArray(result) ? result : []);
       setCitizensData(Array.isArray(citizensResult) ? citizensResult : []);
       setPetitionsData(Array.isArray(petitionsResult) ? petitionsResult : []);
+      setJogoUsersData(Array.isArray(jogoUsersResult) ? jogoUsersResult : []);
     } catch (err) {
       console.error(err);
     }
@@ -86,7 +91,7 @@ export const AdminDashboard = () => {
   };
 
   const deleteRecord = async (type: 'protocol' | 'citizen' | 'petition', id: string) => {
-    if (!window.confirm("Tem certeza que deseja apagar este registro?")) return;
+    
     try {
       if (type === 'protocol') await fetch(`/api/protocols/${id}`, { method: 'DELETE' });
       else if (type === 'citizen') await fetch(`/api/citizens/${id}`, { method: 'DELETE' });
@@ -205,6 +210,34 @@ export const AdminDashboard = () => {
     XLSX.writeFile(wb, "abaixo_assinados_codigo_animal.xlsx");
   };
 
+
+  const exportJogoUsersExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const rows = jogoUsersData.map(u => ({
+      Nome: u.nomeCompleto,
+      Usuario: u.usuario,
+      WhatsApp: u.whatsapp,
+      Email: u.email,
+      CEP: u.cep,
+      Cidade: u.cidade,
+      Estado: u.estado,
+      'Data de Cadastro': u.createdAt ? new Date(u.createdAt).toLocaleString() : ''
+    }));
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, sheet, "Jogo Users");
+    XLSX.writeFile(wb, "jogo_users.xlsx");
+  };
+
+  const deleteJogoUser = async (id: string) => {
+    
+    try {
+      await fetch(`/api/jogo/users/${id}`, { method: 'DELETE' });
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -267,6 +300,25 @@ export const AdminDashboard = () => {
             </Link>
           </div>
         </div>
+
+
+        <div className="flex gap-4 mb-8 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('PROTOCOLOS')}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'PROTOCOLOS' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Protocolos e Abaixo-assinados
+          </button>
+          <button
+            onClick={() => setActiveTab('JOGO')}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'JOGO' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Jogo - Missão Resgate
+          </button>
+        </div>
+
+        {activeTab === 'PROTOCOLOS' && (
+          <div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -647,6 +699,75 @@ export const AdminDashboard = () => {
             </table>
           </div>
         </div>
+
+          </div>
+        )}
+
+        {activeTab === 'JOGO' && (
+          <div>
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+              <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-xl font-black uppercase text-dark">Usuários do Jogo</h2>
+                  <div className="text-sm font-bold bg-blue-50 text-blue-600 py-1 px-3 rounded-lg">
+                    {jogoUsersData.length} Cadastros
+                  </div>
+                </div>
+                <button
+                  onClick={exportJogoUsersExcel}
+                  className="bg-green-50 hover:bg-green-100 text-green-700 font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm"
+                >
+                  <Download className="w-4 h-4" /> Exportar Dados
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs">Data</th>
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs">Nome Completo</th>
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs">Usuário</th>
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs">Contato</th>
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs">Localidade</th>
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jogoUsersData.length === 0 ? (
+                      <tr><td colSpan={5} className="p-8 text-center text-gray-500 font-medium">Nenhum cadastro encontrado.</td></tr>
+                    ) : (
+                      jogoUsersData.map((user, idx) => (
+                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="p-4 text-sm font-medium text-gray-600">{new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
+                          <td className="p-4 font-bold text-dark">{user.nomeCompleto}</td>
+                          <td className="p-4 text-sm font-bold text-primary">{user.usuario}</td>
+                          <td className="p-4 text-sm font-medium text-gray-600">
+                            <div>{user.email}</div>
+                            <div className="text-xs text-gray-400">{user.whatsapp}</div>
+                          </td>
+                          <td className="p-4 text-sm font-medium text-gray-600">
+                            <div>{user.cidade} - {user.estado || 'SP'}</div>
+                            <div className="text-xs text-gray-400">CEP: {user.cep}</div>
+                          </td>
+                          <td className="p-4 text-right">
+                            <button
+                              onClick={() => deleteJogoUser(user.id)}
+                              className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                              title="Remover Cadastro"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
