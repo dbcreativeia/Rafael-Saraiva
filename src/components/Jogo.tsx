@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Trophy, ArrowLeft, Play, ArrowRight, RotateCcw, Eye, EyeOff, User, Lock, Mail, Phone, MapPin, Building } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 
 const MANDATE_FACTS = [
   { title: "Edital Animal", content: "Criação de um modelo inédito de destinação de emendas parlamentares onde a população de SP vota e decide. 3 Edições, +250 ONGs Contempladas e +40k Animais Impactados." },
@@ -527,6 +528,20 @@ export const Jogo = () => {
   };
 
   return (
+    <>
+      <Helmet>
+        <title>Jogo do Mandato | Deputado Rafael Saraiva</title>
+        <meta name="title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
+        <meta name="description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
+        <meta property="og:description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
+        <meta property="og:image" content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG" />
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
+        <meta property="twitter:description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
+        <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG" />
+      </Helmet>
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-0 font-sans overflow-hidden">
       {currentView !== 'PLAYING' && (
         <Link to="/" className="absolute top-4 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors font-bold z-50">
@@ -916,6 +931,7 @@ export const Jogo = () => {
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 };
 
