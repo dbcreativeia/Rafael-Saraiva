@@ -247,13 +247,26 @@ async function startServer() {
   app.get('/api/jogo/scores', async (req, res) => {
     if (db) {
       try {
-        const [rows] = await db.query('SELECT * FROM jogo_scores ORDER BY score DESC LIMIT 100');
+        const [rows] = await db.query(`
+          SELECT MIN(id) as id, nome, MAX(cidade) as cidade, MAX(score) as score, MAX(createdAt) as createdAt, usuario 
+          FROM jogo_scores 
+          GROUP BY nome, usuario 
+          ORDER BY score DESC 
+          LIMIT 100
+        `);
         return res.json(rows);
       } catch (err) {
         return res.status(500).json({ error: "DB erro" });
       }
     }
-    const sorted = [...jogoScoresData].sort((a, b) => b.score - a.score).slice(0, 100);
+    const grouped = [...jogoScoresData].reduce((acc: any, curr) => {
+      const key = curr.usuario || curr.nome;
+      if (!acc[key] || acc[key].score < curr.score) {
+        acc[key] = curr;
+      }
+      return acc;
+    }, {});
+    const sorted = Object.values(grouped).sort((a: any, b: any) => b.score - a.score).slice(0, 100);
     res.json(sorted);
   });
 
