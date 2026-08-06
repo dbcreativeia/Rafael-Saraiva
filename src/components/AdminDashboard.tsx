@@ -58,9 +58,9 @@ export const AdminDashboard = () => {
       const result = await response.json();
       const citizensResult = await citizensResponse.json();
       const petitionsResult = await petitionsResponse.json();
-      setData(result);
-      setCitizensData(citizensResult);
-      setPetitionsData(petitionsResult);
+      setData(Array.isArray(result) ? result : []);
+      setCitizensData(Array.isArray(citizensResult) ? citizensResult : []);
+      setPetitionsData(Array.isArray(petitionsResult) ? petitionsResult : []);
     } catch (err) {
       console.error(err);
     }

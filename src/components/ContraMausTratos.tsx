@@ -541,7 +541,7 @@ const AdminView = () => {
     try {
       const response = await fetch('/api/contra-maus-tratos');
       const json = await response.json();
-      setData(json);
+      setData(Array.isArray(json) ? json : []);
     } catch (err) {
       console.error(err);
     } finally {
