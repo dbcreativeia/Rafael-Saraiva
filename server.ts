@@ -494,27 +494,58 @@ async function startServer() {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
-        appType: "spa",
+        appType: "custom",
       });
       app.use(vite.middlewares);
+
+      app.get('*all', async (req, res, next) => {
+        try {
+          let template = await fs.promises.readFile(path.join(process.cwd(), 'index.html'), 'utf-8');
+          template = await vite.transformIndexHtml(req.originalUrl, template);
+
+          if (req.path.startsWith('/jogo')) {
+            const jogoTitle = "Jogo do Mandato | Deputado Rafael Saraiva";
+            const jogoDesc = "Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!";
+            
+            template = template.replace(/<title>.*?<\/title>/, `<title>${jogoTitle}</title>`);
+            template = template.split('content="Deputado Rafael Saraiva | Defesa da Causa Animal em SP"').join(`content="${jogoTitle}"`);
+            template = template.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA."').join(`content="${jogoDesc}"`);
+            template = template.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo."').join(`content="${jogoDesc}"`);
+          }
+          
+          res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+        } catch (e) {
+          vite.ssrFixStacktrace(e);
+          next(e);
+        }
+      });
     } catch (err) {
       console.warn("Vite not found, falling back to static serving");
       app.use(express.static(distPath));
-      app.use((req, res, next) => {
-        if (req.method === 'GET' && req.accepts('html')) {
-          res.sendFile(path.join(distPath, 'index.html'));
-        } else {
-          next();
-        }
+      app.get('*all', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
       });
     }
   } else {
-    app.use(express.static(distPath));
-    app.use((req, res, next) => {
-      if (req.method === 'GET' && req.accepts('html')) {
-        res.sendFile(path.join(distPath, 'index.html'));
-      } else {
-        next();
+    app.use(express.static(distPath, { index: false }));
+    
+    app.get('*all', async (req, res, next) => {
+      try {
+        let html = await fs.promises.readFile(path.join(distPath, 'index.html'), 'utf-8');
+        
+        if (req.path.startsWith('/jogo')) {
+          const jogoTitle = "Jogo do Mandato | Deputado Rafael Saraiva";
+          const jogoDesc = "Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!";
+          
+          html = html.replace(/<title>.*?<\/title>/, `<title>${jogoTitle}</title>`);
+          html = html.split('content="Deputado Rafael Saraiva | Defesa da Causa Animal em SP"').join(`content="${jogoTitle}"`);
+          html = html.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA."').join(`content="${jogoDesc}"`);
+          html = html.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo."').join(`content="${jogoDesc}"`);
+        }
+        
+        res.status(200).set({ 'Content-Type': 'text/html' }).send(html);
+      } catch (e) {
+        next(e);
       }
     });
   }
