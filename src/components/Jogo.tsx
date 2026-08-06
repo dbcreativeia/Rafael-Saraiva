@@ -52,6 +52,28 @@ export const Jogo = () => {
     if (saved) {
       setLoggedUser(JSON.parse(saved));
     }
+
+    // Track PageView
+    const trackPage = () => {
+      const fbq = (window as any).fbq;
+      if (fbq) {
+        fbq('trackCustom', 'PageView_Jogo');
+      }
+    };
+    if ((window as any).fbq) {
+      trackPage();
+    } else {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if ((window as any).fbq) {
+          trackPage();
+          clearInterval(interval);
+        } else if (attempts > 10) {
+          clearInterval(interval);
+        }
+      }, 500);
+    }
   }, []);
 
   const fetchScores = async () => {
@@ -139,6 +161,15 @@ export const Jogo = () => {
         localStorage.setItem('jogo_user_v3', JSON.stringify(data.data));
         setLoggedUser(data.data);
         setCurrentView('INSTRUCTIONS');
+        
+        // Track conversion
+        if (typeof window !== 'undefined') {
+          const fbq = (window as any).fbq;
+          if (fbq) {
+            fbq('track', 'Lead');
+            fbq('trackCustom', 'Lead_Jogo');
+          }
+        }
       } else {
         setAuthError(data.error || "Erro no cadastro");
       }
@@ -295,11 +326,12 @@ export const Jogo = () => {
       state.distance += state.speed / 5;
       
       // Progressive speed based on score (starts slow, gets faster as you score)
-      state.speed = (canvas.height * 0.006) + (state.score * 0.0001);
+      const baseSpeed = canvas.height * (window.innerWidth < 768 ? 0.0035 : 0.005);
+      state.speed = baseSpeed + (state.score * 0.0003);
 
       // Spawning
       // Increase spawn rate slightly as speed increases
-      const spawnChance = 0.03 + (state.speed * 0.002);
+      const spawnChance = (window.innerWidth < 768 ? 0.02 : 0.03) + (state.speed * 0.002);
       if (Math.random() < spawnChance) {
         const type = Math.random() > 0.4 ? 'animal' : 'obstacle';
         const collect = ['🐶', '🐱', '🐴', '🦜', '🐇', '⛓️', '🔒', '📦', '🏥', '📜'];
@@ -831,15 +863,16 @@ export const Jogo = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="w-[calc(100%-2rem)] max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[85vh] my-8"
           >
-            <div className="bg-dark p-6 text-center relative shrink-0">
+            <div className="bg-dark py-6 px-14 sm:px-6 text-center relative shrink-0">
               <button 
                 onClick={() => setCurrentView('HOME')}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white p-2"
               >
                 <ArrowLeft className="w-6 h-6" />
               </button>
-              <h2 className="text-2xl font-black text-white uppercase tracking-wider flex items-center justify-center gap-2">
-                <Trophy className="w-6 h-6 text-accent" /> Melhores Resgates
+              <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider flex items-center justify-center gap-3">
+                <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-accent shrink-0" /> 
+                <span className="leading-tight text-left sm:text-center">Melhores<br className="sm:hidden" /> Resgates</span>
               </h2>
             </div>
             
@@ -873,7 +906,7 @@ export const Jogo = () => {
 
             <div className="p-4 bg-white border-t border-gray-100 shrink-0">
               <button
-                onClick={startGame}
+                onClick={showInstructions}
                 className="w-full bg-primary hover:bg-secondary text-white font-black py-4 rounded-xl transition-transform active:scale-95 uppercase tracking-wider"
               >
                 Jogar Agora
