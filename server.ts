@@ -199,7 +199,7 @@ async function startServer() {
     const { usuario, senha } = req.body;
     if (db) {
       try {
-        const [rows] = await db.query('SELECT * FROM jogo_users WHERE usuario = ? AND senha = ?', [usuario, senha]);
+        const [rows] = await db.query('SELECT * FROM jogo_users WHERE (usuario = ? OR email = ?) AND senha = ?', [usuario, usuario, senha]);
         if (rows.length > 0) {
           const user = rows[0];
           delete user.senha; // hide password
@@ -524,6 +524,7 @@ async function startServer() {
             template = template.split('content="Deputado Rafael Saraiva | Defesa da Causa Animal em SP"').join(`content="${jogoTitle}"`);
             template = template.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA."').join(`content="${jogoDesc}"`);
             template = template.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo."').join(`content="${jogoDesc}"`);
+            template = template.split('content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG"').join('content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ"');
           }
           
           res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
@@ -554,6 +555,7 @@ async function startServer() {
           html = html.split('content="Deputado Rafael Saraiva | Defesa da Causa Animal em SP"').join(`content="${jogoTitle}"`);
           html = html.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA."').join(`content="${jogoDesc}"`);
           html = html.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo."').join(`content="${jogoDesc}"`);
+          html = html.split('content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG"').join('content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ"');
         }
         
         res.status(200).set({ 'Content-Type': 'text/html' }).send(html);

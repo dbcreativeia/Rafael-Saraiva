@@ -541,11 +541,11 @@ export const Jogo = () => {
         <meta property="og:type" content="website" />
         <meta property="og:title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
         <meta property="og:description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
-        <meta property="og:image" content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG" />
+        <meta property="og:image" content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" />
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
         <meta property="twitter:description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
-        <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG" />
+        <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" />
       </Helmet>
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-0 font-sans overflow-hidden">
       {currentView !== 'PLAYING' && (
@@ -785,10 +785,10 @@ export const Jogo = () => {
             
             <form onSubmit={handleLogin} className="flex flex-col gap-4">
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1 mb-1 block">Usuário</label>
+                <label className="text-xs font-bold text-gray-500 uppercase ml-1 mb-1 block">Usuário ou E-mail</label>
                 <div className="relative">
                   <User className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" required value={authForm.usuario} onChange={e => setAuthForm({...authForm, usuario: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 focus:border-primary outline-none font-medium" placeholder="Seu usuário" />
+                  <input type="text" required value={authForm.usuario} onChange={e => setAuthForm({...authForm, usuario: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 focus:border-primary outline-none font-medium" placeholder="Seu usuário ou e-mail" />
                 </div>
               </div>
               
