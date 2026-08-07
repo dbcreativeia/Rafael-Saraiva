@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Phone, Instagram, Facebook, MessageCircle, PawPrint, Heart, BookOpen } from 'lucide-react';
+import { Phone, Instagram, Facebook, MessageCircle, PawPrint, Heart, BookOpen, Gamepad2 } from 'lucide-react';
 
 import { WHATSAPP_NUMBER, WHATSAPP_MESSAGE } from './constants';
 import { MandatoInfo } from './components/MandatoInfo';
@@ -147,18 +147,34 @@ function LandingPage() {
               transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
               className="flex flex-col gap-6 md:gap-8 w-full max-w-md lg:max-w-lg relative z-20"
             >
-              {/* Botão Destaque: Minha cidade protege os animais? */}
+              {/* Botão Destaque: Jogo */}
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-50 group-hover:opacity-70 transition duration-500"></div>
+                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl blur opacity-60 group-hover:opacity-80 transition duration-500"></div>
+                <Link
+                  to="/jogo"
+                  className="relative w-full overflow-hidden font-black py-8 md:py-10 px-6 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all transform hover:-translate-y-1 shadow-2xl text-2xl md:text-3xl uppercase tracking-wider border border-white/20 text-center leading-tight group bg-dark"
+                >
+                  <div className="absolute inset-0 bg-black/50 group-hover:bg-black/30 transition-colors z-10 duration-500"></div>
+                  <img src="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" alt="Missão Resgate Animal" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700" />
+                  <div className="relative z-20 flex flex-col items-center">
+                    <Gamepad2 className="w-12 h-12 md:w-14 md:h-14 text-white mb-2 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]" />
+                    <span className="text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]">Jogue Agora</span>
+                    <span className="text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] mt-1">MISSÃO RESGATE ANIMAL SP</span>
+                  </div>
+                </Link>
+              </div>
+
+              {/* Botão Secundário: Minha cidade protege os animais? */}
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
                 <Link
                   to="/codigoanimal"
-                  className="relative w-full bg-gradient-to-r from-primary to-secondary text-white font-black py-6 md:py-8 px-6 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all transform hover:-translate-y-1 shadow-2xl text-xl md:text-2xl uppercase tracking-wider border border-white/20 text-center leading-tight"
+                  className="relative w-full bg-gradient-to-r from-primary to-secondary text-white font-black py-4 md:py-5 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all transform hover:-translate-y-1 shadow-xl border border-white/20 text-center"
                 >
-                  <BookOpen className="w-10 h-10 md:w-12 md:h-12 text-white mb-1 drop-shadow-md" />
-                  <span>Minha cidade protege os animais?</span>
-                  <span className="text-sm md:text-base font-bold text-white/90 normal-case tracking-normal drop-shadow-sm mt-1">
-                    Descubra agora e faça a diferença
-                  </span>
+                  <div className="flex items-center gap-3 text-lg md:text-xl uppercase tracking-wider">
+                    <BookOpen className="w-6 h-6 md:w-7 md:h-7" />
+                    <span>Minha cidade protege os animais?</span>
+                  </div>
                 </Link>
               </div>
 

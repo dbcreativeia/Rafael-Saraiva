@@ -23,6 +23,7 @@ export const Jogo = () => {
   const [finalScore, setFinalScore] = useState(0);
   const [scores, setScores] = useState<any[]>([]);
   const [endGameFact, setEndGameFact] = useState<{title: string, content: string} | null>(null);
+  const [factPreviewState, setFactPreviewState] = useState({ active: false, canSkip: false });
   
   const [loggedUser, setLoggedUser] = useState<any>(null);
   const [authForm, setAuthForm] = useState({ nomeCompleto: '', usuario: '', senha: '', email: '', whatsapp: '', cep: '', cidade: '', estado: '', lgpd: false });
@@ -488,6 +489,10 @@ export const Jogo = () => {
         setFinalScore(state.score);
         setResultType(state.status as 'WIN' | 'GAMEOVER');
         setEndGameFact(MANDATE_FACTS[Math.floor(Math.random() * MANDATE_FACTS.length)]);
+        setFactPreviewState({ active: true, canSkip: false });
+        setTimeout(() => {
+          setFactPreviewState(prev => ({ ...prev, canSkip: true }));
+        }, 3000);
         setCurrentView('RESULT');
         
         const saved = localStorage.getItem('jogo_user_v3');
@@ -558,7 +563,12 @@ export const Jogo = () => {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col items-center justify-center max-w-md w-full gap-8 text-center p-6"
           >
-            <div>
+            <div className="flex flex-col items-center">
+              <img 
+                src="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" 
+                alt="Missão Resgate Animal" 
+                className="w-full max-w-[280px] rounded-3xl shadow-2xl mb-6 border-4 border-white/10"
+              />
               <h1 className="text-5xl md:text-6xl font-black text-white mb-4 tracking-tight uppercase leading-tight font-display">
                 Missão <span className="text-primary">Resgate Animal SP</span>
               </h1>
@@ -682,47 +692,77 @@ export const Jogo = () => {
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-col w-full max-w-md gap-6 p-6"
           >
-            <div className="bg-white rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
-              <div className={`absolute top-0 left-0 w-full h-3 ${resultType === 'WIN' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              
-              <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${resultType === 'WIN' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {resultType === 'WIN' ? <Trophy className="w-10 h-10" /> : <RotateCcw className="w-10 h-10" />}
+            {factPreviewState.active ? (
+              <div className="bg-white rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden flex flex-col items-center justify-center min-h-[350px]">
+                {endGameFact && (
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="text-left bg-blue-50 p-6 rounded-xl border-2 border-blue-200 w-full mb-6"
+                  >
+                    <div className="text-sm font-black text-blue-600 mb-3 uppercase tracking-widest text-center">O Deputado Rafael Saraiva fez:</div>
+                    <h4 className="font-black text-primary uppercase text-2xl mb-3 text-center">{endGameFact.title}</h4>
+                    <p className="text-base font-bold text-blue-900 leading-relaxed text-center">
+                      {endGameFact.content}
+                    </p>
+                  </motion.div>
+                )}
+                {factPreviewState.canSkip && (
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    onClick={() => setFactPreviewState({ active: false, canSkip: false })}
+                    className="w-full bg-primary hover:bg-secondary text-white font-black py-4 rounded-2xl transition-transform active:scale-95 uppercase tracking-wider mt-auto"
+                  >
+                    Ver Pontuação
+                  </motion.button>
+                )}
               </div>
+            ) : (
+              <>
+                <div className="bg-white rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+                  <div className={`absolute top-0 left-0 w-full h-3 ${resultType === 'WIN' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${resultType === 'WIN' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                    {resultType === 'WIN' ? <Trophy className="w-10 h-10" /> : <RotateCcw className="w-10 h-10" />}
+                  </div>
 
-              <h2 className="text-3xl font-black text-dark uppercase mb-2">
-                {resultType === 'WIN' ? 'Missão Cumprida!' : 'Fim de Jogo'}
-              </h2>
-              <p className="text-gray-500 font-medium mb-4">
-                {resultType === 'WIN' ? 'Você chegou ao destino e salvou muitos animais!' : 'Você tropeçou nos obstáculos.'}
-              </p>
-              
-              <div className="text-6xl font-black text-primary mb-6 font-display">{finalScore.toLocaleString()} pts</div>
-
-              {endGameFact && (
-                <div className="text-left bg-blue-50 p-4 rounded-xl border border-blue-100 mt-2">
-                  <div className="text-xs font-bold text-blue-600 mb-2 uppercase tracking-wider">O Deputado Rafael Saraiva fez:</div>
-                  <h4 className="font-black text-primary uppercase text-sm mb-1">{endGameFact.title}</h4>
-                  <p className="text-xs font-medium text-blue-900 leading-relaxed">
-                    {endGameFact.content}
+                  <h2 className="text-3xl font-black text-dark uppercase mb-2">
+                    {resultType === 'WIN' ? 'Missão Cumprida!' : 'Fim de Jogo'}
+                  </h2>
+                  <p className="text-gray-500 font-medium mb-4">
+                    {resultType === 'WIN' ? 'Você chegou ao destino e salvou muitos animais!' : 'Você tropeçou nos obstáculos.'}
                   </p>
-                </div>
-              )}
-            </div>
+                  
+                  <div className="text-6xl font-black text-primary mb-6 font-display">{finalScore.toLocaleString()} pts</div>
 
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={startGame}
-                className="w-full bg-primary hover:bg-secondary text-white font-black py-5 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-lg uppercase tracking-wider shadow-lg"
-              >
-                <RotateCcw className="w-6 h-6" /> Tentar Novamente
-              </button>
-              <button
-                onClick={() => setCurrentView('LEADERBOARD')}
-                className="w-full bg-white text-dark font-bold py-4 rounded-2xl"
-              >
-                Ver Ranking
-              </button>
-            </div>
+                  {endGameFact && (
+                    <div className="text-left bg-blue-50 p-4 rounded-xl border border-blue-100 mt-2">
+                      <div className="text-xs font-bold text-blue-600 mb-2 uppercase tracking-wider">O Deputado Rafael Saraiva fez:</div>
+                      <h4 className="font-black text-primary uppercase text-sm mb-1">{endGameFact.title}</h4>
+                      <p className="text-xs font-medium text-blue-900 leading-relaxed">
+                        {endGameFact.content}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={startGame}
+                    className="w-full bg-primary hover:bg-secondary text-white font-black py-5 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-lg uppercase tracking-wider shadow-lg"
+                  >
+                    <RotateCcw className="w-6 h-6" /> Tentar Novamente
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('LEADERBOARD')}
+                    className="w-full bg-white text-dark font-bold py-4 rounded-2xl"
+                  >
+                    Ver Ranking
+                  </button>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
 
