@@ -179,6 +179,9 @@ async function startServer() {
   // Jogo Users
   app.post('/api/jogo/register', async (req, res) => {
     const { nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado } = req.body;
+    if (usuario && usuario.includes('@')) {
+      return res.status(400).json({ error: "O nome de usuário não pode ser um e-mail" });
+    }
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     if (db) {
       try {
@@ -217,9 +220,16 @@ async function startServer() {
   app.get('/api/jogo/users', async (req, res) => {
     if (db) {
       try {
-        const [rows] = await db.query('SELECT * FROM jogo_users ORDER BY createdAt DESC');
+        const [rows] = await db.query(`
+          SELECT u.*, 
+            (SELECT MAX(score) FROM jogo_scores s WHERE s.usuario = u.usuario) as maxScore,
+            (SELECT COUNT(*) FROM jogo_scores s WHERE s.usuario = u.usuario) as playCount
+          FROM jogo_users u 
+          ORDER BY u.createdAt DESC
+        `);
         return res.json(rows);
       } catch (err) {
+        console.error("Error fetching users:", err);
         return res.status(500).json({ error: "DB erro" });
       }
     }
@@ -271,17 +281,29 @@ async function startServer() {
   });
 
   app.post('/api/jogo/scores', async (req, res) => {
-    const { nome, cidade, score, fase } = req.body;
+    let { nome, cidade, score, fase, usuario } = req.body;
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     const createdAt = new Date().toISOString();
     
     if (db) {
       try {
+        if (usuario && usuario.includes('@')) {
+          const trimmed = usuario.trim();
+          const [users] = await db.query('SELECT usuario, nomeCompleto FROM jogo_users WHERE email = ? OR usuario = ?', [trimmed, trimmed]);
+          if (users && users.length > 0) {
+            usuario = users[0].usuario || users[0].nomeCompleto;
+            nome = usuario;
+          } else {
+            usuario = "Jogador_" + id.substring(0, 5);
+            nome = usuario;
+          }
+        }
+
         await db.query(
           'INSERT INTO jogo_scores (id, nome, cidade, score, fase, createdAt, usuario) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [id, req.body.nome, req.body.cidade, req.body.score, req.body.fase, createdAt, req.body.usuario]
+          [id, nome, cidade, score, fase, createdAt, usuario]
         );
-        return res.json({ success: true, data: { id, nome, cidade, score, fase, createdAt } });
+        return res.json({ success: true, data: { id, nome, cidade, score, fase, createdAt, usuario } });
       } catch (err) {
         console.error(err);
         return res.status(500).json({ error: "DB erro" });

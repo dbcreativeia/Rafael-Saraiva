@@ -18,6 +18,8 @@ export const AdminDashboard = () => {
   const [cityFilterSolicitacoes, setCityFilterSolicitacoes] = useState('');
   const [cityFilterCitizens, setCityFilterCitizens] = useState('');
   const [cityFilterPetitions, setCityFilterPetitions] = useState('');
+  const [estadoFilterJogo, setEstadoFilterJogo] = useState('');
+  const [filterTypeJogo, setFilterTypeJogo] = useState<'all' | 'unique' | 'duplicates'>('all');
   const [activeTab, setActiveTab] = useState<'PROTOCOLOS' | 'JOGO'>('PROTOCOLOS');
   const [jogoUsersData, setJogoUsersData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'unique' | 'duplicates'>('all');
@@ -126,9 +128,34 @@ export const AdminDashboard = () => {
   const processedCitizens = useMemo(() => processList(citizensData), [citizensData]);
   const processedPetitions = useMemo(() => processList(petitionsData), [petitionsData]);
 
+  const processedJogoUsers = useMemo(() => {
+    const list = [...jogoUsersData];
+    const emailMap = new Map();
+    list.forEach(user => {
+      if (user.email) {
+        const key = user.email.toLowerCase().trim();
+        emailMap.set(key, (emailMap.get(key) || 0) + 1);
+      }
+    });
+    return list.map(user => {
+      let isDuplicate = false;
+      if (user.email) {
+        const key = user.email.toLowerCase().trim();
+        if (emailMap.get(key) > 1) isDuplicate = true;
+      }
+      return { ...user, isDuplicate };
+    });
+  }, [jogoUsersData]);
+
   const applyFilter = (list: any[]) => {
     if (filterType === 'unique') return list.filter(item => !item.isDuplicate);
     if (filterType === 'duplicates') return list.filter(item => item.isDuplicate);
+    return list;
+  };
+
+  const applyJogoFilter = (list: any[]) => {
+    if (filterTypeJogo === 'unique') return list.filter(item => !item.isDuplicate);
+    if (filterTypeJogo === 'duplicates') return list.filter(item => item.isDuplicate);
     return list;
   };
 
@@ -213,14 +240,18 @@ export const AdminDashboard = () => {
 
   const exportJogoUsersExcel = () => {
     const wb = XLSX.utils.book_new();
-    const rows = jogoUsersData.map(u => ({
+    const filteredUsers = applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo);
+    const rows = filteredUsers.map(u => ({
       Nome: u.nomeCompleto,
       Usuario: u.usuario,
       WhatsApp: u.whatsapp,
       Email: u.email,
       CEP: u.cep,
       Cidade: u.cidade,
-      Estado: u.estado,
+      Estado: u.estado || 'SP',
+      'Duplicado': u.isDuplicate ? 'Sim' : 'Não',
+      'Pontuação Máxima': u.maxScore || 0,
+      'Partidas Jogadas': u.playCount || 0,
       'Data de Cadastro': u.createdAt ? new Date(u.createdAt).toLocaleString() : ''
     }));
     const sheet = XLSX.utils.json_to_sheet(rows);
@@ -713,12 +744,47 @@ export const AdminDashboard = () => {
                     {jogoUsersData.length} Cadastros
                   </div>
                 </div>
-                <button
-                  onClick={exportJogoUsersExcel}
-                  className="bg-green-50 hover:bg-green-100 text-green-700 font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm"
-                >
-                  <Download className="w-4 h-4" /> Exportar Dados
-                </button>
+                <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
+                  <div className="flex bg-gray-50 rounded-xl border border-gray-200 p-1">
+                    <button 
+                      onClick={() => setFilterTypeJogo('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${filterTypeJogo === 'all' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      Todos
+                    </button>
+                    <button 
+                      onClick={() => setFilterTypeJogo('unique')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${filterTypeJogo === 'unique' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      Únicos
+                    </button>
+                    <button 
+                      onClick={() => setFilterTypeJogo('duplicates')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${filterTypeJogo === 'duplicates' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      Duplicados
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <select
+                      value={estadoFilterJogo}
+                      onChange={(e) => setEstadoFilterJogo(e.target.value)}
+                      className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none bg-white font-medium text-gray-700 text-sm"
+                    >
+                      <option value="">Todos os estados</option>
+                      {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map(uf => (
+                        <option key={uf} value={uf}>{uf}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={exportJogoUsersExcel}
+                    className="bg-green-50 hover:bg-green-100 text-green-700 font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm whitespace-nowrap"
+                  >
+                    <Download className="w-4 h-4" /> Exportar
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -727,20 +793,28 @@ export const AdminDashboard = () => {
                       <th className="p-4 font-bold text-gray-500 uppercase text-xs">Data</th>
                       <th className="p-4 font-bold text-gray-500 uppercase text-xs">Nome Completo</th>
                       <th className="p-4 font-bold text-gray-500 uppercase text-xs">Usuário</th>
+                      <th className="p-4 font-bold text-gray-500 uppercase text-xs">Desempenho</th>
                       <th className="p-4 font-bold text-gray-500 uppercase text-xs">Contato</th>
                       <th className="p-4 font-bold text-gray-500 uppercase text-xs">Localidade</th>
                       <th className="p-4 font-bold text-gray-500 uppercase text-xs text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {jogoUsersData.length === 0 ? (
-                      <tr><td colSpan={5} className="p-8 text-center text-gray-500 font-medium">Nenhum cadastro encontrado.</td></tr>
+                    {applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo).length === 0 ? (
+                      <tr><td colSpan={7} className="p-8 text-center text-gray-500 font-medium">Nenhum cadastro encontrado.</td></tr>
                     ) : (
-                      jogoUsersData.map((user, idx) => (
-                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo).map((user, idx) => (
+                        <tr key={idx} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${user.isDuplicate ? 'bg-red-50/30' : ''}`}>
                           <td className="p-4 text-sm font-medium text-gray-600">{new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
-                          <td className="p-4 font-bold text-dark">{user.nomeCompleto}</td>
+                          <td className="p-4 font-bold text-dark">
+                            {user.nomeCompleto}
+                            {user.isDuplicate && <span className="ml-2 bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Duplicado</span>}
+                          </td>
                           <td className="p-4 text-sm font-bold text-primary">{user.usuario}</td>
+                          <td className="p-4 text-sm font-medium text-gray-600">
+                            <div className="font-bold text-dark">Max: {user.maxScore?.toLocaleString() || 0} pts</div>
+                            <div className="text-xs text-gray-500">{user.playCount || 0} partidas</div>
+                          </td>
                           <td className="p-4 text-sm font-medium text-gray-600">
                             <div>{user.email}</div>
                             <div className="text-xs text-gray-400">{user.whatsapp}</div>

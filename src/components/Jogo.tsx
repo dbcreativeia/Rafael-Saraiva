@@ -152,6 +152,10 @@ export const Jogo = () => {
       setAuthError("Você precisa aceitar os termos da LGPD");
       return;
     }
+    if (authForm.usuario.includes('@')) {
+      setAuthError("O nome de usuário não pode ser um e-mail.");
+      return;
+    }
     try {
       const res = await fetch('/api/jogo/register', {
         method: 'POST',
@@ -936,25 +940,37 @@ export const Jogo = () => {
                 <p className="text-center text-gray-500 font-medium py-10">Nenhum recorde ainda. Seja o primeiro!</p>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {scores.map((s, i) => (
-                    <div key={i} className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg shrink-0 ${
-                        i === 0 ? 'bg-yellow-400 text-yellow-900 shadow-md' :
-                        i === 1 ? 'bg-gray-300 text-gray-800 shadow-sm' :
-                        i === 2 ? 'bg-orange-300 text-orange-900 shadow-sm' :
-                        'bg-gray-100 text-gray-500'
-                      }`}>
-                        {i + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-black text-dark truncate text-lg">{s.usuario || s.nome}</div>
-                        <div className="text-sm font-medium text-gray-500 truncate">{s.cidade}</div>
-                      </div>
-                      <div className="font-black text-primary font-display text-2xl shrink-0">
-                        {s.score.toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
+                  {(() => {
+                    let currentRank = 1;
+                    let lastScore: number | null = null;
+                    return scores.map((s, i) => {
+                      if (lastScore !== null && s.score < lastScore) {
+                        currentRank++; // dense ranking
+                      }
+                      lastScore = s.score;
+                      return (
+                        <div key={i} className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg shrink-0 ${
+                            currentRank === 1 ? 'bg-yellow-400 text-yellow-900 shadow-md' :
+                            currentRank === 2 ? 'bg-gray-300 text-gray-800 shadow-sm' :
+                            currentRank === 3 ? 'bg-orange-300 text-orange-900 shadow-sm' :
+                            'bg-gray-100 text-gray-500'
+                          }`}>
+                            {currentRank}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-black text-dark truncate text-lg">
+                              {(s.usuario || s.nome)?.includes('@') ? (s.usuario || s.nome).split('@')[0] : (s.usuario || s.nome)}
+                            </div>
+                            <div className="text-sm font-medium text-gray-500 truncate">{s.cidade}</div>
+                          </div>
+                          <div className="font-black text-primary font-display text-2xl shrink-0">
+                            {s.score.toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
