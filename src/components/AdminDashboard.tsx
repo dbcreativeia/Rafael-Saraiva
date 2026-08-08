@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { Lock, Search, RefreshCw, LayoutDashboard, Database, CheckCircle2, AlertCircle, Eye, EyeOff, Download, Users, FileSignature, Trash2, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 export const AdminDashboard = () => {
   const [password, setPassword] = useState('');
@@ -18,11 +20,24 @@ export const AdminDashboard = () => {
   const [cityFilterSolicitacoes, setCityFilterSolicitacoes] = useState('');
   const [cityFilterCitizens, setCityFilterCitizens] = useState('');
   const [cityFilterPetitions, setCityFilterPetitions] = useState('');
+  
   const [estadoFilterJogo, setEstadoFilterJogo] = useState('');
   const [filterTypeJogo, setFilterTypeJogo] = useState<'all' | 'unique' | 'duplicates'>('all');
+  const [sortJogoField, setSortJogoField] = useState<'date' | 'score' | 'playCount'>('date');
+  const [sortJogoOrder, setSortJogoOrder] = useState<'asc' | 'desc'>('desc');
+  
   const [activeTab, setActiveTab] = useState<'PROTOCOLOS' | 'JOGO'>('PROTOCOLOS');
   const [jogoUsersData, setJogoUsersData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'unique' | 'duplicates'>('all');
+
+  const [municipiosData, setMunicipiosData] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/municipios.json')
+      .then(res => res.json())
+      .then(d => setMunicipiosData(d))
+      .catch(e => console.error(e));
+  }, []);
 
   // Optional cities tracking (now unused in AdminDashboard since we removed form, but kept if needed)
   const [cities, setCities] = useState<string[]>([]);
@@ -159,6 +174,52 @@ export const AdminDashboard = () => {
     return list;
   };
 
+  const finalJogoUsers = useMemo(() => {
+    const filtered = applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo);
+    return filtered.sort((a, b) => {
+      let valA, valB;
+      if (sortJogoField === 'date') {
+        valA = new Date(a.createdAt).getTime();
+        valB = new Date(b.createdAt).getTime();
+      } else if (sortJogoField === 'score') {
+        valA = a.maxScore || 0;
+        valB = b.maxScore || 0;
+      } else if (sortJogoField === 'playCount') {
+        valA = a.playCount || 0;
+        valB = b.playCount || 0;
+      }
+      
+      if (sortJogoOrder === 'asc') {
+        return valA > valB ? 1 : valA < valB ? -1 : 0;
+      } else {
+        return valA < valB ? 1 : valA > valB ? -1 : 0;
+      }
+    });
+  }, [processedJogoUsers, filterTypeJogo, estadoFilterJogo, sortJogoField, sortJogoOrder]);
+
+  const mapPoints = useMemo(() => {
+    if (!municipiosData.length) return [];
+    
+    // Create a map of city name -> count from finalJogoUsers
+    const cityCounts: Record<string, number> = {};
+    finalJogoUsers.forEach(u => {
+      if (u.cidade) {
+        // Normalize city name
+        const name = u.cidade.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        cityCounts[name] = (cityCounts[name] || 0) + 1;
+      }
+    });
+    
+    const points: { lat: number, lng: number, count: number, name: string }[] = [];
+    municipiosData.forEach(mun => {
+      const name = mun.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (cityCounts[name]) {
+        points.push({ lat: mun.latitude, lng: mun.longitude, count: cityCounts[name], name: mun.nome });
+      }
+    });
+    return points;
+  }, [finalJogoUsers, municipiosData]);
+
   const exportDataExcel = () => {
     const wb = XLSX.utils.book_new();
     const rows = data.filter(d => d.status === 'protocolado').map(d => ({
@@ -240,8 +301,7 @@ export const AdminDashboard = () => {
 
   const exportJogoUsersExcel = () => {
     const wb = XLSX.utils.book_new();
-    const filteredUsers = applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo);
-    const rows = filteredUsers.map(u => ({
+    const rows = finalJogoUsers.map(u => ({
       Nome: u.nomeCompleto,
       Usuario: u.usuario,
       WhatsApp: u.whatsapp,
@@ -737,6 +797,37 @@ export const AdminDashboard = () => {
         {activeTab === 'JOGO' && (
           <div>
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+              <div className="p-6 border-b border-gray-100">
+                <h2 className="text-xl font-black uppercase text-dark mb-4">Mapa de Calor (Jogadores por Cidade)</h2>
+                <div className="h-[400px] w-full bg-gray-100 rounded-xl overflow-hidden relative z-0">
+                  <MapContainer 
+                    center={[-23.5505, -46.6333]} // SP default
+                    zoom={7} 
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution="&copy; OpenStreetMap contributors"
+                    />
+                    {mapPoints.map((pt, i) => (
+                      <CircleMarker 
+                        key={i} 
+                        center={[pt.lat, pt.lng]} 
+                        radius={Math.min(30, Math.max(5, pt.count * 2))}
+                        pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.6, weight: 1 }}
+                      >
+                        <Tooltip>
+                          <div className="font-bold text-gray-800">{pt.name}</div>
+                          <div className="text-gray-600">{pt.count} jogador{pt.count > 1 ? 'es' : ''}</div>
+                        </Tooltip>
+                      </CircleMarker>
+                    ))}
+                  </MapContainer>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
               <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-4">
                   <h2 className="text-xl font-black uppercase text-dark">Usuários do Jogo</h2>
@@ -765,6 +856,26 @@ export const AdminDashboard = () => {
                       Duplicados
                     </button>
                   </div>
+                  
+                  <div className="relative">
+                    <select
+                      value={`${sortJogoField}-${sortJogoOrder}`}
+                      onChange={(e) => {
+                        const [field, order] = e.target.value.split('-');
+                        setSortJogoField(field as 'date' | 'score' | 'playCount');
+                        setSortJogoOrder(order as 'asc' | 'desc');
+                      }}
+                      className="pl-4 pr-8 py-2 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none bg-white font-medium text-gray-700 text-sm"
+                    >
+                      <option value="date-desc">Recentes</option>
+                      <option value="date-asc">Antigos</option>
+                      <option value="score-desc">Maior Pontuação</option>
+                      <option value="score-asc">Menor Pontuação</option>
+                      <option value="playCount-desc">Mais Partidas</option>
+                      <option value="playCount-asc">Menos Partidas</option>
+                    </select>
+                  </div>
+
                   <div className="relative">
                     <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <select
@@ -800,10 +911,10 @@ export const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo).length === 0 ? (
+                    {finalJogoUsers.length === 0 ? (
                       <tr><td colSpan={7} className="p-8 text-center text-gray-500 font-medium">Nenhum cadastro encontrado.</td></tr>
                     ) : (
-                      applyJogoFilter(processedJogoUsers).filter(cit => estadoFilterJogo === '' || (cit.estado || 'SP') === estadoFilterJogo).map((user, idx) => (
+                      finalJogoUsers.map((user, idx) => (
                         <tr key={idx} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${user.isDuplicate ? 'bg-red-50/30' : ''}`}>
                           <td className="p-4 text-sm font-medium text-gray-600">{new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
                           <td className="p-4 font-bold text-dark">
