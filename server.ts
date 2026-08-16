@@ -25,7 +25,110 @@ async function startServer() {
     db = connection;
   });
 
+  
+  const materialData = [];
+
+  app.get('/api/material', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM material_campaign ORDER BY createdAt DESC');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    res.json(materialData);
+  });
+
+  app.post('/api/material', async (req, res) => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const data = { ...req.body, id, createdAt };
+    
+    if (db) {
+      try {
+        await db.query(
+          `INSERT INTO material_campaign (id, nome, sobrenome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, tipoMaterial, adesivoPerfurado, createdAt) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, data.nome, data.sobrenome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento || '', data.bairro, data.cidade, data.estado, data.tipoMaterial, data.adesivoPerfurado ? 1 : 0, createdAt]
+        );
+        return res.json({ success: true, data });
+      } catch (err) {
+        console.error("DB Insert error:", err);
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+
+    materialData.push(data);
+    res.json({ success: true, data });
+  });
+
+  app.delete('/api/material/:id', async (req, res) => {
+    const id = req.params.id;
+    if (db) {
+      try {
+        await db.query('DELETE FROM material_campaign WHERE id = ?', [id]);
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const idx = materialData.findIndex(p => p.id === id);
+    if (idx !== -1) materialData.splice(idx, 1);
+    res.json({ success: true });
+  });
+
+  app.get('/api/ninapassadore', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM ninapassadore_campaign ORDER BY createdAt DESC');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    res.json(ninapassadoreData);
+  });
+
+  app.post('/api/ninapassadore', async (req, res) => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const data = { ...req.body, id, createdAt };
+    
+    if (db) {
+      try {
+        await db.query(
+          `INSERT INTO ninapassadore_campaign (id, nome, sobrenome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, tipoMaterial, adesivoPerfurado, createdAt) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, data.nome, data.sobrenome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento || '', data.bairro, data.cidade, data.estado, data.tipoMaterial, data.adesivoPerfurado ? 1 : 0, createdAt]
+        );
+        return res.json({ success: true, data });
+      } catch (err) {
+        console.error("DB Insert error:", err);
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    ninapassadoreData.push(data);
+    res.json({ success: true, data });
+  });
+
+  app.delete('/api/ninapassadore/:id', async (req, res) => {
+    const id = req.params.id;
+    if (db) {
+      try {
+        await db.query('DELETE FROM ninapassadore_campaign WHERE id = ?', [id]);
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const idx = ninapassadoreData.findIndex(p => p.id === id);
+    if (idx !== -1) ninapassadoreData.splice(idx, 1);
+    res.json({ success: true });
+  });
+
   // API routing for petitions
+
   app.get('/api/petitions', async (req, res) => {
     if (db) {
       try {
@@ -546,7 +649,7 @@ async function startServer() {
             template = template.split('content="Deputado Rafael Saraiva | Defesa da Causa Animal em SP"').join(`content="${jogoTitle}"`);
             template = template.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA."').join(`content="${jogoDesc}"`);
             template = template.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo."').join(`content="${jogoDesc}"`);
-            template = template.split('content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG"').join('content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ"');
+            template = template.split('content="https://lh3.googleusercontent.com/d/14C1ToZx8KSE4oySqVSPnfI6l3OP2Lrhg"').join('content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ"');
           }
           
           res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
@@ -577,7 +680,7 @@ async function startServer() {
           html = html.split('content="Deputado Rafael Saraiva | Defesa da Causa Animal em SP"').join(`content="${jogoTitle}"`);
           html = html.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA."').join(`content="${jogoDesc}"`);
           html = html.split('content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva e suas ações em defesa da causa animal em todo o estado de São Paulo."').join(`content="${jogoDesc}"`);
-          html = html.split('content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG"').join('content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ"');
+          html = html.split('content="https://lh3.googleusercontent.com/d/14C1ToZx8KSE4oySqVSPnfI6l3OP2Lrhg"').join('content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ"');
         }
         
         res.status(200).set({ 'Content-Type': 'text/html' }).send(html);

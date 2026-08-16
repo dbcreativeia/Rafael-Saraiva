@@ -123,6 +123,53 @@ export async function getDbConnection() {
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS material_campaign (
+        id VARCHAR(255) PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        sobrenome VARCHAR(255) NOT NULL,
+        whatsapp VARCHAR(255),
+        email VARCHAR(255),
+        cep VARCHAR(20),
+        endereco TEXT,
+        numero VARCHAR(50),
+        complemento VARCHAR(255),
+        bairro VARCHAR(255),
+        cidade VARCHAR(255),
+        estado VARCHAR(2),
+        tipoMaterial VARCHAR(50),
+        adesivoPerfurado BOOLEAN DEFAULT false,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ninapassadore_campaign (
+        id VARCHAR(255) PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        sobrenome VARCHAR(255) NOT NULL,
+        whatsapp VARCHAR(255),
+        email VARCHAR(255),
+        cep VARCHAR(20),
+        endereco TEXT,
+        numero VARCHAR(50),
+        complemento VARCHAR(255),
+        bairro VARCHAR(255),
+        cidade VARCHAR(255),
+        estado VARCHAR(2),
+        tipoMaterial VARCHAR(50),
+        adesivoPerfurado BOOLEAN DEFAULT false,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      await pool.query(`ALTER TABLE material_campaign ADD COLUMN adesivoPerfurado BOOLEAN DEFAULT false`);
+    } catch (e) {
+      // Column probably already exists, ignore
+    }
+
     console.log("Conectado ao MySQL com sucesso!");
     return pool;
   } catch (err) {

@@ -6,11 +6,16 @@
   --font-display: "Teko", sans-serif;
   --font-impact: "Anton", sans-serif;
   
-  --color-primary: #00b1fd;
-  --color-secondary: #0192f2;
-  --color-accent: #fed102;
-  --color-dark: #023fb4;
-  --color-brand-orange: #ff3e03;
-  --color-paper: #fefefe;
-  --color-brand-red: #d81b21;
+  --color-primary: #e5a42f;
+  --color-secondary: #d45f2d;
+  --color-accent: #e5a42f;
+  --color-dark: #121622;
+  --color-brand-orange: #d45f2d;
+  --color-paper: #ffffff;
+  --color-brand-red: #d45f2d;
+}
+-e 
+html, body {
+  overflow-x: hidden;
+  width: 100%;
 }

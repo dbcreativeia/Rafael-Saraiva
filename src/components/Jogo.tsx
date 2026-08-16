@@ -84,7 +84,7 @@ export const Jogo = () => {
       const data = await res.json();
       setScores(data);
     } catch (e) {
-      console.error(e);
+      console.warn("API request failed:", e);
     }
   };
 
@@ -103,7 +103,7 @@ export const Jogo = () => {
       });
       fetchScores();
     } catch (e) {
-      console.error(e);
+      console.warn("API request failed:", e);
     }
   };
 
@@ -118,7 +118,7 @@ export const Jogo = () => {
           setAuthForm(prev => ({ ...prev, cidade: data.localidade, estado: data.uf || '' }));
         }
       } catch (err) {
-        console.error(err);
+        console.warn("API request failed:", err);
       }
     }
   };
@@ -253,6 +253,7 @@ export const Jogo = () => {
   };
 
   const showInstructions = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!loggedUser) {
       setCurrentView('LOGIN');
       return;
@@ -442,8 +443,9 @@ export const Jogo = () => {
       ctx.font = '900 80px Poppins';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('RAFAEL', width/2, height/2 - 45);
-      ctx.fillText('SARAIVA', width/2, height/2 + 45);
+      ctx.fillText('RAFAEL', width/2, height/2 - 80);
+      ctx.fillText('SARAIVA', width/2, height/2);
+      ctx.fillText('44077', width/2, height/2 + 80);
 
       // Draw items
       ctx.globalAlpha = 1;
@@ -539,21 +541,21 @@ export const Jogo = () => {
   return (
     <>
       <Helmet>
-        <title>Jogo do Mandato | Deputado Rafael Saraiva</title>
-        <meta name="title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
-        <meta name="description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
+        <title>Jogo do Mandato | Rafael Saraiva 44077</title>
+        <meta name="title" content="Jogo do Mandato | Rafael Saraiva 44077" />
+        <meta name="description" content="Jogue o Jogo do Mandato do Rafael Saraiva 44077, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
-        <meta property="og:description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
+        <meta property="og:title" content="Jogo do Mandato | Rafael Saraiva 44077" />
+        <meta property="og:description" content="Jogue o Jogo do Mandato do Rafael Saraiva 44077, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
         <meta property="og:image" content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" />
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:title" content="Jogo do Mandato | Deputado Rafael Saraiva" />
-        <meta property="twitter:description" content="Jogue o Jogo do Mandato do Deputado Rafael Saraiva, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
+        <meta property="twitter:title" content="Jogo do Mandato | Rafael Saraiva 44077" />
+        <meta property="twitter:description" content="Jogue o Jogo do Mandato do Rafael Saraiva 44077, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
         <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" />
       </Helmet>
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-0 font-sans overflow-hidden">
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center pt-24 md:pt-28 p-0 font-sans overflow-hidden">
       {currentView !== 'PLAYING' && (
-        <Link to="/" className="absolute top-4 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors font-bold z-50">
+        <Link to="/" className="hidden absolute top-28 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors font-bold z-50">
           <ArrowLeft className="w-5 h-5" /> Voltar
         </Link>
       )}
@@ -904,7 +906,7 @@ export const Jogo = () => {
                   </div>
                 </div>
                 <span className="text-xs text-gray-500 font-medium leading-tight pt-1">
-                  Li e concordo com a <Link to="/privacidade" target="_blank" className="text-primary hover:underline">Política de Privacidade</Link> e autorizo o uso dos meus dados.
+                  Li e concordo com a <Link to="/politica-de-privacidade" className="text-primary hover:underline">Política de Privacidade e Proteção de Dados</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
                 </span>
               </label>
               

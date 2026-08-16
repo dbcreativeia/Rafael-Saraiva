@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Shield, FileSignature, CheckCircle2, AlertCircle, Lock, LayoutDashboard, Download, Trash2, Link as LinkIcon, Facebook, Twitter, MessageCircle, PawPrint } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import * as XLSX from 'xlsx';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Footer } from './Footer';
 import { WHATSAPP_NUMBER } from '../constants';
 
@@ -126,7 +126,7 @@ const PublicView = () => {
           }));
         }
       } catch (error) {
-        console.error('Erro ao buscar CEP:', error);
+        console.warn('Erro ao buscar CEP:', error);
       }
     }
   };
@@ -216,15 +216,15 @@ const PublicView = () => {
       <div className="fixed inset-0 pointer-events-none z-0 opacity-60 mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/concrete-wall.png")', backgroundRepeat: 'repeat' }}>
       </div>
       <Helmet>
-        <title>Abaixo-assinado Contra Maus-Tratos | Deputado Rafael Saraiva</title>
-        <meta name="description" content="Junte-se a Rafael Saraiva e Aline Teixeira na luta contra os maus-tratos aos animais. Assine nosso abaixo-assinado e apoie essa causa." />
-        <meta property="og:title" content="Abaixo-assinado Contra Maus-Tratos | Rafael Saraiva e Aline Teixeira" />
+        <title>Abaixo-assinado Contra Maus-Tratos | Rafael Saraiva 44077</title>
+        <meta name="description" content="Junte-se a Rafael Saraiva 44077 e Aline Teixeira na luta contra os maus-tratos aos animais. Assine nosso abaixo-assinado e apoie essa causa." />
+        <meta property="og:title" content="Abaixo-assinado Contra Maus-Tratos | Rafael Saraiva 44077 e Aline Teixeira" />
         <meta property="og:description" content="Milhares de animais ainda sofrem abandono, maus-tratos e falta de assistência. Junte-se a nós, assine e faça parte dessa corrente." />
         <meta property="og:image" content="https://lh3.googleusercontent.com/d/1jna7BizJ3PHwWOVDBV86b_Y2KhlhN7MZ" />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Abaixo-assinado Contra Maus-Tratos" />
-        <meta name="twitter:description" content="Junte-se a Rafael Saraiva e Aline Teixeira na luta contra os maus-tratos aos animais. Assine nosso abaixo-assinado!" />
+        <meta name="twitter:description" content="Junte-se a Rafael Saraiva 44077 e Aline Teixeira na luta contra os maus-tratos aos animais. Assine nosso abaixo-assinado!" />
         <meta name="twitter:image" content="https://lh3.googleusercontent.com/d/1jna7BizJ3PHwWOVDBV86b_Y2KhlhN7MZ" />
       </Helmet>
 
@@ -251,7 +251,7 @@ const PublicView = () => {
       </div>
 
       {/* Header */}
-      <header className="pt-0 md:pt-2 relative overflow-hidden z-10 w-full">
+      <header className="pt-24 md:pt-28 relative overflow-hidden z-10 w-full">
         
         <div className="w-full relative z-10 text-center flex flex-col items-center">
           
@@ -295,7 +295,7 @@ const PublicView = () => {
           <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8 pb-8 relative z-50 pointer-events-auto mt-8 w-full">
             {/* Left Logo */}
             <a href="https://rafaelsaraivasp.com.br/" target="_blank" rel="noreferrer" className="hidden md:block relative z-40">
-              <motion.img initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} src="https://lh3.googleusercontent.com/d/1M6hf4eQkOkt7qiVd6RqR_akBOzSKs2Qd" alt="Logo Rafael Saraiva" className="w-48 object-contain filter brightness-0 invert hover:scale-105 transition-transform" />
+              <motion.img initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} src="https://lh3.googleusercontent.com/d/1T7IJ8z_2QvLKXA3nRsEt30B71oidsOQL" alt="Logo Rafael Saraiva" className="w-48 object-contain filter brightness-0 invert hover:scale-105 transition-transform" />
             </a>
 
             {/* Center Text */}
@@ -309,13 +309,13 @@ const PublicView = () => {
                   <p className="font-impact text-3xl md:text-5xl text-[var(--color-brand-red)] uppercase leading-none">Assine o abaixo-assinado.</p>
                   <p className="text-white/80 font-medium text-lg leading-relaxed mt-4 max-w-xl text-center md:text-left mx-auto md:mx-0">
                     Milhares de animais ainda sofrem abandono, maus-tratos e falta de assistência.<br className="hidden md:block" />
-                    Junte-se ao Rafael Saraiva e Aline Teixeira nessa luta, se inscreva e faça parte dessa corrente.
+                    Junte-se ao Rafael Saraiva 44077 e Aline Teixeira nessa luta, se inscreva e faça parte dessa corrente.
                   </p>
 
                   {/* Mobile Logos */}
                   <div className="flex md:hidden flex-row items-center justify-center gap-6 mt-8 w-full relative z-50">
                     <a href="https://rafaelsaraivasp.com.br/" target="_blank" rel="noreferrer" className="block relative z-40">
-                      <img src="https://lh3.googleusercontent.com/d/1M6hf4eQkOkt7qiVd6RqR_akBOzSKs2Qd" alt="Logo Rafael Saraiva" className="w-32 object-contain filter brightness-0 invert" />
+                      <img src="https://lh3.googleusercontent.com/d/1T7IJ8z_2QvLKXA3nRsEt30B71oidsOQL" alt="Logo Rafael Saraiva" className="w-32 object-contain filter brightness-0 invert" />
                     </a>
                     <img src="https://lh3.googleusercontent.com/d/1hMUOo95ZLm3H66ehCUaISvWLIZ0Fp0eS" alt="Logo Aline Teixeira" className="w-32 object-contain filter brightness-0 invert" />
                   </div>
@@ -459,7 +459,7 @@ const PublicView = () => {
                     className="mt-1 w-5 h-5 rounded border-gray-300 text-[var(--color-brand-red)] focus:ring-[var(--color-brand-red)]"
                   />
                   <label htmlFor="lgpd" className="text-base text-gray-800 font-medium leading-relaxed">
-                    Estou de acordo em fornecer meus dados para este abaixo-assinado e aceito os termos da <a href="https://rafaelsaraivasp.com.br/politica-de-privacidade" target="_blank" rel="noreferrer" className="font-bold text-[var(--color-brand-red)] hover:underline">Lei Geral de Proteção de Dados (LGPD)</a> e a Política de Privacidade.
+                    Estou de acordo em fornecer meus dados para este abaixo-assinado e aceito os termos da <Link to="/politica-de-privacidade" className="font-bold text-[var(--color-brand-red)] hover:underline" >Lei Geral de Proteção de Dados (LGPD) e a Política de Privacidade</Link>.
                   </label>
                 </div>
               </div>
@@ -498,9 +498,9 @@ const PublicView = () => {
             &copy; 2026 Deputado Rafael Saraiva
           </p>
           <div className="flex items-center gap-6">
-            <a href="https://rafaelsaraivasp.com.br/politica-de-privacidade" target="_blank" rel="noreferrer" className="text-white/60 hover:text-white transition-colors text-sm font-medium">
+            <Link to="/politica-de-privacidade" className="text-white/60 hover:text-white transition-colors text-sm font-medium">
               Política de Privacidade
-            </a>
+            </Link>
           </div>
         </div>
       </footer>
@@ -523,7 +523,7 @@ const AdminView = () => {
       .then(d => {
         setCities(d.map((c: any) => c.nome).sort());
       })
-      .catch(err => console.error(err));
+      .catch(err => console.warn("API request failed:", err));
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -543,7 +543,7 @@ const AdminView = () => {
       const json = await response.json();
       setData(Array.isArray(json) ? json : []);
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -564,7 +564,7 @@ const AdminView = () => {
       await fetch(`/api/contra-maus-tratos/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
   };
 

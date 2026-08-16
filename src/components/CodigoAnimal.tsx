@@ -64,7 +64,7 @@ export const CodigoAnimal = () => {
         setLoadingCities(false);
       })
       .catch(err => {
-        console.error(err);
+        console.warn("API request failed:", err);
         setLoadingCities(false);
       });
   }, []);
@@ -92,7 +92,7 @@ export const CodigoAnimal = () => {
         body: JSON.stringify(citizenFormData)
       });
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
     setIsCitizenFormSubmitted(true);
     
@@ -115,7 +115,7 @@ export const CodigoAnimal = () => {
         body: JSON.stringify(petitionFormData)
       });
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
     setIsPetitionSubmitted(true);
     setTimeout(() => {
@@ -140,7 +140,7 @@ export const CodigoAnimal = () => {
           }));
         }
       } catch (err) {
-        console.error(err);
+        console.warn("API request failed:", err);
       }
     }
   };
@@ -162,7 +162,7 @@ export const CodigoAnimal = () => {
           }));
         }
       } catch (err) {
-        console.error(err);
+        console.warn("API request failed:", err);
       }
     }
   };
@@ -184,7 +184,7 @@ export const CodigoAnimal = () => {
         }
       }, 100);
     } catch (error) {
-      console.error(error);
+      console.warn("API request failed:", error);
     }
     setIsSearching(false);
   };
@@ -221,7 +221,7 @@ export const CodigoAnimal = () => {
         downloadPDF();
       }
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
   };
 
@@ -230,38 +230,25 @@ export const CodigoAnimal = () => {
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col text-gray-900">
       <Helmet>
-        <title>Código Animal Municipal | Deputado Rafael Saraiva</title>
-        <meta name="title" content="Código Animal Municipal | Deputado Rafael Saraiva" />
+        <title>Código Animal Municipal | Rafael Saraiva 44077</title>
+        <meta name="title" content="Código Animal Municipal | Rafael Saraiva 44077" />
         <meta name="description" content="Iniciativa para a implementação do Código Municipal de Proteção Animal nas cidades. Ajude a proteger os animais no seu município." />
-        <meta name="keywords" content="Código Animal, Proteção Animal, Lei Animal, Rafael Saraiva, Código Municipal de Proteção Animal" />
+        <meta name="keywords" content="Código Animal, Proteção Animal, Lei Animal, Rafael Saraiva 44077, Rafael Saraiva, Código Municipal de Proteção Animal" />
         
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://rafaelsaraiva.com.br/codigoanimal" />
-        <meta property="og:title" content="Código Animal Municipal | Deputado Rafael Saraiva" />
+        <meta property="og:title" content="Código Animal Municipal | Rafael Saraiva 44077" />
         <meta property="og:description" content="Iniciativa para a implementação do Código Municipal de Proteção Animal nas cidades. Ajude a proteger os animais no seu município." />
-        <meta property="og:image" content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG" />
+        <meta property="og:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
 
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="https://rafaelsaraiva.com.br/codigoanimal" />
-        <meta property="twitter:title" content="Código Animal Municipal | Deputado Rafael Saraiva" />
+        <meta property="twitter:title" content="Código Animal Municipal | Rafael Saraiva 44077" />
         <meta property="twitter:description" content="Iniciativa para a implementação do Código Municipal de Proteção Animal nas cidades. Ajude a proteger os animais no seu município." />
-        <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1LTl540agD9Vz8CK3qckzHvifJrY2bYcG" />
+        <meta property="twitter:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
       </Helmet>
-      <div className="flex-1 py-10 md:py-14">
+      <div className="flex-1 pt-28 md:pt-36 pb-10 md:pb-14">
         <div className="max-w-6xl mx-auto px-6">
-          
-          {/* Top Bar with Nav and Logo */}
-          <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-            <Link to="/" className="inline-flex items-center gap-2 text-primary hover:text-blue-800 font-bold w-full md:w-auto">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Voltar para o início
-            </Link>
-            <img 
-              src="https://lh3.googleusercontent.com/d/1M6hf4eQkOkt7qiVd6RqR_akBOzSKs2Qd" 
-              alt="Logo Rafael Saraiva" 
-              className="h-12 md:h-16 w-auto invert"
-              referrerPolicy="no-referrer"
-            />
-          </div>
           
           {/* HERO SECTION */}
           <div className="bg-gradient-to-br from-dark to-primary text-white rounded-3xl p-6 sm:p-8 md:p-12 lg:p-16 shadow-xl mb-16 relative overflow-hidden flex flex-col lg:flex-row justify-between items-center gap-10 lg:gap-12">
@@ -475,7 +462,7 @@ export const CodigoAnimal = () => {
                               <label className="flex items-start gap-2 mt-4 cursor-pointer">
                                 <input required type="checkbox" className="mt-0.5 flex-shrink-0 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary" />
                                 <span className="text-xs text-gray-500 leading-relaxed text-left">
-                                  Li e concordo com a <Link to="/politica-de-privacidade" className="underline hover:text-gray-700">Política de Privacidade</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
+                                  Li e concordo com a <Link to="/politica-de-privacidade" className="underline hover:text-gray-700" >Política de Privacidade e Proteção de Dados</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
                                 </span>
                               </label>
                             </div>
@@ -564,7 +551,7 @@ export const CodigoAnimal = () => {
                                     <label className="flex items-start gap-2 mt-4 cursor-pointer">
                                       <input required type="checkbox" className="mt-0.5 flex-shrink-0 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary" />
                                       <span className="text-xs text-gray-500 leading-relaxed text-left">
-                                        Li e concordo com a <Link to="/politica-de-privacidade" className="underline hover:text-gray-700">Política de Privacidade</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
+                                        Li e concordo com a <Link to="/politica-de-privacidade" className="underline hover:text-gray-700" >Política de Privacidade e Proteção de Dados</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
                                       </span>
                                     </label>
                                   </div>
@@ -702,7 +689,7 @@ export const CodigoAnimal = () => {
                     <label className="flex items-start gap-2 mt-4 cursor-pointer max-w-xl mx-auto">
                       <input required type="checkbox" className="mt-0.5 flex-shrink-0 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary" />
                       <span className="text-xs text-gray-500 leading-relaxed text-left">
-                        Li e concordo com a <Link to="/politica-de-privacidade" className="underline hover:text-gray-700">Política de Privacidade</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
+                        Li e concordo com a <Link to="/politica-de-privacidade" className="underline hover:text-gray-700" >Política de Privacidade e Proteção de Dados</Link> e com o tratamento de meus dados, em conformidade com a LGPD.
                       </span>
                     </label>
                   </form>

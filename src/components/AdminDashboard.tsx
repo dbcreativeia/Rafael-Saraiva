@@ -6,6 +6,210 @@ import * as XLSX from 'xlsx';
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
+
+const NinaPassadoreAdminTab = () => {
+  const [ninapassadore, setNinapassadore] = React.useState<any[]>([]);
+
+  const fetchNinapassadore = async () => {
+    try {
+      const res = await fetch('/api/ninapassadore');
+      const data = await res.json();
+      setNinapassadore(data);
+    } catch(err) {
+      console.warn("API request failed:", err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchNinapassadore();
+  }, []);
+
+  const deleteNinapassadore = async (id: string) => {
+    try {
+      await fetch('/api/ninapassadore/' + id, { method: 'DELETE' });
+      fetchNinapassadore();
+    } catch (err) {
+      console.warn("API request failed:", err);
+    }
+  };
+
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(ninapassadore.map(m => ({
+      Data: new Date(m.createdAt).toLocaleString(),
+      Nome: m.nome,
+      Sobrenome: m.sobrenome,
+      WhatsApp: m.whatsapp,
+      Email: m.email,
+      Endereço: m.endereco,
+      Número: m.numero,
+      Complemento: m.complemento,
+      Bairro: m.bairro,
+      Cidade: m.cidade,
+      Estado: m.estado,
+      CEP: m.cep,
+      'Tipo de Material': m.tipoMaterial,
+      'Adesivo Perfurado': m.adesivoPerfurado ? 'Sim' : 'Não'
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Material Dobrada");
+    XLSX.writeFile(wb, "pedidos_material_dobrada.xlsx");
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material Dobrada</h2>
+        <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
+          <Download className="w-5 h-5" /> Exportar Planilha
+        </button>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider">
+              <th className="p-4 font-bold">Data</th>
+              <th className="p-4 font-bold">Nome</th>
+              <th className="p-4 font-bold">WhatsApp</th>
+              <th className="p-4 font-bold">Cidade</th>
+              <th className="p-4 font-bold">Tipo</th>
+              <th className="p-4 font-bold">Adesivo Perf.</th>
+              <th className="p-4 font-bold">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ninapassadore.map(m => (
+              <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="p-4 text-sm font-medium text-gray-600">{new Date(m.createdAt).toLocaleDateString()}</td>
+                <td className="p-4 font-bold text-gray-800">{m.nome} {m.sobrenome}</td>
+                <td className="p-4 text-sm text-gray-600">{m.whatsapp}</td>
+                <td className="p-4 text-sm text-gray-600">{m.cidade}/{m.estado}</td>
+                <td className="p-4 text-sm">
+                  <span className={`px-2 py-1 rounded text-xs font-bold ${m.tipoMaterial === 'digital' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                    {m.tipoMaterial}
+                  </span>
+                </td>
+                <td className="p-4 text-sm text-gray-600 font-medium">
+                  {m.tipoMaterial === 'impresso' ? (m.adesivoPerfurado ? 'Sim' : 'Não') : '-'}
+                </td>
+                <td className="p-4">
+                  <button onClick={() => deleteNinapassadore(m.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-5 h-5" /></button>
+                </td>
+              </tr>
+            ))}
+            {ninapassadore.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-gray-500">Nenhum pedido recebido ainda.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+const MaterialAdminTab = () => {
+  const [materials, setMaterials] = React.useState<any[]>([]);
+
+  const fetchMaterials = async () => {
+    try {
+      const res = await fetch('/api/material');
+      const data = await res.json();
+      setMaterials(data);
+    } catch(err) {
+      console.warn("API request failed:", err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchMaterials();
+  }, []);
+
+  const deleteMaterial = async (id: string) => {
+    try {
+      await fetch('/api/material/' + id, { method: 'DELETE' });
+      fetchMaterials();
+    } catch (err) {
+      console.warn("API request failed:", err);
+    }
+  };
+
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(materials.map(m => ({
+      Data: new Date(m.createdAt).toLocaleString(),
+      Nome: m.nome,
+      Sobrenome: m.sobrenome,
+      WhatsApp: m.whatsapp,
+      Email: m.email,
+      Endereço: m.endereco,
+      Número: m.numero,
+      Complemento: m.complemento,
+      Bairro: m.bairro,
+      Cidade: m.cidade,
+      Estado: m.estado,
+      CEP: m.cep,
+      'Tipo de Material': m.tipoMaterial,
+      'Adesivo Perfurado': m.adesivoPerfurado ? 'Sim' : 'Não'
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Materiais");
+    XLSX.writeFile(wb, "pedidos_material.xlsx");
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material de Campanha</h2>
+        <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
+          <Download className="w-5 h-5" /> Exportar Planilha
+        </button>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider">
+              <th className="p-4 font-bold">Data</th>
+              <th className="p-4 font-bold">Nome</th>
+              <th className="p-4 font-bold">WhatsApp</th>
+              <th className="p-4 font-bold">Cidade</th>
+              <th className="p-4 font-bold">Tipo</th>
+              <th className="p-4 font-bold">Adesivo Perf.</th>
+              <th className="p-4 font-bold">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {materials.map(m => (
+              <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="p-4 text-sm font-medium text-gray-600">{new Date(m.createdAt).toLocaleDateString()}</td>
+                <td className="p-4 font-bold text-gray-800">{m.nome} {m.sobrenome}</td>
+                <td className="p-4 text-sm text-gray-600">{m.whatsapp}</td>
+                <td className="p-4 text-sm text-gray-600">{m.cidade}/{m.estado}</td>
+                <td className="p-4 text-sm">
+                  <span className={`px-2 py-1 rounded text-xs font-bold ${m.tipoMaterial === 'digital' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                    {m.tipoMaterial}
+                  </span>
+                </td>
+                <td className="p-4 text-sm text-gray-600 font-medium">
+                  {m.tipoMaterial === 'impresso' ? (m.adesivoPerfurado ? 'Sim' : 'Não') : '-'}
+                </td>
+                <td className="p-4">
+                  <button onClick={() => deleteMaterial(m.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-5 h-5" /></button>
+                </td>
+              </tr>
+            ))}
+            {materials.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-gray-500">Nenhum pedido de material recebido ainda.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 export const AdminDashboard = () => {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -26,7 +230,7 @@ export const AdminDashboard = () => {
   const [sortJogoField, setSortJogoField] = useState<'date' | 'score' | 'playCount'>('date');
   const [sortJogoOrder, setSortJogoOrder] = useState<'asc' | 'desc'>('desc');
   
-  const [activeTab, setActiveTab] = useState<'PROTOCOLOS' | 'JOGO'>('PROTOCOLOS');
+  const [activeTab, setActiveTab] = useState<'PROTOCOLOS' | 'JOGO' | 'MATERIAL'>('PROTOCOLOS');
   const [jogoUsersData, setJogoUsersData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'unique' | 'duplicates'>('all');
 
@@ -36,7 +240,7 @@ export const AdminDashboard = () => {
     fetch('/municipios.json')
       .then(res => res.json())
       .then(d => setMunicipiosData(d))
-      .catch(e => console.error(e));
+      .catch(e => console.warn("API request failed:", e));
   }, []);
 
   // Optional cities tracking (now unused in AdminDashboard since we removed form, but kept if needed)
@@ -51,7 +255,7 @@ export const AdminDashboard = () => {
         setLoadingCities(false);
       })
       .catch(err => {
-        console.error(err);
+        console.warn("API request failed:", err);
         setLoadingCities(false);
       });
   }, []);
@@ -84,7 +288,7 @@ export const AdminDashboard = () => {
       setPetitionsData(Array.isArray(petitionsResult) ? petitionsResult : []);
       setJogoUsersData(Array.isArray(jogoUsersResult) ? jogoUsersResult : []);
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
     if (!quiet) setLoading(false);
   };
@@ -103,7 +307,7 @@ export const AdminDashboard = () => {
       await fetch(`/api/protocols/${id}/toggle-active`, { method: 'PUT' });
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
   };
 
@@ -115,7 +319,7 @@ export const AdminDashboard = () => {
       else if (type === 'petition') await fetch(`/api/petitions/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.warn("API request failed:", err);
     }
   };
 
@@ -325,7 +529,7 @@ export const AdminDashboard = () => {
       await fetch(`/api/jogo/users/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (e) {
-      console.error(e);
+      console.warn("API request failed:", e);
     }
   };
 
@@ -376,7 +580,6 @@ export const AdminDashboard = () => {
               <LayoutDashboard className="w-8 h-8 text-primary" />
               Painel Administrativo
             </h1>
-            <p className="text-gray-500 font-medium mt-1">Gerenciamento de protocolos do Código Animal</p>
           </div>
           
           <div className="flex flex-wrap gap-3">
@@ -406,7 +609,29 @@ export const AdminDashboard = () => {
           >
             Jogo - Missão Resgate
           </button>
+          <button
+            onClick={() => setActiveTab('MATERIAL')}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'MATERIAL' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Material de Campanha
+          </button>
+          <button
+            onClick={() => setActiveTab('MATERIAL_DOBRADA')}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'MATERIAL_DOBRADA' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Material Dobrada
+
+          </button>
         </div>
+
+        
+        {activeTab === 'MATERIAL' && (
+          <MaterialAdminTab />
+        )}
+
+        {activeTab === 'MATERIAL_DOBRADA' && (
+          <NinaPassadoreAdminTab />
+        )}
 
         {activeTab === 'PROTOCOLOS' && (
           <div>

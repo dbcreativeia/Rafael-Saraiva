@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Phone, Instagram, Facebook, MessageCircle, PawPrint, Heart, BookOpen, Gamepad2 } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
+import { Gamepad2, BookOpen } from 'lucide-react';
 
 import { WHATSAPP_NUMBER, WHATSAPP_MESSAGE } from './constants';
 import { MandatoInfo } from './components/MandatoInfo';
@@ -11,16 +12,30 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { CodigoAnimal } from './components/CodigoAnimal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ContraMausTratos } from './components/ContraMausTratos';
+import { MaterialCampanha } from './components/MaterialCampanha';
+import { NinaPassadore } from './components/NinaPassadore';
 import { Jogo } from './components/Jogo';
 
+import { FloatingWhatsApp } from './components/FloatingWhatsApp';
+import { Navbar } from './components/Navbar';
 import { trackEvent, generateEventId, sendCAPIEvent } from './analytics';
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (hash) {
+      setTimeout(() => {
+        const element = document.getElementById(hash.replace('#', ''));
+        if (element) {
+          const y = element.getBoundingClientRect().top + window.scrollY - 112; // 112px offset for the fixed navbar (h-28)
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
 
   return null;
 }
@@ -37,19 +52,13 @@ declare global {
 function LandingPage() {
   const location = useLocation();
 
+  useEffect(() => {
+    trackEvent('PageView_Home');
+  }, []);
+
   if (location.hash === '#admin') {
     return <AdminDashboard />;
   }
-
-  const handleWhatsAppClick = () => {
-    trackEvent('Contact');
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'click_whatsapp', { event_category: 'engagement', event_label: 'WhatsApp Button' });
-    }
-    
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
-    window.open(url, '_blank');
-  };
 
   const handleInstagramClick = () => {
     trackEvent('Click_Instagram');
@@ -75,6 +84,23 @@ function LandingPage() {
   };
 
   return (
+    <>
+      <Helmet>
+        <title>Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP</title>
+        <meta name="title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />
+        <meta name="description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA." />
+        <meta name="keywords" content="Rafael Saraiva 44077, Rafael Saraiva, Deputado Estadual SP, Causa Animal, Proteção Animal, Instituto ELPA, Política São Paulo, Animais, São Paulo" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://rafaelsaraiva.com.br/" />
+        <meta property="og:title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />
+        <meta property="og:description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo." />
+        <meta property="og:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://rafaelsaraiva.com.br/" />
+        <meta property="twitter:title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />
+        <meta property="twitter:description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo." />
+        <meta property="twitter:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+      </Helmet>
     <main className="overflow-x-hidden flex flex-col bg-gray-50 text-gray-900 w-full relative">
       <div className="min-h-screen bg-gradient-to-br from-dark via-secondary to-primary relative overflow-hidden flex flex-col selection:bg-accent selection:text-dark">
       {/* Standard Campaign Texture */}
@@ -91,7 +117,7 @@ function LandingPage() {
       <div className="absolute top-0 left-0 w-full md:w-1/2 h-full bg-gradient-to-r from-dark/50 to-transparent pointer-events-none z-0" />
 
       <div className="flex-1 flex flex-col relative z-10 max-w-7xl mx-auto px-6 w-full h-full">
-        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center lg:justify-between h-full pt-12 pb-16 lg:pt-16 lg:pb-24 xl:pb-32">
+        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center lg:justify-between h-full pt-28 pb-16 lg:pt-40 lg:pb-24 xl:pt-48 xl:pb-32">
           
           {/* Content Area */}
           <div className="text-center lg:text-left flex flex-col items-center lg:items-start z-30 w-full md:w-[80%] lg:w-[55%] xl:w-1/2 mt-4 lg:mt-0 lg:pl-8 xl:pl-12">
@@ -99,26 +125,14 @@ function LandingPage() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className="mb-8 md:mb-10 lg:mb-12 inline-block"
+              className="mb-8 md:mb-10 lg:mb-16 xl:mb-20 inline-block"
             >
               <img 
-                src="https://lh3.googleusercontent.com/d/1M6hf4eQkOkt7qiVd6RqR_akBOzSKs2Qd" 
+                src="https://lh3.googleusercontent.com/d/1T7IJ8z_2QvLKXA3nRsEt30B71oidsOQL" 
                 alt="Logo Rafael Saraiva" 
-                className="h-24 sm:h-28 md:h-32 lg:h-40 xl:h-48 w-auto drop-shadow-xl"
+                className="h-44 sm:h-48 md:h-52 lg:h-[22rem] xl:h-[26rem] 2xl:h-[28rem] w-auto drop-shadow-xl"
                 referrerPolicy="no-referrer"
               />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-              className="bg-dark/20 backdrop-blur-sm border border-white/10 rounded-2xl p-4 md:p-6 mb-6 md:mb-12 max-w-md md:max-w-lg lg:max-w-xl relative shadow-lg"
-            >
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-2/3 bg-accent rounded-r-md"></div>
-              <p className="text-white text-base sm:text-lg md:text-xl lg:text-2xl font-medium leading-relaxed font-sans pl-3 text-left">
-                Acompanhe nosso mandato e as ações em <strong className="text-accent font-bold">defesa da causa animal em todo o estado de São Paulo</strong>.
-              </p>
             </motion.div>
 
             {/* FOTO MOBILE NA PRIMEIRA DOBRA */}
@@ -147,19 +161,32 @@ function LandingPage() {
               transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
               className="flex flex-col gap-6 md:gap-8 w-full max-w-md lg:max-w-lg relative z-20"
             >
-              {/* Botão Destaque: Jogo */}
+              
+              {/* Botão Material Campanha */}
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl blur opacity-60 group-hover:opacity-80 transition duration-500"></div>
+                <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
+                <Link
+                  to="/material"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="relative w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-black py-4 md:py-5 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all transform hover:-translate-y-1 shadow-xl border border-white/20 text-center"
+                >
+                  <div className="flex items-center gap-3 text-lg md:text-xl uppercase tracking-wider">
+                    <span>Quero receber o material de campanha!</span>
+                  </div>
+                </Link>
+              </div>
+
+              {/* Botão Jogo */}
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
                 <Link
                   to="/jogo"
-                  className="relative w-full overflow-hidden font-black py-8 md:py-10 px-6 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all transform hover:-translate-y-1 shadow-2xl text-2xl md:text-3xl uppercase tracking-wider border border-white/20 text-center leading-tight group bg-dark"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="relative w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black py-4 md:py-5 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all transform hover:-translate-y-1 shadow-xl border border-white/20 text-center"
                 >
-                  <div className="absolute inset-0 bg-black/50 group-hover:bg-black/30 transition-colors z-10 duration-500"></div>
-                  <img src="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" alt="Missão Resgate Animal" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700" />
-                  <div className="relative z-20 flex flex-col items-center">
-                    <Gamepad2 className="w-12 h-12 md:w-14 md:h-14 text-white mb-2 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]" />
-                    <span className="text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]">Jogue Agora</span>
-                    <span className="text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] mt-1">MISSÃO RESGATE ANIMAL SP</span>
+                  <div className="flex items-center gap-3 text-lg md:text-xl uppercase tracking-wider">
+                    <Gamepad2 className="w-6 h-6 md:w-7 md:h-7" />
+                    <span>Jogue Agora - Missão Resgate Animal</span>
                   </div>
                 </Link>
               </div>
@@ -176,64 +203,6 @@ function LandingPage() {
                     <span>Minha cidade protege os animais?</span>
                   </div>
                 </Link>
-              </div>
-
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-[#25D366] to-[#128C7E] rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
-                <button
-                  onClick={handleWhatsAppClick}
-                  className="relative w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-black py-4 md:py-5 px-6 rounded-2xl flex items-center justify-center gap-3 transition-all transform hover:-translate-y-1 shadow-xl text-lg md:text-xl uppercase tracking-wider border border-white/20"
-                >
-                  <MessageCircle className="w-6 h-6 md:w-7 md:h-7 fill-current" />
-                  Fale no WhatsApp
-                </button>
-              </div>
-
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-accent to-yellow-400 rounded-2xl blur opacity-50 group-hover:opacity-70 transition duration-500"></div>
-                <a
-                  href="https://www.ielpa.org/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={handleElpaClick}
-                  className="relative w-full bg-accent hover:bg-yellow-400 text-dark font-black py-4 md:py-5 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all transform hover:-translate-y-1 shadow-xl border border-white/20"
-                >
-                  <div className="flex items-center gap-3 text-lg md:text-xl uppercase tracking-wider">
-                    <PawPrint className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2.5} />
-                    Conheça o Instituto ELPA
-                  </div>
-                </a>
-              </div>
-
-              <div className="flex flex-col gap-4 md:gap-5">
-                <div className="flex items-center gap-4">
-                  <div className="h-px bg-white/20 flex-1"></div>
-                  <span className="text-xs md:text-sm font-bold text-white/60 uppercase tracking-widest text-center">
-                    Siga nas redes sociais
-                  </span>
-                  <div className="h-px bg-white/20 flex-1"></div>
-                </div>
-                
-                <div className="flex gap-4">
-                  <a 
-                    href="https://instagram.com/rafaelsaraivasp" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    onClick={handleInstagramClick}
-                    className="flex-1 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white font-bold py-3 md:py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:-translate-y-1 text-sm md:text-base uppercase tracking-wider group"
-                  >
-                    <Instagram size={18} className="text-[#ee2a7b] group-hover:scale-110 transition-transform md:w-5 md:h-5" /> Instagram
-                  </a>
-                  <a 
-                    href="https://facebook.com/rafaelsaraivasp" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    onClick={handleFacebookClick}
-                    className="flex-1 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white font-bold py-3 md:py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:-translate-y-1 text-sm md:text-base uppercase tracking-wider group"
-                  >
-                    <Facebook size={18} className="text-[#1877F2] group-hover:scale-110 transition-transform md:w-5 md:h-5" /> Facebook
-                  </a>
-                </div>
               </div>
             </motion.div>
           </div>
@@ -272,6 +241,7 @@ function LandingPage() {
     <MandatoInfo />
     <Footer />
     </main>
+    </>
   );
 }
 
@@ -280,10 +250,14 @@ function App() {
     <BrowserRouter>
       <ScrollToTop />
       <CookieConsent />
+      <Navbar />
+      <FloatingWhatsApp />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/codigoanimal" element={<CodigoAnimal />} />
         <Route path="/contramaustratos" element={<ContraMausTratos />} />
+        <Route path="/material" element={<MaterialCampanha />} />
+        <Route path="/ninapassadore" element={<NinaPassadore />} />
         <Route path="/jogo" element={<Jogo />} />
         <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
         <Route path="*" element={<LandingPage />} />

@@ -90,7 +90,7 @@ export const MandatoInfo = () => {
   };
 
   return (
-    <div className="bg-white text-gray-900 w-full z-20 relative pt-20 pb-24">
+    <div id="mandato" className="bg-white text-gray-900 w-full z-20 relative pt-20 pb-24">
       {/* Container */}
       <div className="max-w-7xl mx-auto px-6">
         {/* Title */}

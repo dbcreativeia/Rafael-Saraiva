@@ -25,7 +25,7 @@ export const sendCAPIEvent = async (eventName: string, eventId: string) => {
       }),
     });
   } catch (e) {
-    console.error('Erro ao enviar evento CAPI:', e);
+    console.warn('Erro ao enviar evento CAPI:', e);
   }
 };
 
