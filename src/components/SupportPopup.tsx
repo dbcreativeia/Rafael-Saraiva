@@ -12,6 +12,7 @@ export const SupportPopup: React.FC = () => {
   const [cep, setCep] = useState('');
   const [bairro, setBairro] = useState('');
   const [endereco, setEndereco] = useState('');
+  const [cidade, setCidade] = useState('São Paulo');
   const [cepValid, setCepValid] = useState<boolean | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
@@ -74,20 +75,20 @@ export const SupportPopup: React.FC = () => {
         
         if (data.erro) {
           setCepValid(false);
-          setCepError('CEP não encontrado. Por favor, verifique o número.');
+          setCepError('CEP não encontrado. Por favor, verifique o número informado.');
         } else {
-          // Normalizar cidade e estado para validação estrita de São Paulo Capital
-          const cidade = (data.localidade || '').trim().toLowerCase();
           const uf = (data.uf || '').trim().toUpperCase();
+          const localidade = (data.localidade || '').trim();
 
-          if (cidade === 'são paulo' || cidade === 'sao paulo') {
+          if (uf === 'SP') {
             setCepValid(true);
+            setCidade(localidade || 'São Paulo');
             setBairro(data.bairro || '');
             setEndereco(data.logradouro || '');
             setCepError('');
           } else {
             setCepValid(false);
-            setCepError(`Esta iniciativa é direcionada exclusivamente a moradores do município de São Paulo. O CEP informado pertence a ${data.localidade || 'outro município'} (${uf}).`);
+            setCepError(`Esta iniciativa é direcionada exclusivamente a moradores do Estado de São Paulo (SP). O CEP informado pertence a ${localidade || 'outro estado'} (${uf}).`);
           }
         }
       } catch (err) {
@@ -131,7 +132,7 @@ export const SupportPopup: React.FC = () => {
     }
 
     if (cepValid === false) {
-      setError(cepError || 'O cadastro é exclusivo para a cidade de São Paulo.');
+      setError(cepError || 'O cadastro é exclusivo para residentes do Estado de São Paulo.');
       return;
     }
 
@@ -153,7 +154,7 @@ export const SupportPopup: React.FC = () => {
           cep: cleanCep,
           endereco: endereco || '',
           bairro: bairro || '',
-          cidade: 'São Paulo',
+          cidade: cidade || 'São Paulo',
           estado: 'SP'
         })
       });
@@ -179,7 +180,7 @@ export const SupportPopup: React.FC = () => {
         cep: cep,
         endereco: endereco || '',
         bairro: bairro || '',
-        cidade: 'São Paulo',
+        cidade: cidade || 'São Paulo',
         estado: 'SP'
       };
       try {
@@ -339,7 +340,7 @@ export const SupportPopup: React.FC = () => {
                       CEP <span className="text-red-500">*</span>
                     </label>
                     <span className="text-[11px] text-gray-500 font-medium">
-                      (Válido exclusivamente para residentes da cidade de São Paulo)
+                      (Válido para todo o Estado de São Paulo)
                     </span>
                   </div>
                   
@@ -376,7 +377,7 @@ export const SupportPopup: React.FC = () => {
                   {cepValid === true && (
                     <p className="text-xs text-green-700 mt-1.5 font-medium flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5 shrink-0 text-green-600" />
-                      São Paulo - SP {bairro ? `• Bairro: ${bairro}` : ''}
+                      {cidade} - SP {bairro ? `• Bairro: ${bairro}` : ''}
                     </p>
                   )}
                 </div>
