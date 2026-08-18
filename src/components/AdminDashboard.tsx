@@ -10,9 +10,14 @@ import 'leaflet/dist/leaflet.css';
 const NinaPassadoreAdminTab = () => {
   const [ninapassadore, setNinapassadore] = React.useState<any[]>([]);
   const [cidadeFilter, setCidadeFilter] = React.useState("");
+  const [tipoFilter, setTipoFilter] = React.useState<"todos" | "impresso" | "digital">("todos");
 
   const uniqueCities = Array.from(new Set(ninapassadore.map(m => m.cidade))).filter(Boolean).sort();
-  const filteredData = ninapassadore.filter(m => cidadeFilter ? m.cidade === cidadeFilter : true);
+  const filteredData = ninapassadore.filter(m => {
+    const matchCity = cidadeFilter ? m.cidade === cidadeFilter : true;
+    const matchTipo = tipoFilter !== 'todos' ? m.tipoMaterial === tipoFilter : true;
+    return matchCity && matchTipo;
+  });
   const totalCount = ninapassadore.length;
   const impressoCount = ninapassadore.filter(m => m.tipoMaterial === 'impresso').length;
   const digitalCount = ninapassadore.filter(m => m.tipoMaterial === 'digital').length;
@@ -40,8 +45,22 @@ const NinaPassadoreAdminTab = () => {
     }
   };
 
-  const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(ninapassadore.map(m => ({
+  const exportFilteredToExcel = (tipo?: 'impresso' | 'digital') => {
+    let dataset = ninapassadore;
+    let sheetName = "Material Dobrada";
+    let filename = "pedidos_material_dobrada_TODOS.xlsx";
+
+    if (tipo === 'impresso') {
+      dataset = ninapassadore.filter(m => m.tipoMaterial === 'impresso');
+      sheetName = "Impressos";
+      filename = "pedidos_material_dobrada_IMPRESSO.xlsx";
+    } else if (tipo === 'digital') {
+      dataset = ninapassadore.filter(m => m.tipoMaterial === 'digital');
+      sheetName = "Digitais";
+      filename = "pedidos_material_dobrada_DIGITAL.xlsx";
+    }
+
+    const ws = XLSX.utils.json_to_sheet(dataset.map(m => ({
       Data: new Date(m.createdAt).toLocaleString(),
       Nome: m.nome,
       Sobrenome: m.sobrenome,
@@ -58,28 +77,37 @@ const NinaPassadoreAdminTab = () => {
       'Adesivo Perfurado': m.adesivoPerfurado ? 'Sim' : 'Não'
     })));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Material Dobrada");
-    XLSX.writeFile(wb, "pedidos_material_dobrada.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
   };
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material Dobrada</h2>
           <div className="flex gap-2">
-            <div className="text-sm font-bold bg-purple-50 text-purple-600 py-1 px-3 rounded-lg">
+            <button 
+              onClick={() => setTipoFilter('todos')} 
+              className={`text-sm font-bold py-1 px-3 rounded-lg transition-all ${tipoFilter === 'todos' ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-50 text-purple-600 hover:bg-purple-100'}`}
+            >
               {totalCount} Geral
-            </div>
-            <div className="text-sm font-bold bg-orange-50 text-orange-600 py-1 px-3 rounded-lg">
+            </button>
+            <button 
+              onClick={() => setTipoFilter('impresso')} 
+              className={`text-sm font-bold py-1 px-3 rounded-lg transition-all ${tipoFilter === 'impresso' ? 'bg-orange-600 text-white shadow-sm' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}
+            >
               {impressoCount} Impressos
-            </div>
-            <div className="text-sm font-bold bg-blue-50 text-blue-600 py-1 px-3 rounded-lg">
+            </button>
+            <button 
+              onClick={() => setTipoFilter('digital')} 
+              className={`text-sm font-bold py-1 px-3 rounded-lg transition-all ${tipoFilter === 'digital' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+            >
               {digitalCount} Digitais
-            </div>
+            </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
@@ -93,9 +121,30 @@ const NinaPassadoreAdminTab = () => {
               ))}
             </select>
           </div>
-          <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
-            <Download className="w-5 h-5" /> Exportar
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button 
+              onClick={() => exportFilteredToExcel('impresso')} 
+              title="Exportar leads de material impresso"
+              className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4" /> Exportar Impressos ({impressoCount})
+            </button>
+            <button 
+              onClick={() => exportFilteredToExcel('digital')} 
+              title="Exportar leads de material digital"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4" /> Exportar Digitais ({digitalCount})
+            </button>
+            <button 
+              onClick={() => exportFilteredToExcel()} 
+              title="Exportar todos os leads"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4" /> Exportar Todos ({totalCount})
+            </button>
+          </div>
         </div>
       </div>
 
@@ -138,9 +187,9 @@ const NinaPassadoreAdminTab = () => {
                 </td>
               </tr>
             ))}
-            {ninapassadore.length === 0 && (
+            {filteredData.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-gray-500">Nenhum pedido recebido ainda.</td>
+                <td colSpan={7} className="p-8 text-center text-gray-500">Nenhum pedido encontrado com os filtros selecionados.</td>
               </tr>
             )}
           </tbody>
@@ -152,9 +201,14 @@ const NinaPassadoreAdminTab = () => {
 const MaterialAdminTab = () => {
   const [materials, setMaterials] = React.useState<any[]>([]);
   const [cidadeFilter, setCidadeFilter] = React.useState("");
+  const [tipoFilter, setTipoFilter] = React.useState<"todos" | "impresso" | "digital">("todos");
 
   const uniqueCities = Array.from(new Set(materials.map(m => m.cidade))).filter(Boolean).sort();
-  const filteredData = materials.filter(m => cidadeFilter ? m.cidade === cidadeFilter : true);
+  const filteredData = materials.filter(m => {
+    const matchCity = cidadeFilter ? m.cidade === cidadeFilter : true;
+    const matchTipo = tipoFilter !== 'todos' ? m.tipoMaterial === tipoFilter : true;
+    return matchCity && matchTipo;
+  });
   const totalCount = materials.length;
   const impressoCount = materials.filter(m => m.tipoMaterial === 'impresso').length;
   const digitalCount = materials.filter(m => m.tipoMaterial === 'digital').length;
@@ -182,8 +236,22 @@ const MaterialAdminTab = () => {
     }
   };
 
-  const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(materials.map(m => ({
+  const exportFilteredToExcel = (tipo?: 'impresso' | 'digital') => {
+    let dataset = materials;
+    let sheetName = "Materiais";
+    let filename = "pedidos_material_TODOS.xlsx";
+
+    if (tipo === 'impresso') {
+      dataset = materials.filter(m => m.tipoMaterial === 'impresso');
+      sheetName = "Impressos";
+      filename = "pedidos_material_IMPRESSO.xlsx";
+    } else if (tipo === 'digital') {
+      dataset = materials.filter(m => m.tipoMaterial === 'digital');
+      sheetName = "Digitais";
+      filename = "pedidos_material_DIGITAL.xlsx";
+    }
+
+    const ws = XLSX.utils.json_to_sheet(dataset.map(m => ({
       Data: new Date(m.createdAt).toLocaleString(),
       Nome: m.nome,
       Sobrenome: m.sobrenome,
@@ -200,28 +268,37 @@ const MaterialAdminTab = () => {
       'Adesivo Perfurado': m.adesivoPerfurado ? 'Sim' : 'Não'
     })));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Materiais");
-    XLSX.writeFile(wb, "pedidos_material.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
   };
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material de Campanha</h2>
           <div className="flex gap-2">
-            <div className="text-sm font-bold bg-indigo-50 text-indigo-600 py-1 px-3 rounded-lg">
+            <button 
+              onClick={() => setTipoFilter('todos')} 
+              className={`text-sm font-bold py-1 px-3 rounded-lg transition-all ${tipoFilter === 'todos' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+            >
               {totalCount} Geral
-            </div>
-            <div className="text-sm font-bold bg-orange-50 text-orange-600 py-1 px-3 rounded-lg">
+            </button>
+            <button 
+              onClick={() => setTipoFilter('impresso')} 
+              className={`text-sm font-bold py-1 px-3 rounded-lg transition-all ${tipoFilter === 'impresso' ? 'bg-orange-600 text-white shadow-sm' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}
+            >
               {impressoCount} Impressos
-            </div>
-            <div className="text-sm font-bold bg-blue-50 text-blue-600 py-1 px-3 rounded-lg">
+            </button>
+            <button 
+              onClick={() => setTipoFilter('digital')} 
+              className={`text-sm font-bold py-1 px-3 rounded-lg transition-all ${tipoFilter === 'digital' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+            >
               {digitalCount} Digitais
-            </div>
+            </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
@@ -235,9 +312,30 @@ const MaterialAdminTab = () => {
               ))}
             </select>
           </div>
-          <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
-            <Download className="w-5 h-5" /> Exportar
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button 
+              onClick={() => exportFilteredToExcel('impresso')} 
+              title="Exportar leads de material impresso"
+              className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4" /> Exportar Impressos ({impressoCount})
+            </button>
+            <button 
+              onClick={() => exportFilteredToExcel('digital')} 
+              title="Exportar leads de material digital"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4" /> Exportar Digitais ({digitalCount})
+            </button>
+            <button 
+              onClick={() => exportFilteredToExcel()} 
+              title="Exportar todos os leads"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4" /> Exportar Todos ({totalCount})
+            </button>
+          </div>
         </div>
       </div>
 
@@ -280,9 +378,9 @@ const MaterialAdminTab = () => {
                 </td>
               </tr>
             ))}
-            {materials.length === 0 && (
+            {filteredData.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-gray-500">Nenhum pedido de material recebido ainda.</td>
+                <td colSpan={7} className="p-8 text-center text-gray-500">Nenhum pedido de material encontrado com os filtros selecionados.</td>
               </tr>
             )}
           </tbody>

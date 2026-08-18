@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { FileText, Download, CheckCircle2, Shield, MapPin, Phone, User, Mail, Box, ImagePlus } from 'lucide-react';
+import { FileText, Download, CheckCircle2, Shield, MapPin, Phone, User, Mail, Box, ImagePlus, AlertCircle, Eye } from 'lucide-react';
 import { Footer } from './Footer';
 import { Helmet } from 'react-helmet-async';
 import { trackEvent } from '../analytics';
@@ -563,34 +563,85 @@ export const MaterialCampanha = () => {
               
               {tipoMaterial === 'digital' && (
                 <div className="flex flex-col items-center w-full">
+                  {/* Atenção ao Download */}
+                  <div className="w-full max-w-2xl bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 mb-8 text-left shadow-sm flex items-start gap-4">
+                    <div className="p-2.5 bg-amber-100 text-amber-800 rounded-xl shrink-0 mt-0.5">
+                      <AlertCircle className="w-6 h-6 text-amber-700" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-black text-amber-900 uppercase tracking-wide mb-1 flex items-center gap-2">
+                        Atenção ao Download
+                      </h4>
+                      <p className="text-amber-800 text-sm font-medium leading-relaxed">
+                        Como são 6 arquivos diferentes, o seu navegador pode pedir permissão para baixar múltiplos arquivos. Clique em <strong className="font-bold underline text-amber-950">Permitir</strong> na barra superior.
+                      </p>
+                    </div>
+                  </div>
+
                   <button
                     onClick={triggerDownload}
-                    className="bg-orange-100 text-orange-600 hover:bg-orange-200 font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-colors mb-8"
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 px-8 rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-xl mb-10 transform hover:-translate-y-0.5"
                   >
                     <Download className="w-5 h-5" />
-                    Caso o download não inicie automaticamente clique aqui!
+                    Caso o download não inicie automaticamente, clique aqui para baixar todas!
                   </button>
                   
-                  <div className="w-full max-w-lg bg-gray-50 p-6 rounded-2xl border border-gray-100 text-left">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Baixar artes separadamente:</h3>
-                    <div className="flex flex-col gap-3">
+                  {/* Galeria de Miniaturas das Artes */}
+                  <div className="w-full max-w-2xl bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-200 text-left">
+                    <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-200">
+                      <div>
+                        <h3 className="text-lg md:text-xl font-black text-gray-800 uppercase">
+                          Miniaturas das Artes para Baixar
+                        </h3>
+                        <p className="text-xs md:text-sm text-gray-500 font-medium">
+                          Veja abaixo as artes incluídas e baixe individualmente se preferir:
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       {[
+                        { name: 'Estou-fechado-com-ele.png', label: 'Estou Fechado com Ele' },
                         { name: 'A-Luta-Continua.png', label: 'A Luta Continua' },
-                        { name: 'Capa-Facebook.png', label: 'Capa para Facebook' },
-                        { name: 'Colinha.png', label: 'Colinha' },
-                        { name: 'Estou-fechado-com-ele.png', label: 'Estou fechado com ele' },
                         { name: 'Mais-Direitos-e-Protecao.png', label: 'Mais Direitos e Proteção' },
+                        { name: 'Colinha.png', label: 'Colinha Eleitoral' },
+                        { name: 'Capa-Facebook.png', label: 'Capa Facebook' },
                         { name: 'Marque-5-Amigos_Feed.png', label: 'Marque 5 Amigos (Feed)' },
                         { name: 'Marque-5-Amigos_Stories.png', label: 'Marque 5 Amigos (Stories)' }
                       ].map((file) => (
-                        <button
+                        <div
                           key={file.name}
-                          onClick={() => downloadSingleFile(file.name)}
-                          className="flex items-center justify-between w-full p-3 bg-white border border-gray-200 rounded-xl hover:border-orange-300 hover:shadow-sm transition-all text-left group"
+                          className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col group"
                         >
-                          <span className="font-medium text-gray-700 group-hover:text-orange-600 transition-colors">{file.label}</span>
-                          <Download className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition-colors" />
-                        </button>
+                          <div 
+                            className="relative aspect-square bg-gray-100 overflow-hidden cursor-pointer" 
+                            onClick={() => downloadSingleFile(file.name)}
+                          >
+                            <img
+                              src={`/${file.name}`}
+                              alt={file.label}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="bg-white/95 text-gray-900 text-xs font-black uppercase px-3 py-1.5 rounded-full flex items-center gap-1 shadow">
+                                <Download className="w-3.5 h-3.5 text-orange-600" /> Baixar
+                              </span>
+                            </div>
+                          </div>
+                          <div className="p-3 flex flex-col justify-between flex-grow">
+                            <p className="text-xs font-bold text-gray-800 line-clamp-1 mb-2" title={file.label}>
+                              {file.label}
+                            </p>
+                            <button
+                              onClick={() => downloadSingleFile(file.name)}
+                              className="w-full py-2 px-2.5 bg-gray-50 hover:bg-orange-500 hover:text-white text-gray-700 text-xs font-bold rounded-lg border border-gray-200 hover:border-orange-500 transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
