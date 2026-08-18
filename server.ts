@@ -26,7 +26,8 @@ async function startServer() {
   });
 
   
-  const materialData = [];
+  const materialData: any[] = [];
+  const ninapassadoreData: any[] = [];
 
   app.get('/api/material', async (req, res) => {
     if (db) {

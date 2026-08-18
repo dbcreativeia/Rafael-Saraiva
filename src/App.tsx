@@ -74,22 +74,13 @@ function LandingPage() {
     }
   };
 
-  const handleElpaClick = () => {
-    const eventId = generateEventId();
-    if (typeof window !== 'undefined') {
-      if (window.fbq) window.fbq('trackCustom', 'Click_InstitutoELPA', {}, { eventID: eventId });
-      if (window.gtag) window.gtag('event', 'click_instituto_elpa', { event_category: 'engagement', event_label: 'Instituto ELPA Button' });
-    }
-    sendCAPIEvent('Click_InstitutoELPA', eventId);
-  };
-
   return (
     <>
       <Helmet>
         <title>Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP</title>
         <meta name="title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />
-        <meta name="description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e o Instituto ELPA." />
-        <meta name="keywords" content="Rafael Saraiva 44077, Rafael Saraiva, Deputado Estadual SP, Causa Animal, Proteção Animal, Instituto ELPA, Política São Paulo, Animais, São Paulo" />
+        <meta name="description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e projetos." />
+        <meta name="keywords" content="Rafael Saraiva 44077, Rafael Saraiva, Deputado Estadual SP, Causa Animal, Proteção Animal, Política São Paulo, Animais, São Paulo" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://rafaelsaraiva.com.br/" />
         <meta property="og:title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />

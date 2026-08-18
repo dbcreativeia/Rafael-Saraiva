@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Gamepad2, BookOpen, PawPrint, Instagram, Facebook, Target, Package, ChevronDown } from 'lucide-react';
+import { Menu, X, Gamepad2, BookOpen, Instagram, Facebook, Target, Package, ChevronDown } from 'lucide-react';
 import { trackEvent } from '../analytics';
 
 export function Navbar() {
@@ -70,9 +70,6 @@ export function Navbar() {
               <Link to="/codigoanimal" className="whitespace-nowrap text-white/90 hover:text-white px-2 xl:px-3 py-2 rounded-md text-[11px] xl:text-sm font-bold uppercase tracking-wider flex items-center gap-1 xl:gap-2 transition-colors">
                 <BookOpen className="w-4 h-4" /> Código Animal
               </Link>
-              <a href="https://www.ielpa.org/" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap text-white/90 hover:text-white px-2 xl:px-3 py-2 rounded-md text-[11px] xl:text-sm font-bold uppercase tracking-wider flex items-center gap-1 xl:gap-2 transition-colors">
-                <PawPrint className="w-4 h-4" /> Instituto ELPA
-              </a>
               
               {/* Divider */}
               <div className="w-px h-6 bg-white/20 mx-2"></div>
@@ -137,9 +134,6 @@ export function Navbar() {
             <Link to="/codigoanimal" onClick={closeMenu} className="text-white hover:bg-white/10 block px-4 py-3 rounded-md text-base font-bold uppercase tracking-wider flex items-center gap-3">
               <BookOpen className="w-5 h-5" /> Código Animal
             </Link>
-            <a href="https://www.ielpa.org/" target="_blank" rel="noopener noreferrer" onClick={closeMenu} className="text-white hover:bg-white/10 block px-4 py-3 rounded-md text-base font-bold uppercase tracking-wider flex items-center gap-3">
-              <PawPrint className="w-5 h-5" /> Instituto ELPA
-            </a>
             
             <div className="h-px bg-white/20 my-4 mx-4"></div>
             

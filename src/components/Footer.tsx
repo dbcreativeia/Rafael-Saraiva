@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Instagram, Facebook, PawPrint } from 'lucide-react';
-import { trackEvent, generateEventId, sendCAPIEvent } from '../analytics';
+import { Instagram, Facebook } from 'lucide-react';
+import { trackEvent } from '../analytics';
 
 export const Footer: React.FC = () => {
   const handleInstagramClick = () => {
@@ -16,15 +16,6 @@ export const Footer: React.FC = () => {
     if (typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', 'click_facebook', { event_category: 'engagement', event_label: 'Facebook Footer' });
     }
-  };
-
-  const handleElpaClick = () => {
-    const eventId = generateEventId();
-    if (typeof window !== 'undefined') {
-      if (window.fbq) window.fbq('trackCustom', 'Click_InstitutoELPA', {}, { eventID: eventId });
-      if (window.gtag) window.gtag('event', 'click_instituto_elpa', { event_category: 'engagement', event_label: 'Instituto ELPA Footer' });
-    }
-    sendCAPIEvent('Click_InstitutoELPA', eventId);
   };
 
   return (
@@ -80,17 +71,6 @@ export const Footer: React.FC = () => {
               <Facebook size={18} className="text-[#1877F2] group-hover:scale-110 transition-transform md:w-5 md:h-5" /> Facebook
             </a>
           </div>
-
-          <a
-            href="https://www.ielpa.org/"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleElpaClick}
-            className="w-full bg-accent hover:bg-yellow-400 text-dark font-black py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all transform hover:-translate-y-1 shadow-xl border border-white/20"
-          >
-            <PawPrint className="w-5 h-5" strokeWidth={2.5} />
-            Conheça o Instituto ELPA
-          </a>
         </div>
 
       </div>
