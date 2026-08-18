@@ -27,9 +27,36 @@ export const MaterialCampanha = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [autoPreenchido, setAutoPreenchido] = useState(false);
   
   const formRef = React.useRef<HTMLFormElement>(null);
   const successRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-preencher dados se o usuário já tiver preenchido o pop-up de apoio ou formulário anterior
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem('rafael_saraiva_user_profile');
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile);
+        setFormData(prev => ({
+          ...prev,
+          nome: prev.nome || profile.nome || profile.primeiroNome || '',
+          sobrenome: prev.sobrenome || profile.sobrenome || '',
+          whatsapp: prev.whatsapp || profile.whatsapp || '',
+          email: prev.email || profile.email || '',
+          cep: prev.cep || profile.cep || '',
+          endereco: prev.endereco || profile.endereco || '',
+          bairro: prev.bairro || profile.bairro || '',
+          cidade: prev.cidade || profile.cidade || 'São Paulo',
+          estado: prev.estado || profile.estado || 'SP'
+        }));
+        setLgpdAccepted(true);
+        setAutoPreenchido(true);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar dados do perfil salvo:', e);
+    }
+  }, []);
 
   const handleTipoMaterialSelect = (tipo: 'impresso' | 'digital' | 'foto') => {
     setTipoMaterial(tipo);
@@ -158,6 +185,25 @@ export const MaterialCampanha = () => {
       
       const data = await response.json();
       if (data.success) {
+        // Atualizar perfil salvo no localStorage
+        try {
+          const profile = {
+            nome: formData.nome,
+            sobrenome: formData.sobrenome,
+            nomeCompleto: `${formData.nome} ${formData.sobrenome}`.trim(),
+            whatsapp: formData.whatsapp,
+            email: formData.email,
+            cep: formData.cep,
+            endereco: formData.endereco,
+            bairro: formData.bairro,
+            cidade: formData.cidade,
+            estado: formData.estado
+          };
+          localStorage.setItem('rafael_saraiva_user_profile', JSON.stringify(profile));
+        } catch (e) {
+          console.warn('Erro ao atualizar perfil local:', e);
+        }
+
         setIsSubmitted(true);
         trackEvent('Lead');
         trackEvent('Lead_MaterialCampanha');
@@ -332,6 +378,12 @@ export const MaterialCampanha = () => {
                 <ProfilePhotoMaker molduraUrl="/moldura-foto-perfil_rafael-saraiva_44077.png" />
               ) : (
                 <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+                {autoPreenchido && (
+                  <div className="bg-orange-50 border border-orange-200 text-orange-800 px-4 py-3 rounded-xl flex items-center gap-2.5 text-xs sm:text-sm font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-orange-600 shrink-0" />
+                    <span>Identificamos seu apoio! Seus dados foram preenchidos automaticamente abaixo para facilitar seu pedido.</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2 uppercase">Nome *</label>

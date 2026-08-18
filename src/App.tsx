@@ -18,6 +18,7 @@ import { Jogo } from './components/Jogo';
 
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Navbar } from './components/Navbar';
+import { SupportPopup } from './components/SupportPopup';
 import { trackEvent, generateEventId, sendCAPIEvent } from './analytics';
 
 function ScrollToTop() {
@@ -241,6 +242,7 @@ function App() {
     <BrowserRouter>
       <ScrollToTop />
       <CookieConsent />
+      <SupportPopup />
       <Navbar />
       <FloatingWhatsApp />
       <Routes>

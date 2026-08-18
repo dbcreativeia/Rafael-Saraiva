@@ -390,6 +390,227 @@ const MaterialAdminTab = () => {
   );
 };
 
+const ApoioAdminTab = () => {
+  const [citizens, setCitizens] = React.useState<any[]>([]);
+  const [search, setSearch] = React.useState('');
+  const [bairroFilter, setBairroFilter] = React.useState('');
+  const [filterType, setFilterType] = React.useState<'all' | 'unique' | 'duplicates'>('all');
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchCitizens = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/popup-apoio');
+      const data = await res.json();
+      setCitizens(Array.isArray(data) ? data : []);
+    } catch(err) {
+      console.warn("API request failed:", err);
+    }
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    fetchCitizens();
+  }, []);
+
+  const deleteCitizen = async (id: string) => {
+    if (!window.confirm("Deseja realmente remover este cadastro de apoio?")) return;
+    try {
+      await fetch('/api/popup-apoio/' + id, { method: 'DELETE' });
+      fetchCitizens();
+    } catch (err) {
+      console.warn("API request failed:", err);
+    }
+  };
+
+  const processedList = React.useMemo(() => {
+    const seenEmails = new Set();
+    const seenPhones = new Set();
+    return citizens.map(item => {
+      let isDuplicate = false;
+      const emailKey = item.email?.toLowerCase().trim();
+      const phoneKey = item.whatsapp?.replace(/\D/g, '');
+      if ((emailKey && seenEmails.has(emailKey)) || (phoneKey && phoneKey.length > 8 && seenPhones.has(phoneKey))) {
+        isDuplicate = true;
+      } else {
+        if (emailKey) seenEmails.add(emailKey);
+        if (phoneKey && phoneKey.length > 8) seenPhones.add(phoneKey);
+      }
+      return { ...item, isDuplicate };
+    });
+  }, [citizens]);
+
+  const uniqueBairros = Array.from(new Set(citizens.map(c => c.bairro))).filter(Boolean).sort();
+
+  const filteredData = React.useMemo(() => {
+    return processedList.filter(item => {
+      if (filterType === 'unique' && item.isDuplicate) return false;
+      if (filterType === 'duplicates' && !item.isDuplicate) return false;
+      if (bairroFilter && item.bairro !== bairroFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const matchName = item.nome?.toLowerCase().includes(q);
+        const matchPhone = item.whatsapp?.includes(q);
+        const matchEmail = item.email?.toLowerCase().includes(q);
+        const matchCep = item.cep?.includes(q);
+        const matchBairro = item.bairro?.toLowerCase().includes(q);
+        return matchName || matchPhone || matchEmail || matchCep || matchBairro;
+      }
+      return true;
+    });
+  }, [processedList, filterType, bairroFilter, search]);
+
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredData.map(c => ({
+      'Data de Cadastro': c.createdAt ? new Date(c.createdAt).toLocaleString() : '',
+      'Nome': c.nome,
+      'WhatsApp': c.whatsapp,
+      'E-mail': c.email,
+      'CEP': c.cep,
+      'Bairro': c.bairro,
+      'Cidade': c.cidade || 'São Paulo',
+      'Estado': c.estado || 'SP',
+      'Duplicado': c.isDuplicate ? 'Sim' : 'Não'
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Apoiadores Pop-up SP");
+    XLSX.writeFile(wb, "apoiadores_popup_mobilizacao_sp.xlsx");
+  };
+
+  return (
+    <div>
+      {/* Header com métricas e ações */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-black uppercase text-dark flex items-center gap-2">
+            Apoiadores - Pop-up (São Paulo)
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterType('all')}
+              className={`text-xs font-bold py-1.5 px-3 rounded-xl transition-all cursor-pointer ${filterType === 'all' ? 'bg-[#FF5500] text-white shadow-sm' : 'bg-orange-50 text-[#FF5500] hover:bg-orange-100'}`}
+            >
+              {processedList.length} Total
+            </button>
+            <button
+              onClick={() => setFilterType('unique')}
+              className={`text-xs font-bold py-1.5 px-3 rounded-xl transition-all cursor-pointer ${filterType === 'unique' ? 'bg-green-600 text-white shadow-sm' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}
+            >
+              {processedList.filter(c => !c.isDuplicate).length} Únicos
+            </button>
+            <button
+              onClick={() => setFilterType('duplicates')}
+              className={`text-xs font-bold py-1.5 px-3 rounded-xl transition-all cursor-pointer ${filterType === 'duplicates' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}
+            >
+              {processedList.filter(c => c.isDuplicate).length} Duplicados
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          {/* Busca */}
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, WhatsApp, e-mail, bairro..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/20 outline-none text-sm bg-white"
+            />
+          </div>
+
+          {/* Filtro por Bairro */}
+          {uniqueBairros.length > 0 && (
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={bairroFilter}
+                onChange={(e) => setBairroFilter(e.target.value)}
+                className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/20 outline-none bg-white font-medium text-gray-700 text-sm"
+              >
+                <option value="">Todos os Bairros ({uniqueBairros.length})</option>
+                {uniqueBairros.map(bairro => (
+                  <option key={String(bairro)} value={String(bairro)}>{String(bairro)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Botão Exportar Excel */}
+          <button
+            onClick={exportToExcel}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3.5 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4" /> Exportar Excel ({filteredData.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Tabela de Apoiadores */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider">
+              <th className="p-4 font-bold">Data</th>
+              <th className="p-4 font-bold">Nome</th>
+              <th className="p-4 font-bold">WhatsApp</th>
+              <th className="p-4 font-bold">E-mail</th>
+              <th className="p-4 font-bold">CEP</th>
+              <th className="p-4 font-bold">Bairro / Cidade</th>
+              <th className="p-4 font-bold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map(c => (
+              <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="p-4 text-xs text-gray-500">
+                  {c.createdAt ? new Date(c.createdAt).toLocaleDateString() + ' ' + new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                </td>
+                <td className="p-4 font-bold text-gray-800 text-sm">
+                  {c.nome}
+                  {c.isDuplicate && (
+                    <span className="ml-2 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">Duplicado</span>
+                  )}
+                </td>
+                <td className="p-4 text-sm text-gray-700 font-mono">
+                  {c.whatsapp}
+                </td>
+                <td className="p-4 text-sm text-gray-600">
+                  {c.email}
+                </td>
+                <td className="p-4 text-sm text-gray-600 font-mono">
+                  {c.cep}
+                </td>
+                <td className="p-4 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-800">{c.bairro || 'Não informado'}</span>
+                  <div className="text-xs text-gray-400">{c.cidade || 'São Paulo'} - {c.estado || 'SP'}</div>
+                </td>
+                <td className="p-4 text-right">
+                  <button
+                    onClick={() => deleteCitizen(c.id)}
+                    className="text-red-400 hover:text-red-600 p-2 transition-colors cursor-pointer"
+                    title="Excluir cadastro"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {filteredData.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-gray-500">
+                  {loading ? 'Carregando dados...' : 'Nenhum apoiador cadastrado com os filtros selecionados.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 export const AdminDashboard = () => {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -410,7 +631,7 @@ export const AdminDashboard = () => {
   const [sortJogoField, setSortJogoField] = useState<'date' | 'score' | 'playCount'>('date');
   const [sortJogoOrder, setSortJogoOrder] = useState<'asc' | 'desc'>('desc');
   
-  const [activeTab, setActiveTab] = useState<'PROTOCOLOS' | 'JOGO' | 'MATERIAL'>('PROTOCOLOS');
+  const [activeTab, setActiveTab] = useState<'APOIO' | 'PROTOCOLOS' | 'JOGO' | 'MATERIAL' | 'MATERIAL_DOBRADA'>('APOIO');
   const [jogoUsersData, setJogoUsersData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'unique' | 'duplicates'>('all');
 
@@ -776,33 +997,42 @@ export const AdminDashboard = () => {
         </div>
 
 
-        <div className="flex gap-4 mb-8 border-b border-gray-200">
+        <div className="flex gap-4 mb-8 border-b border-gray-200 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('APOIO')}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'APOIO' ? 'border-b-4 border-[#FF5500] text-[#FF5500]' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Apoio - Pop-up (SP)
+          </button>
           <button
             onClick={() => setActiveTab('PROTOCOLOS')}
-            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'PROTOCOLOS' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'PROTOCOLOS' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Protocolos e Abaixo-assinados
           </button>
           <button
             onClick={() => setActiveTab('JOGO')}
-            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'JOGO' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'JOGO' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Jogo - Missão Resgate
           </button>
           <button
             onClick={() => setActiveTab('MATERIAL')}
-            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'MATERIAL' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'MATERIAL' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Material de Campanha
           </button>
           <button
             onClick={() => setActiveTab('MATERIAL_DOBRADA')}
-            className={`pb-4 font-bold uppercase tracking-wider transition-colors ${activeTab === 'MATERIAL_DOBRADA' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'MATERIAL_DOBRADA' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Material Dobrada
-
           </button>
         </div>
+
+        {activeTab === 'APOIO' && (
+          <ApoioAdminTab />
+        )}
 
         
         {activeTab === 'MATERIAL' && (

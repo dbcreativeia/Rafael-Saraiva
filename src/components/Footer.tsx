@@ -34,7 +34,7 @@ export const Footer: React.FC = () => {
               &copy; 2026 Deputado Rafael Saraiva
             </p>
             <p className="text-white/40 text-[10px] uppercase tracking-wider leading-relaxed">
-              PROPAGANDA ELEITORAL - CNPJ DO CANDIDATO: Eleicao 2026 Rafael Saraiva Gaia Deputado Estadual 68.237.505/0001-08
+              PROPAGANDA ELEITORAL - CNPJ DO CANDIDATO: Eleicao 2026 Rafael Saraiva Gaia Deputado Estadual 68.283.115/0001-74
             </p>
             <Link to="/politica-de-privacidade" className="text-white/60 hover:text-white transition-colors text-sm font-medium mt-1">
               Política de Privacidade

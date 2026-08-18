@@ -59,7 +59,6 @@ export async function getDbConnection() {
         bairro VARCHAR(255),
         cidade VARCHAR(255),
         estado VARCHAR(2),
-        estado VARCHAR(2),
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -91,6 +90,21 @@ export async function getDbConnection() {
         endereco TEXT,
         numero VARCHAR(50),
         complemento VARCHAR(255),
+        bairro VARCHAR(255),
+        cidade VARCHAR(255),
+        estado VARCHAR(2),
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS popup_apoio (
+        id VARCHAR(255) PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        whatsapp VARCHAR(255),
+        email VARCHAR(255),
+        cep VARCHAR(20),
+        endereco TEXT,
         bairro VARCHAR(255),
         cidade VARCHAR(255),
         estado VARCHAR(2),

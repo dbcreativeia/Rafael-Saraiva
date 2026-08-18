@@ -61,315 +61,474 @@ export const PrivacyPolicy: React.FC = () => {
 
           <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed space-y-8 font-medium">
             <div className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-8">
-              Última atualização: 13/08/2026
+              Última atualização: 18/08/2026
             </div>
 
             <section>
               <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">1. Introdução</h2>
-              <p>A presente Política de Privacidade explica como a campanha <strong>ELEICAO 2026 RAFAEL SARAIVA GAIA DEPUTADO ESTADUAL</strong>, vinculada ao <strong>União Brasil</strong>, trata dados pessoais coletados por meio do site <strong><a href="http://www.rafaelsaraivasp.com.br" target="_blank" rel="noopener noreferrer">www.rafaelsaraivasp.com.br</a></strong>, landing pages, formulários, cookies, ferramentas de analytics, plataformas de mídia e demais canais digitais relacionados à campanha eleitoral de Rafael Saraiva para Deputado Estadual em São Paulo/SP.</p>
-              <p className="mt-4">A proteção dos dados pessoais é importante para a campanha. O tratamento das informações será realizado de forma transparente, limitada às finalidades informadas, com medidas de segurança adequadas e em conformidade com a Lei Geral de Proteção de Dados Pessoais — LGPD, Lei nº 13.709/2018, e com as regras eleitorais aplicáveis.</p>
-              <p className="mt-4">Esta política se aplica a visitantes do site, pessoas que preenchem formulários, solicitam materiais de campanha, autorizam o recebimento de comunicações, interagem com anúncios, conteúdos digitais, páginas, botões, links ou demais canais oficiais da campanha.</p>
+              <p>Esta Política de Privacidade e Proteção de Dados explica como a campanha <strong>ELEIÇÃO 2026 RAFAEL SARAIVA GAIA DEPUTADO ESTADUAL</strong>, relativa à candidatura de Rafael Saraiva ao cargo de Deputado Estadual pelo Estado de São Paulo, trata dados pessoais coletados por meio do site <strong><a href="http://www.rafaelsaraivasp.com.br" target="_blank" rel="noopener noreferrer">www.rafaelsaraivasp.com.br</a></strong>, de suas landing pages, formulários e demais canais digitais oficiais da campanha.</p>
+              <p className="mt-4">A campanha realiza o tratamento de dados pessoais de acordo com a Lei nº 13.709/2018 — Lei Geral de Proteção de Dados Pessoais (LGPD), com a legislação eleitoral e com as normas aplicáveis às Eleições 2026.</p>
+              <p className="mt-4">Esta política se aplica, entre outras situações, às pessoas que:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>acessam o site ou páginas da campanha;</li>
+                <li>preenchem formulários;</li>
+                <li>utilizam o formulário “Você está com a gente?”;</li>
+                <li>solicitam materiais de campanha;</li>
+                <li>autorizam o recebimento de comunicações;</li>
+                <li>entram em contato com a campanha;</li>
+                <li>interagem com funcionalidades do site;</li>
+                <li>utilizam páginas nas quais estejam instaladas tecnologias de cookies, analytics ou mensuração, conforme as preferências aplicáveis.</li>
+              </ul>
+              <p className="mt-4">A mera navegação no site ou leitura desta Política de Privacidade <strong>não equivale a consentimento</strong> para tratamentos que dependam de autorização do titular.</p>
+              <p className="mt-4">Quando o consentimento for necessário, ele será solicitado de maneira própria, específica e compatível com a finalidade do tratamento.</p>
             </section>
 
+            <hr className="border-gray-200" />
+
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">2. Controlador dos dados</h2>
-              <p>O controlador dos dados pessoais tratados neste site é:</p>
-              <ul className="list-none space-y-2 mt-4 text-gray-600">
-                <li><strong>ELEICAO 2026 RAFAEL SARAIVA GAIA DEPUTADO ESTADUAL</strong></li>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">2. Controlador dos dados e canal de privacidade</h2>
+              <p>O controlador dos dados pessoais tratados no contexto desta campanha é:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li><strong>Controlador:</strong> ELEIÇÃO 2026 RAFAEL SARAIVA GAIA DEPUTADO ESTADUAL</li>
+                <li><strong>Candidato:</strong> Rafael Saraiva Gaia</li>
                 <li><strong>Cargo:</strong> Deputado Estadual</li>
-                <li><strong>Partido:</strong> União Brasil</li>
-                <li><strong>Localidade:</strong> São Paulo/SP</li>
+                <li><strong>Estado:</strong> São Paulo</li>
+                <li><strong>CNPJ eleitoral:</strong> 68.283.115/0001-74</li>
                 <li><strong>Site:</strong> <a href="http://www.rafaelsaraivasp.com.br" target="_blank" rel="noopener noreferrer">www.rafaelsaraivasp.com.br</a></li>
-                <li><strong>Canal de privacidade/LGPD:</strong> <a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></li>
-                <li><strong>Responsável pelo atendimento:</strong> Equipe de Campanha</li>
+                <li><strong>Canal de privacidade e proteção de dados:</strong> <a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></li>
+                <li><strong>Responsável pelo atendimento:</strong> Equipe Rafael Saraiva</li>
+                <li><strong>Encarregado pelo tratamento de dados:</strong> Diogo Santos Barbosa</li>
               </ul>
-              <p className="mt-4">O canal acima pode ser utilizado para dúvidas, solicitações de titulares de dados, pedidos de acesso, correção, exclusão, revogação de consentimento, descadastro de comunicações ou informações sobre o tratamento de dados pessoais.</p>
+              <p className="mt-4">O canal de privacidade poderá ser utilizado para dúvidas sobre tratamento de dados pessoais e para solicitações de confirmação de tratamento, acesso, correção, eliminação, revogação de consentimento, descadastramento de comunicações e exercício dos demais direitos previstos na legislação aplicável.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">3. Dados pessoais que podemos coletar</h2>
-              <p>Podemos coletar os seguintes dados pessoais, conforme a interação do titular com o site ou com os canais digitais da campanha:</p>
-              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Nome;</li>
-                <li>E-mail;</li>
-                <li>Telefone;</li>
-                <li>Cidade;</li>
-                <li>Bairro;</li>
-                <li>Endereço completo, quando necessário para envio, entrega ou organização de material de campanha;</li>
-                <li>Mensagem ou informações preenchidas voluntariamente em formulários;</li>
-                <li>Preferências de contato;</li>
-                <li>Solicitação de recebimento de material de campanha;</li>
-                <li>Autorização para recebimento de comunicações;</li>
-                <li>Endereço IP;</li>
-                <li>Tipo de navegador;</li>
-                <li>Sistema operacional;</li>
-                <li>Identificadores de dispositivo;</li>
-                <li>Páginas acessadas;</li>
-                <li>Data e horário de acesso;</li>
-                <li>Origem do tráfego;</li>
-                <li>Eventos de conversão;</li>
-                <li>Dados de navegação coletados por cookies, pixels, tags e tecnologias similares.</li>
-              </ul>
-              <p className="mt-4">A campanha não solicita CPF, título de eleitor, data de nascimento, dados de doação, dados de saúde, religião, sindicato, intenção de voto ou outros dados sensíveis por meio dos formulários informados para este site.</p>
-              <p className="mt-4">No entanto, em razão do contexto político-eleitoral da página, determinados dados fornecidos voluntariamente, como nome, e-mail, telefone, endereço, solicitação de material, interação com conteúdos da campanha ou autorização para receber comunicações, podem revelar ou permitir inferir opinião política, apoio, preferência ou engajamento.</p>
-              <p className="mt-4">Nesses casos, os dados serão tratados com cautela reforçada, observando as hipóteses legais aplicáveis, a finalidade informada, a necessidade, a transparência, a segurança e os direitos dos titulares.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">4. Como os dados são coletados</h2>
-              <p>Os dados pessoais podem ser coletados quando o titular:</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">3. Dados pessoais que podem ser tratados</h2>
+              <p>Os dados tratados variam de acordo com a interação da pessoa com o site e com os canais da campanha.</p>
+              <p className="mt-4">Podemos tratar:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Acessa o site ou landing pages da campanha;</li>
-                <li>Preenche formulários;</li>
-                <li>Solicita material de campanha;</li>
-                <li>Autoriza o recebimento de comunicações por e-mail, WhatsApp, SMS, telefone ou outros canais;</li>
-                <li>Interage com anúncios, publicações, botões, páginas ou links da campanha;</li>
-                <li>Aceita cookies analíticos ou de marketing;</li>
-                <li>Entra em contato com os canais oficiais da campanha.</li>
+                <li>nome;</li>
+                <li>WhatsApp ou número de telefone;</li>
+                <li>e-mail;</li>
+                <li>CEP;</li>
+                <li>cidade, bairro ou região obtidos ou informados a partir do CEP;</li>
+                <li>endereço, quando necessário para entrega solicitada de material;</li>
+                <li>mensagens enviadas voluntariamente;</li>
+                <li>preferências e autorizações de contato;</li>
+                <li>solicitações de material de campanha;</li>
+                <li>respostas e manifestações realizadas em formulários da campanha;</li>
+                <li>data e horário da interação;</li>
+                <li>registros de consentimento;</li>
+                <li>versão do texto de consentimento apresentado;</li>
+                <li>página ou formulário de origem;</li>
+                <li>endereço IP, quando tecnicamente registrado;</li>
+                <li>tipo de navegador;</li>
+                <li>sistema operacional;</li>
+                <li>identificadores técnicos de dispositivo;</li>
+                <li>páginas acessadas;</li>
+                <li>origem do tráfego;</li>
+                <li>eventos de navegação ou conversão;</li>
+                <li>preferências de cookies;</li>
+                <li>dados técnicos gerados pelas ferramentas efetivamente utilizadas no site.</li>
               </ul>
-              <p className="mt-4">Também podemos coletar dados técnicos de navegação por meio de cookies, pixels, tags, ferramentas de analytics e tecnologias similares, sempre observadas as preferências de consentimento aplicáveis.</p>
+
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Dados capazes de revelar opinião política</h3>
+              <p>Em determinados formulários ou interações, a informação fornecida pelo próprio titular poderá revelar ou permitir inferir sua opinião, preferência, apoio ou engajamento político.</p>
+              <p className="mt-4">Isso ocorre, especialmente, quando uma pessoa responde ou envia seus dados por meio de formulários com chamadas como <strong>“Você está com a gente?”</strong> ou outras manifestações semelhantes relacionadas diretamente à candidatura.</p>
+              <p className="mt-4">A opinião política é considerada dado pessoal sensível.</p>
+              <p className="mt-4">Por essa razão, quando o tratamento realizado pela campanha envolver dado pessoal sensível ou informação capaz de revelar dado pessoal sensível, serão adotadas salvaguardas reforçadas e, nas hipóteses aplicáveis à propaganda eleitoral, será solicitado <strong>consentimento específico, expresso e destacado</strong> para as finalidades previamente informadas.</p>
             </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">4. Formulário “Você está com a gente?”</h2>
+              <p>No formulário denominado <strong>“Você está com a gente?”</strong>, poderão ser coletados os seguintes dados:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>nome completo;</li>
+                <li>WhatsApp;</li>
+                <li>e-mail;</li>
+                <li>CEP;</li>
+                <li>manifestação realizada por meio do envio do formulário;</li>
+                <li>registros relacionados ao consentimento fornecido.</li>
+              </ul>
+              <p className="mt-4">Os campos de <strong>nome, WhatsApp, e-mail e CEP são obrigatórios para o envio desse formulário</strong>.</p>
+              <p className="mt-4">Esses dados serão utilizados para as finalidades informadas no próprio formulário e nesta Política, incluindo:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>registrar a manifestação realizada pelo titular;</li>
+                <li>identificar a região aproximada da pessoa cadastrada;</li>
+                <li>organizar informações da campanha por região;</li>
+                <li>administrar o cadastro realizado voluntariamente;</li>
+                <li>manter contato com o titular, quando autorizado e para as finalidades informadas;</li>
+                <li>registrar e comprovar as autorizações concedidas;</li>
+                <li>atender pedidos de revogação, eliminação ou descadastramento;</li>
+                <li>cumprir obrigações legais e eleitorais relacionadas ao tratamento de dados.</li>
+              </ul>
+              <p className="mt-4">O CEP poderá ser utilizado para identificar cidade, bairro ou região aproximada, conforme os recursos técnicos utilizados pela campanha.</p>
+              <p className="mt-4">O envio do formulário dependerá da manifestação específica e destacada do titular quanto ao tratamento de informações que possam revelar opinião política.</p>
+              <p className="mt-4">A campanha manterá registro da manifestação de consentimento, incluindo, quando tecnicamente disponível, data, horário, formulário ou página de origem e versão do texto apresentado ao titular.</p>
+            </section>
+
+            <hr className="border-gray-200" />
 
             <section>
               <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">5. Finalidades do tratamento</h2>
-              <p>Os dados pessoais poderão ser tratados para as seguintes finalidades:</p>
+              <p>Dependendo da interação realizada, os dados poderão ser tratados para:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Responder contatos, dúvidas, comentários, solicitações ou mensagens enviadas pelo titular;</li>
-                <li>Atender pedidos de materiais de campanha;</li>
-                <li>Organizar o envio, entrega ou disponibilização de materiais de campanha;</li>
-                <li>Registrar autorizações para recebimento de comunicações;</li>
-                <li>Enviar comunicações da campanha por e-mail, WhatsApp, SMS, telefone, newsletter ou lista de transmissão, quando houver autorização do titular;</li>
-                <li>Realizar contato individual com pessoas cadastradas voluntariamente;</li>
-                <li>Permitir o descadastro e a revogação de consentimento;</li>
-                <li>Mensurar o desempenho do site, das páginas, formulários, anúncios e campanhas digitais;</li>
-                <li>Analisar tráfego, audiência, origem de acessos, interações e eventos de conversão;</li>
-                <li>Realizar campanhas de mídia, segmentação, remarketing, públicos personalizados ou semelhantes, quando autorizado;</li>
-                <li>Melhorar a experiência de navegação e o funcionamento do site;</li>
-                <li>Prevenir spam, fraudes, abusos, acessos indevidos e incidentes de segurança;</li>
-                <li>Cumprir obrigações legais, regulatórias ou eleitorais, quando aplicável;</li>
-                <li>Resguardar direitos da campanha, do candidato ou de terceiros em processos administrativos, judiciais ou perante autoridades competentes;</li>
-                <li>Demonstrar conformidade com a LGPD, inclusive por meio de registros de consentimento, versões de política e preferências de cookies.</li>
+                <li>administrar cadastros realizados voluntariamente;</li>
+                <li>registrar manifestações feitas em formulários da campanha;</li>
+                <li>identificar a região das pessoas cadastradas;</li>
+                <li>responder dúvidas, mensagens e solicitações;</li>
+                <li>atender pedidos de materiais de campanha;</li>
+                <li>organizar entrega ou disponibilização de materiais solicitados;</li>
+                <li>realizar contatos relacionados às finalidades informadas;</li>
+                <li>enviar comunicações eleitorais quando houver autorização aplicável;</li>
+                <li>registrar consentimentos e preferências;</li>
+                <li>atender pedidos de descadastramento, revogação ou eliminação;</li>
+                <li>prestar informações e atender direitos dos titulares;</li>
+                <li>manter registros necessários para demonstrar conformidade;</li>
+                <li>garantir segurança do site e dos formulários;</li>
+                <li>prevenir spam, fraude, abuso e acesso indevido;</li>
+                <li>analisar tecnicamente o funcionamento do site;</li>
+                <li>mensurar audiência ou desempenho quando permitido e de acordo com as preferências de cookies;</li>
+                <li>cumprir obrigações legais, regulatórias e eleitorais;</li>
+                <li>atender determinações da Justiça Eleitoral, da Autoridade Nacional de Proteção de Dados ou de outra autoridade competente;</li>
+                <li>exercer ou resguardar direitos em processos judiciais, administrativos ou eleitorais.</li>
               </ul>
+              <p className="mt-4">Os dados não serão utilizados para finalidade incompatível com aquela informada ao titular sem que sejam observadas as exigências legais aplicáveis à nova finalidade.</p>
             </section>
+
+            <hr className="border-gray-200" />
 
             <section>
               <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">6. Bases legais utilizadas</h2>
-              <p>O tratamento dos dados pessoais será realizado com base nas hipóteses legais previstas na LGPD, conforme a finalidade específica.</p>
-              <p className="mt-4">De forma geral, poderão ser utilizadas as seguintes bases legais:</p>
-              
-              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Consentimento</h3>
-              <p>Utilizado para:</p>
-              <ul className="list-disc pl-6 space-y-2 mt-2 text-gray-600">
-                <li>Envio de comunicações por e-mail, WhatsApp, SMS, telefone, newsletter ou lista de transmissão;</li>
-                <li>Uso de cookies analíticos não essenciais;</li>
-                <li>Uso de cookies de marketing;</li>
-                <li>Uso de pixels, tags de publicidade, remarketing e mensuração de campanhas;</li>
-                <li>Criação de públicos personalizados ou semelhantes em plataformas de mídia;</li>
-                <li>Tratamento de dados que, no contexto político-eleitoral, possam revelar ou permitir inferir opinião política, apoio, preferência ou engajamento, quando aplicável.</li>
-              </ul>
-              <p className="mt-2">O consentimento poderá ser revogado a qualquer momento pelo titular.</p>
+              <p>O fundamento jurídico utilizado dependerá do tipo de dado e da finalidade do tratamento.</p>
 
-              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Procedimentos solicitados pelo titular</h3>
-              <p>Utilizado para responder contatos, processar solicitações enviadas voluntariamente e atender pedidos de materiais de campanha solicitados pelo próprio titular.</p>
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">6.1. Consentimento específico para dados capazes de revelar opinião política</h3>
+              <p>Quando uma interação ou formulário puder revelar opinião política, apoio, preferência ou engajamento político, a campanha utilizará, quando exigido pela regulamentação eleitoral, <strong>consentimento específico, expresso e destacado do titular</strong>.</p>
+              <p className="mt-2">Esse consentimento deverá estar relacionado a finalidades determinadas e será registrado de maneira que permita demonstrar a manifestação do titular.</p>
+              <p className="mt-2">O consentimento poderá ser revogado, sem prejuízo dos tratamentos realizados legitimamente antes da revogação e das hipóteses em que a legislação permita ou exija a conservação de determinados registros.</p>
 
-              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Legítimo interesse</h3>
-              <p>Utilizado para atividades necessárias à segurança do site, prevenção de abuso, proteção contra spam, funcionamento técnico, controle de acessos, melhoria limitada dos serviços e resguardo de direitos, sempre respeitados os direitos e liberdades fundamentais do titular.</p>
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">6.2. Consentimento para comunicações</h3>
+              <p>Quando aplicável, o recebimento de comunicações por WhatsApp, e-mail ou outro canal será informado ao titular no momento da coleta.</p>
+              <p className="mt-2">A campanha utilizará os dados de contato de acordo com a autorização e as finalidades apresentadas ao titular.</p>
 
-              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Cumprimento de obrigação legal ou regulatória</h3>
-              <p>Utilizado quando o tratamento for necessário para cumprir obrigações previstas em lei, normas eleitorais, determinações de autoridades públicas, ordens judiciais ou exigências regulatórias aplicáveis.</p>
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">6.3. Consentimento para cookies e tecnologias não essenciais</h3>
+              <p>Cookies ou tecnologias analíticas, publicitárias ou de rastreamento que dependam de consentimento somente deverão ser ativados após a escolha do titular.</p>
 
-              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Exercício regular de direitos</h3>
-              <p>Utilizado para resguardar direitos da campanha, do candidato ou de terceiros em processos judiciais, administrativos, eleitorais ou perante autoridades competentes.</p>
-              
-              <p className="mt-4">A base legal aplicável poderá variar conforme o tipo de dado, a finalidade e o contexto do tratamento.</p>
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">6.4. Legítimo interesse</h3>
+              <p>O legítimo interesse poderá ser utilizado, quando juridicamente cabível, para tratamentos de dados pessoais não sensíveis relacionados, por exemplo, à segurança do site, prevenção de abuso, funcionamento técnico e proteção de direitos, após análise da necessidade e dos direitos e expectativas do titular.</p>
+              <p className="mt-2 font-bold">O legítimo interesse não será utilizado como fundamento para tratar opinião política ou outros dados pessoais sensíveis.</p>
+
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">6.5. Cumprimento de obrigação legal ou regulatória</h3>
+              <p>Dados poderão ser conservados ou tratados quando necessários para o cumprimento de obrigações legais, eleitorais ou regulatórias.</p>
+
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">6.6. Exercício regular de direitos</h3>
+              <p>Dados poderão ser tratados ou conservados quando necessários à formulação, ao exercício ou à defesa de direitos em processos judiciais, administrativos ou eleitorais.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">7. Comunicações por e-mail, WhatsApp, SMS, telefone e newsletter</h2>
-              <p>A campanha poderá enviar comunicações por e-mail, WhatsApp, SMS, telefone, newsletter ou lista de transmissão apenas quando houver autorização do titular ou outra base legal aplicável.</p>
-              <p className="mt-4">As comunicações poderão incluir informações sobre a campanha, materiais, conteúdos informativos, avisos, convites, notícias, atualizações e mensagens relacionadas à candidatura.</p>
-              <p className="mt-4">Ao autorizar o recebimento de comunicações, o titular declara estar ciente de que poderá solicitar o descadastro ou revogar sua autorização a qualquer momento.</p>
-              <p className="mt-4">O descadastro poderá ser solicitado pelo próprio canal de comunicação utilizado, quando disponível, ou pelo e-mail: <br/><strong><a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></strong></p>
-              <p className="mt-4">A campanha não deve realizar propaganda eleitoral por telemarketing nem disparo em massa irregular de mensagens. O envio de mensagens deverá observar a legislação eleitoral, a LGPD, as regras das plataformas utilizadas e a existência de consentimento ou cadastro voluntário do titular, quando exigido.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">8. Cookies e tecnologias de rastreamento</h2>
-              <p>Este site pode utilizar cookies, pixels, tags e tecnologias similares para permitir o funcionamento da página, melhorar a experiência do usuário, medir audiência, analisar desempenho de campanhas e exibir anúncios relacionados à campanha.</p>
-              <p className="mt-4">As ferramentas utilizadas podem incluir, entre outras:</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">7. Comunicações por WhatsApp, e-mail e outros canais</h2>
+              <p>Quando autorizado e observadas as regras aplicáveis, a campanha poderá enviar comunicações relacionadas à candidatura por WhatsApp, e-mail ou outros canais informados ao titular.</p>
+              <p className="mt-4">As comunicações poderão envolver:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Google Analytics;</li>
-                <li>Google Tag Manager;</li>
-                <li>Google Ads;</li>
-                <li>Meta Ads;</li>
-                <li>Meta Pixel ou tecnologias similares;</li>
-                <li>Ferramentas de rastreamento, mensuração, conversão, remarketing e mídia paga.</li>
+                <li>informações sobre a campanha;</li>
+                <li>avisos;</li>
+                <li>materiais;</li>
+                <li>conteúdos;</li>
+                <li>convites;</li>
+                <li>agenda e atividades;</li>
+                <li>informações relacionadas à candidatura.</li>
               </ul>
-              
-              <p className="mt-4">Os cookies podem ser classificados nas seguintes categorias:</p>
+              <p className="mt-4">A campanha buscará limitar as comunicações às finalidades informadas no momento do cadastro.</p>
+              <p className="mt-4">As mensagens eleitorais deverão permitir a identificação do remetente e disponibilizar forma para solicitação de descadastramento e eliminação dos dados pessoais.</p>
+              <p className="mt-4">O pedido poderá ser realizado pelo próprio canal utilizado, quando disponível, ou pelo e-mail:</p>
+              <p className="mt-2 font-bold"><a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></p>
+              <p className="mt-4">Pedidos de descadastramento e eliminação relacionados às mensagens eleitorais serão tratados dentro do prazo previsto na regulamentação eleitoral aplicável.</p>
+              <p className="mt-4">A campanha não realizará telemarketing eleitoral vedado nem contratará disparo em massa irregular de mensagens.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">8. Revogação de consentimento e descadastramento</h2>
+              <p>Quando o tratamento depender de consentimento, o titular poderá solicitar sua revogação por procedimento gratuito e facilitado.</p>
+              <p className="mt-4">Também poderá solicitar o descadastramento do recebimento de comunicações.</p>
+              <p className="mt-4">A solicitação poderá ser realizada:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>pelo próprio meio disponibilizado na comunicação; ou</li>
+                <li>pelo e-mail <strong><a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></strong>.</li>
+              </ul>
+              <p className="mt-4">A revogação do consentimento não torna ilícitos os tratamentos realizados legitimamente antes da solicitação.</p>
+              <p className="mt-4">Após a revogação, os dados deixarão de ser utilizados para a finalidade baseada naquele consentimento, ressalvadas as hipóteses legais de conservação necessárias para cumprimento de obrigação legal, exercício regular de direitos, comprovação do próprio pedido de descadastramento ou outras situações permitidas pela legislação.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">9. Cookies e tecnologias semelhantes</h2>
+              <p>O site poderá utilizar cookies e tecnologias semelhantes para funcionalidades técnicas, segurança, análise de funcionamento e, quando autorizado, mensuração de campanhas e publicidade digital.</p>
+              <p className="mt-4">A existência e a utilização efetiva de cada ferramenta dependerão das tecnologias instaladas no site no momento da navegação.</p>
 
               <h3 className="text-lg font-bold text-dark mt-6 mb-2">Cookies necessários</h3>
-              <p>São essenciais para o funcionamento básico do site, segurança, carregamento de páginas, prevenção de spam, manutenção de preferências técnicas e funcionamento adequado dos recursos essenciais.</p>
-              <p className="mt-2">Esses cookies podem ser utilizados independentemente de consentimento, quando forem estritamente necessários.</p>
+              <p>São aqueles indispensáveis ao funcionamento técnico, segurança, prevenção de fraude, manutenção de preferências essenciais ou prestação de funcionalidades solicitadas pelo usuário.</p>
 
               <h3 className="text-lg font-bold text-dark mt-6 mb-2">Cookies analíticos</h3>
-              <p>São utilizados para entender como os visitantes acessam e utilizam o site, quais páginas são visitadas, origem do tráfego, tempo de navegação, interações e eventos de conversão.</p>
-              <p className="mt-2">Esses cookies ajudam a melhorar a experiência do usuário e a mensurar o desempenho das páginas e campanhas.</p>
+              <p>Podem ser utilizados para compreender, de forma agregada ou individualizada conforme a ferramenta, como as pessoas acessam e utilizam o site.</p>
+              <p className="mt-2">Quando o uso desses cookies depender de consentimento, eles permanecerão desativados até a manifestação do titular.</p>
 
-              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Cookies de marketing</h3>
-              <p>São utilizados para mensurar campanhas, acompanhar conversões, criar públicos personalizados ou semelhantes, realizar remarketing e melhorar a entrega de anúncios em plataformas de mídia, como Google, Meta e ferramentas similares.</p>
-              
-              <p className="mt-4">Cookies analíticos e de marketing não essenciais somente serão ativados após o consentimento do titular, quando aplicável.</p>
-              <p className="mt-4">O site disponibilizará banner de cookies com opções para:</p>
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Cookies de marketing e publicidade</h3>
+              <p>Podem ser utilizados, quando legalmente permitido e autorizado, para mensuração de publicidade, eventos de conversão e outras funcionalidades publicitárias compatíveis com a legislação eleitoral e com as políticas da plataforma utilizada.</p>
+              <p className="mt-2">Quando dependerem de consentimento, permanecerão desativados até a autorização do titular.</p>
+
+              <h3 className="text-lg font-bold text-dark mt-6 mb-2">Preferências</h3>
+              <p>O site deverá oferecer mecanismo que permita:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Aceitar cookies não essenciais;</li>
-                <li>Rejeitar cookies não essenciais;</li>
-                <li>Gerenciar preferências por categoria.</li>
+                <li>aceitar cookies não essenciais;</li>
+                <li>rejeitar cookies não essenciais;</li>
+                <li>gerenciar preferências, quando houver mais de uma categoria;</li>
+                <li>alterar posteriormente as escolhas realizadas.</li>
               </ul>
-              <p className="mt-4">As tags de analytics, marketing, mídia paga, remarketing e rastreamento não essenciais deverão permanecer bloqueadas até que o titular manifeste seu consentimento.</p>
-              <p className="mt-4">O titular também pode configurar seu navegador para bloquear ou excluir cookies. No entanto, algumas funcionalidades do site podem não funcionar corretamente sem determinados cookies necessários.</p>
+              <p className="mt-4">A rejeição de cookies não essenciais não deverá impedir o acesso às funcionalidades básicas do site.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">9. Remarketing e públicos personalizados</h2>
-              <p>Mediante consentimento, a campanha poderá utilizar dados de navegação, eventos de conversão, interações com o site e identificadores online para mensuração de campanhas, remarketing, criação de públicos personalizados ou semelhantes e exibição de anúncios relacionados à campanha.</p>
-              <p className="mt-4">Essas atividades podem envolver plataformas de mídia e publicidade digital, como Google, Meta e ferramentas similares.</p>
-              <p className="mt-4">O titular poderá rejeitar cookies de marketing no banner de cookies, gerenciar suas preferências ou revogar consentimentos concedidos anteriormente.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">10. Ferramentas e fornecedores</h2>
-              <p>Para operar o site, os formulários e as ações digitais da campanha, poderão ser utilizados fornecedores e plataformas de tecnologia, incluindo:</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">10. Analytics, pixels, tags e publicidade digital</h2>
+              <p>A campanha poderá utilizar ferramentas técnicas de analytics, gerenciamento de tags, mensuração e publicidade digital que sejam efetivamente necessárias às suas atividades e permitidas pela legislação e pelas políticas das plataformas utilizadas.</p>
+              <p className="mt-4">Entre as ferramentas que poderão ser utilizadas, conforme a configuração efetiva do site, estão serviços de:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>analytics;</li>
+                <li>gerenciamento de tags;</li>
+                <li>mensuração de conversões;</li>
+                <li>publicidade digital;</li>
+                <li>CRM;</li>
+                <li>formulários;</li>
+                <li>comunicação;</li>
+                <li>hospedagem e segurança.</li>
+              </ul>
+              <p className="mt-4">A menção a uma categoria de tecnologia nesta Política não significa, por si só, que todas as ferramentas possíveis dessa categoria estejam instaladas ou ativas no site.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">11. Remarketing, públicos personalizados e perfilamento</h2>
+              <p>O preenchimento do formulário <strong>“Você está com a gente?” não autoriza automaticamente</strong> a campanha a utilizar nome, WhatsApp, e-mail, CEP ou a manifestação política do titular para criação de públicos personalizados, Custom Audiences, listas de remarketing, públicos semelhantes ou compartilhamento dessas informações com plataformas de publicidade.</p>
+              <p className="mt-4">Caso a campanha pretenda realizar operação desse tipo utilizando dados identificáveis fornecidos diretamente pelo titular, deverá verificar previamente:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>a finalidade específica;</li>
+                <li>a base legal aplicável;</li>
+                <li>a necessidade de consentimento específico;</li>
+                <li>a transparência oferecida ao titular;</li>
+                <li>o compartilhamento de dados envolvido;</li>
+                <li>a possibilidade de exercício dos direitos do titular;</li>
+                <li>a política vigente da plataforma utilizada;</li>
+                <li>as regras eleitorais aplicáveis.</li>
+              </ul>
+              <p className="mt-4">Quando houver perfilamento ou microdirecionamento de propaganda eleitoral, serão disponibilizadas informações adequadas sobre o tratamento realizado, nos termos da legislação aplicável.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">12. Fornecedores e operadores</h2>
+              <p>Para operar seus canais digitais, a campanha poderá utilizar fornecedores de tecnologia.</p>
+              <p className="mt-4">Conforme a configuração efetivamente utilizada, poderão estar envolvidos serviços como:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
                 <li><strong>Hostinger</strong>, para hospedagem e infraestrutura;</li>
-                <li><strong>RD Station</strong>, para CRM, gestão de contatos, automações e relacionamento;</li>
-                <li>Plataformas de analytics;</li>
-                <li>Plataformas de mídia paga;</li>
-                <li>Gerenciadores de tags;</li>
-                <li>Ferramentas de formulários;</li>
-                <li>Ferramentas de e-mail marketing;</li>
-                <li>Ferramentas de comunicação, quando aplicável;</li>
-                <li>Ferramentas de segurança, anti-spam e prevenção de fraudes.</li>
+                <li><strong>RD Station</strong>, para CRM, formulários, automações e gestão de contatos;</li>
+                <li>ferramentas de analytics;</li>
+                <li>gerenciadores de tags;</li>
+                <li>plataformas de mídia;</li>
+                <li>ferramentas de comunicação;</li>
+                <li>serviços de e-mail;</li>
+                <li>ferramentas de segurança, anti-spam e prevenção de abuso.</li>
               </ul>
-              <p className="mt-4">Esses fornecedores poderão tratar dados pessoais em nome da campanha ou como controladores independentes, conforme o caso, suas funções e suas próprias políticas de privacidade.</p>
-              <p className="mt-4">A campanha informa que terceiros externos à equipe não terão acesso direto aos leads, salvo fornecedores técnicos necessários para operação das ferramentas, hospedagem, CRM, segurança, mídia, comunicação ou cumprimento de obrigação legal.</p>
-              <p className="mt-4">Não vendemos dados pessoais.</p>
+              <p className="mt-4">Esses fornecedores poderão atuar como operadores de dados em nome da campanha ou, em determinadas situações, como controladores independentes, de acordo com a natureza de suas atividades.</p>
+              <p className="mt-4">O acesso de fornecedores aos dados deverá ser limitado ao necessário para a prestação dos serviços contratados.</p>
+              <p className="mt-4">A campanha não vende dados pessoais.</p>
             </section>
 
+            <hr className="border-gray-200" />
+
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">11. Compartilhamento de dados</h2>
-              <p>Os dados pessoais poderão ser compartilhados nas seguintes situações:</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">13. Compartilhamento de dados</h2>
+              <p>Os dados poderão ser compartilhados somente quando necessário e compatível com as finalidades informadas, inclusive:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Com fornecedores necessários para funcionamento do site, hospedagem, CRM, formulários, segurança e operação da campanha;</li>
-                <li>Com plataformas de analytics, mídia e publicidade digital, quando autorizado;</li>
-                <li>Com ferramentas de comunicação, e-mail, WhatsApp, SMS ou relacionamento, quando aplicável;</li>
-                <li>Com prestadores de serviços técnicos que atuem sob orientação da campanha;</li>
-                <li>Com autoridades públicas, Justiça Eleitoral ou órgãos competentes, quando houver obrigação legal, regulatória ou determinação válida;</li>
-                <li>Para exercício regular de direitos em processos judiciais, administrativos ou eleitorais;</li>
-                <li>Em situações necessárias para prevenir fraudes, incidentes de segurança, acessos indevidos ou uso irregular do site.</li>
+                <li>com fornecedores que operam site, hospedagem, CRM, formulários e segurança;</li>
+                <li>com fornecedores responsáveis por ferramentas de comunicação autorizadas;</li>
+                <li>com prestadores de serviços técnicos que necessitem de acesso para executar atividades da campanha;</li>
+                <li>com autoridades públicas, Justiça Eleitoral, ANPD ou outros órgãos competentes, quando houver obrigação ou determinação válida;</li>
+                <li>para exercício regular de direitos.</li>
               </ul>
-              <p className="mt-4">O compartilhamento será limitado ao necessário para cumprir as finalidades informadas e observará medidas adequadas de segurança e confidencialidade.</p>
+              <p className="mt-4">O compartilhamento de dados pessoais sensíveis ou de dados capazes de revelar opinião política receberá tratamento reforçado.</p>
+              <p className="mt-4">Quando a operação depender de consentimento específico para compartilhamento com terceiro ou plataforma, esse consentimento deverá ser obtido antes da operação.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">12. Transferência internacional de dados</h2>
-              <p>Alguns fornecedores utilizados pela campanha podem armazenar ou processar dados em servidores localizados fora do Brasil, especialmente plataformas globais de tecnologia, analytics, mídia, hospedagem, CRM ou comunicação.</p>
-              <p className="mt-4">Quando houver transferência internacional de dados, a campanha adotará medidas razoáveis para que o tratamento observe a LGPD e mecanismos adequados de proteção, conforme aplicável.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">13. Retenção dos dados</h2>
-              <p>Os dados pessoais serão mantidos pelo tempo necessário para cumprir as finalidades descritas nesta política, incluindo atendimento de solicitações, envio de comunicações autorizadas, organização de materiais de campanha, mensuração de campanhas, cumprimento de obrigações legais ou eleitorais, prestação de contas, segurança, prevenção de fraudes, exercício regular de direitos e demonstração de conformidade com a LGPD.</p>
-              <p className="mt-4">Os dados usados para envio de comunicações poderão ser mantidos enquanto houver consentimento válido ou enquanto o titular não solicitar o descadastro, sem prejuízo da conservação de registros mínimos necessários para comprovar a revogação, evitar novos contatos indevidos ou cumprir obrigações legais.</p>
-              <p className="mt-4">Dados tratados com base no consentimento poderão ser eliminados após a revogação, salvo quando a conservação for necessária para cumprimento de obrigação legal, prestação de contas, prevenção de fraudes, segurança, exercício regular de direitos ou outra hipótese permitida pela LGPD.</p>
-              <p className="mt-4">Após o término da finalidade ou do prazo necessário de retenção, os dados serão eliminados, anonimizados ou mantidos somente nas hipóteses legalmente permitidas.</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">14. Separação entre campanha, mandato, projetos e outras bases</h2>
+              <p>Dados coletados no contexto desta campanha eleitoral serão tratados de acordo com as finalidades informadas nesta Política e no momento da coleta.</p>
+              <p className="mt-4">O fato de uma pessoa ter fornecido dados anteriormente em outro contexto — por exemplo, mandato, projeto social, associação, evento, ação temática, prestação de serviço ou cadastro de natureza diferente — <strong>não significa automaticamente que esses dados possam ser incorporados à base eleitoral da campanha</strong>.</p>
+              <p className="mt-4">Da mesma forma, os dados coletados por esta campanha não serão automaticamente transferidos, ao término da eleição, para eventual mandato, organização, empresa, associação ou outro projeto para finalidade diferente.</p>
+              <p className="mt-4">Qualquer reutilização para nova finalidade deverá observar a compatibilidade da finalidade original, a base legal aplicável, os deveres de transparência e, quando exigido, novo consentimento.</p>
             </section>
 
+            <hr className="border-gray-200" />
+
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">14. Segurança dos dados</h2>
-              <p>A campanha adota medidas técnicas e administrativas razoáveis para proteger os dados pessoais contra acessos não autorizados, perda, alteração, divulgação indevida, destruição acidental ou ilícita e outras situações inadequadas.</p>
-              <p className="mt-4">Entre as medidas adotadas ou recomendadas, conforme aplicável, estão:</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">15. Transferência internacional de dados</h2>
+              <p>Alguns fornecedores tecnológicos utilizados pela campanha poderão realizar armazenamento ou processamento de dados fora do Brasil.</p>
+              <p className="mt-4">Quando houver transferência internacional, serão observadas as exigências da LGPD e as regras aplicáveis à transferência internacional de dados pessoais.</p>
+              <p className="mt-4">A campanha buscará utilizar fornecedores que ofereçam mecanismos de proteção compatíveis com a legislação aplicável.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">16. Retenção e eliminação dos dados</h2>
+              <p>Os dados serão mantidos apenas pelo período necessário para cumprir as finalidades informadas e as obrigações legais aplicáveis.</p>
+              <p className="mt-4">Os dados utilizados para manifestação de apoio e comunicação eleitoral serão revisados ao término da campanha, considerando:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Uso de HTTPS no site;</li>
-                <li>Controle de acesso às ferramentas utilizadas;</li>
-                <li>Restrição de acesso aos dados pela Equipe de Campanha;</li>
-                <li>Senhas fortes;</li>
-                <li>Backup dos dados;</li>
-                <li>Proteção contra spam e abusos em formulários;</li>
-                <li>Revisão de permissões em plataformas de hospedagem, CRM, mídia e comunicação;</li>
-                <li>Limitação do acesso aos leads somente a pessoas autorizadas;</li>
-                <li>Não exportação ou download rotineiro dos dados para computadores pessoais;</li>
-                <li>Monitoramento básico de segurança e funcionamento das ferramentas.</li>
+                <li>o encerramento da finalidade eleitoral;</li>
+                <li>eventual revogação de consentimento;</li>
+                <li>pedidos de eliminação;</li>
+                <li>necessidade de manutenção de registros de conformidade;</li>
+                <li>obrigações legais ou eleitorais;</li>
+                <li>exercício regular de direitos;</li>
+                <li>processos administrativos, judiciais ou eleitorais em andamento.</li>
               </ul>
-              <p className="mt-4">Apesar das medidas adotadas, nenhum sistema é totalmente imune a riscos. Caso ocorra incidente de segurança que possa gerar risco ou dano relevante aos titulares, serão adotadas as providências cabíveis, incluindo comunicação às autoridades competentes e aos titulares, quando exigido pela LGPD.</p>
+              <p className="mt-4">Dados que não possuam mais finalidade ou fundamento para conservação serão eliminados ou anonimizados, conforme aplicável.</p>
+              <p className="mt-4">Registros mínimos relacionados a consentimento, revogação, descadastramento ou operações de tratamento poderão ser conservados quando necessários para cumprimento de obrigação legal ou demonstração de conformidade.</p>
+              <p className="mt-4">A campanha manterá o registro das operações de tratamento pelo período exigido pela regulamentação eleitoral aplicável às Eleições 2026.</p>
             </section>
 
+            <hr className="border-gray-200" />
+
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">15. Direitos dos titulares</h2>
-              <p>O titular pode exercer, a qualquer momento e nos termos da LGPD, os seguintes direitos:</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">17. Segurança da informação</h2>
+              <p>A campanha adotará medidas técnicas e administrativas compatíveis com os riscos envolvidos no tratamento realizado.</p>
+              <p className="mt-4">Essas medidas poderão incluir:</p>
               <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
-                <li>Confirmação da existência de tratamento de dados;</li>
-                <li>Acesso aos dados pessoais tratados;</li>
-                <li>Correção de dados incompletos, inexatos ou desatualizados;</li>
-                <li>Anonimização, bloqueio ou eliminação de dados desnecessários, excessivos ou tratados em desconformidade com a LGPD;</li>
-                <li>Portabilidade dos dados, quando aplicável;</li>
-                <li>Informação sobre compartilhamento de dados;</li>
-                <li>Informação sobre a possibilidade de não fornecer consentimento e sobre as consequências da negativa;</li>
-                <li>Revogação do consentimento;</li>
-                <li>Eliminação dos dados tratados com base no consentimento, quando aplicável;</li>
-                <li>Oposição ao tratamento realizado em desconformidade com a LGPD;</li>
-                <li>Revisão de decisões tomadas unicamente com base em tratamento automatizado de dados pessoais, quando aplicável.</li>
+                <li>utilização de HTTPS;</li>
+                <li>controle individualizado de acessos;</li>
+                <li>restrição de acesso às pessoas que necessitem tratar os dados;</li>
+                <li>senhas fortes;</li>
+                <li>autenticação adicional quando disponível;</li>
+                <li>revisão periódica de usuários e permissões;</li>
+                <li>procedimentos de backup;</li>
+                <li>medidas contra spam e abuso de formulários;</li>
+                <li>proteção dos sistemas de CRM;</li>
+                <li>cuidado com exportações de bases;</li>
+                <li>restrição de compartilhamento de arquivos contendo dados pessoais;</li>
+                <li>orientações à equipe sobre proteção de dados;</li>
+                <li>monitoramento e resposta a incidentes.</li>
               </ul>
-              <p className="mt-4">Para exercer seus direitos, o titular deve entrar em contato pelo e-mail: <br/><strong><a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></strong></p>
-              <p className="mt-4">A solicitação poderá exigir validação mínima da identidade do titular, para evitar acesso indevido por terceiros.</p>
+              <p className="mt-4">Nenhum sistema tecnológico é totalmente imune a incidentes.</p>
+              <p className="mt-4">Caso ocorra incidente de segurança capaz de gerar risco ou dano relevante, a campanha adotará as providências exigidas pela legislação, incluindo avaliação e eventual comunicação às autoridades competentes e aos titulares afetados.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">16. Descadastro e revogação de consentimento</h2>
-              <p>Quando o tratamento depender de consentimento, o titular poderá revogá-lo a qualquer momento, de forma gratuita e facilitada.</p>
-              <p className="mt-4">O descadastro de comunicações poderá ser solicitado pelo próprio canal utilizado, quando disponível, ou pelo e-mail: <br/><strong><a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></strong></p>
-              <p className="mt-4">A revogação do consentimento não afeta a validade dos tratamentos realizados anteriormente com base no consentimento então vigente, nem impede a conservação de dados quando houver outra base legal aplicável, como cumprimento de obrigação legal, prestação de contas, prevenção de fraudes, segurança ou exercício regular de direitos.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">17. Dados de crianças e adolescentes</h2>
-              <p>Este site e os formulários da campanha não são direcionados a crianças ou adolescentes.</p>
-              <p className="mt-4">A campanha não solicita, de forma intencional, dados pessoais de crianças ou adolescentes por meio deste site.</p>
-              <p className="mt-4">Caso seja identificado tratamento de dados de crianças ou adolescentes, serão adotadas medidas específicas de proteção, observando o melhor interesse do menor e, quando necessário, o consentimento de pelo menos um dos pais ou responsável legal.</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">18. Direitos dos titulares</h2>
+              <p>O titular poderá exercer os direitos previstos na LGPD, conforme aplicável, incluindo:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>confirmação da existência de tratamento;</li>
+                <li>acesso aos dados;</li>
+                <li>correção de dados incompletos, inexatos ou desatualizados;</li>
+                <li>anonimização, bloqueio ou eliminação de dados desnecessários, excessivos ou tratados em desconformidade;</li>
+                <li>eliminação de dados tratados com base em consentimento, ressalvadas as hipóteses legais de conservação;</li>
+                <li>informação sobre compartilhamento;</li>
+                <li>informação sobre a possibilidade de não fornecer consentimento e suas consequências;</li>
+                <li>revogação do consentimento;</li>
+                <li>oposição ao tratamento, quando cabível;</li>
+                <li>portabilidade, quando aplicável;</li>
+                <li>revisão de decisões tomadas unicamente com base em tratamento automatizado, quando aplicável.</li>
+              </ul>
+              <p className="mt-4">As solicitações poderão ser encaminhadas para:</p>
+              <p className="mt-2 font-bold"><a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></p>
+              <p className="mt-4">Para proteger os próprios dados do titular, a campanha poderá solicitar informações mínimas necessárias para confirmar a identidade da pessoa que realiza o pedido.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">18. Pesquisas, intenção de voto, eventos e doações</h2>
-              <p>Este site não coleta dados de doadores, não realiza inscrição em eventos presenciais, não é direcionado a crianças ou adolescentes e não realiza pesquisa de intenção de voto por meio dos formulários informados.</p>
-              <p className="mt-4">Caso novas funcionalidades sejam adicionadas no futuro, como inscrição em eventos, coleta de doações, pesquisas, formulários de voluntariado, atendimento automatizado ou outras interações, esta política deverá ser atualizada antes do início da nova coleta.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">19. Decisões automatizadas, segmentação e publicidade digital</h2>
-              <p>A campanha poderá utilizar ferramentas de mídia, analytics e marketing para mensurar desempenho, segmentar públicos, acompanhar eventos de conversão e exibir anúncios relacionados à campanha, sempre conforme as preferências de consentimento aplicáveis.</p>
-              <p className="mt-4">A campanha não utiliza decisões automatizadas para produzir efeitos jurídicos ou afetar significativamente os interesses do titular sem a devida transparência e possibilidade de exercício de direitos.</p>
-              <p className="mt-4">Caso o titular deseje informações sobre critérios utilizados em eventual tratamento automatizado, segmentação ou publicidade personalizada, poderá entrar em contato pelo canal de privacidade indicado nesta política.</p>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">19. Registro das operações de tratamento</h2>
+              <p>A campanha manterá registro das operações de tratamento de dados pessoais conforme exigido pela regulamentação eleitoral.</p>
+              <p className="mt-4">O registro deverá contemplar, conforme aplicável:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>tipos e origem dos dados;</li>
+                <li>categorias de titulares;</li>
+                <li>processos e finalidades;</li>
+                <li>fundamentos jurídicos utilizados;</li>
+                <li>duração prevista do tratamento;</li>
+                <li>período de armazenamento;</li>
+                <li>fluxos de compartilhamento;</li>
+                <li>fornecedores envolvidos;</li>
+                <li>atribuições de controladores e operadores;</li>
+                <li>medidas de segurança utilizadas.</li>
+              </ul>
+              <p className="mt-4">Os registros serão mantidos pelo período determinado pela regulamentação eleitoral e por período adicional quando sua conservação for necessária em razão de processo ou obrigação legal.</p>
             </section>
 
-            <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">20. Alterações nesta política</h2>
-              <p>Esta Política de Privacidade poderá ser atualizada periodicamente para refletir mudanças no site, nas ferramentas utilizadas, nas finalidades de tratamento, nos fornecedores, nas exigências legais, nas normas eleitorais ou nas práticas da campanha.</p>
-              <p className="mt-4">A versão mais recente estará sempre disponível no site <strong><a href="http://www.rafaelsaraivasp.com.br" target="_blank" rel="noopener noreferrer">www.rafaelsaraivasp.com.br</a></strong>, com indicação da data da última atualização.</p>
-            </section>
+            <hr className="border-gray-200" />
 
             <section>
-              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">21. Contato</h2>
-              <p>Para dúvidas, solicitações, exercício de direitos, revogação de consentimento ou descadastro de comunicações relacionadas à proteção de dados pessoais, entre em contato pelo canal:</p>
-              <ul className="list-none space-y-2 mt-4 text-gray-600">
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">20. Crianças e adolescentes</h2>
+              <p>Os formulários destinados à manifestação de apoio e relacionamento eleitoral não têm como objetivo a coleta de dados pessoais de crianças.</p>
+              <p className="mt-4">Caso a campanha identifique tratamento de dados de criança ou adolescente, serão avaliadas as circunstâncias concretas e adotadas as medidas de proteção exigidas pela legislação, considerando o melhor interesse e as normas específicas aplicáveis.</p>
+              <p className="mt-4">A campanha poderá remover cadastros ou limitar o tratamento quando não for possível assegurar a conformidade necessária.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">21. Pesquisas, doações, voluntariado e novas funcionalidades</h2>
+              <p>O formulário <strong>“Você está com a gente?”</strong> não constitui pesquisa eleitoral formal de intenção de voto.</p>
+              <p className="mt-4">Caso o site venha a oferecer, futuramente, funcionalidades diferentes das atualmente descritas — como doações eleitorais, pesquisas, inscrições específicas de voluntariado, atendimento automatizado, eventos ou outros serviços — as informações de privacidade e os mecanismos de coleta deverão ser revisados antes do início do novo tratamento.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">22. Alterações desta Política</h2>
+              <p>Esta Política poderá ser atualizada em razão de:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li>mudanças nas funcionalidades do site;</li>
+                <li>inclusão ou remoção de formulários;</li>
+                <li>alteração de fornecedores;</li>
+                <li>mudanças nas finalidades de tratamento;</li>
+                <li>alteração das tecnologias utilizadas;</li>
+                <li>mudanças na legislação eleitoral ou de proteção de dados;</li>
+                <li>orientações ou determinações de autoridades competentes.</li>
+              </ul>
+              <p className="mt-4">A versão atualizada permanecerá disponível em <strong><a href="http://www.rafaelsaraivasp.com.br" target="_blank" rel="noopener noreferrer">www.rafaelsaraivasp.com.br</a></strong>, acompanhada da data da última atualização.</p>
+              <p className="mt-4">Quando uma mudança envolver finalidade que dependa de novo consentimento, a mera atualização desta Política não substituirá a obtenção da autorização necessária.</p>
+            </section>
+
+            <hr className="border-gray-200" />
+
+            <section>
+              <h2 className="text-xl font-black text-dark mb-4 uppercase tracking-wide">23. Contato</h2>
+              <p>Para dúvidas sobre esta Política, solicitações de titulares, revogação de consentimento, descadastramento ou pedidos relacionados ao tratamento de dados pessoais:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-4 text-gray-600">
+                <li><strong>Campanha:</strong> ELEIÇÃO 2026 RAFAEL SARAIVA GAIA DEPUTADO ESTADUAL</li>
+                <li><strong>CNPJ eleitoral:</strong> 68.283.115/0001-74</li>
                 <li><strong>E-mail:</strong> <a href="mailto:marketing@rafaelsaraivasp.com.br">marketing@rafaelsaraivasp.com.br</a></li>
-                <li><strong>Responsável pelo atendimento:</strong> Equipe de Campanha</li>
+                <li><strong>Responsável pelo atendimento:</strong> Equipe Rafael Saraiva</li>
+                <li><strong>Encarregado pelo tratamento de dados:</strong> Diogo Santos Barbosa</li>
                 <li><strong>Site:</strong> <a href="http://www.rafaelsaraivasp.com.br" target="_blank" rel="noopener noreferrer">www.rafaelsaraivasp.com.br</a></li>
               </ul>
+              <p className="mt-4">O titular poderá utilizar esse canal para exercer os direitos previstos na legislação aplicável.</p>
             </section>
-
-            <p className="mt-12 text-sm text-gray-500 italic">
-              Ao utilizar este site, preencher formulários, aceitar cookies ou interagir com os canais digitais da campanha, o titular declara estar ciente das condições desta Política de Privacidade.
-            </p>
           </div>
         </div>
       </main>

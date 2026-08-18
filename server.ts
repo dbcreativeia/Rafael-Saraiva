@@ -18,6 +18,7 @@ async function startServer() {
   const petitionsData: any[] = [];
   const contraMausTratosData: any[] = [];
   const jogoScoresData: any[] = [];
+  const popupApoioData: any[] = [];
 
   let db: any = null;
   // Initialize DB in the background without blocking server startup
@@ -251,7 +252,20 @@ async function startServer() {
         await db.query(
           `INSERT INTO citizens (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, createdAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, data.nome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento, data.bairro, data.cidade, data.estado, createdAt]
+          [
+            id,
+            data.nome,
+            data.whatsapp || '',
+            data.email || '',
+            data.cep || '',
+            data.endereco || '',
+            data.numero || '',
+            data.complemento || '',
+            data.bairro || '',
+            data.cidade || 'São Paulo',
+            data.estado || 'SP',
+            createdAt
+          ]
         );
         return res.json({ success: true, data });
       } catch (err) {
@@ -276,6 +290,68 @@ async function startServer() {
     }
     const idx = citizensData.findIndex(c => c.id === id);
     if (idx !== -1) citizensData.splice(idx, 1);
+    res.json({ success: true });
+  });
+
+  // API routing for popup-apoio (Pop-up de Apoio da Capital SP)
+  app.get('/api/popup-apoio', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM popup_apoio ORDER BY createdAt DESC');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    res.json(popupApoioData);
+  });
+
+  app.post('/api/popup-apoio', async (req, res) => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const data = { ...req.body, id, createdAt };
+    
+    if (db) {
+      try {
+        await db.query(
+          `INSERT INTO popup_apoio (id, nome, whatsapp, email, cep, endereco, bairro, cidade, estado, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            data.nome,
+            data.whatsapp || '',
+            data.email || '',
+            data.cep || '',
+            data.endereco || '',
+            data.bairro || '',
+            data.cidade || 'São Paulo',
+            data.estado || 'SP',
+            createdAt
+          ]
+        );
+        return res.json({ success: true, data });
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+
+    popupApoioData.push(data);
+    res.json({ success: true, data });
+  });
+
+  app.delete('/api/popup-apoio/:id', async (req, res) => {
+    const id = req.params.id;
+    if (db) {
+      try {
+        await db.query('DELETE FROM popup_apoio WHERE id = ?', [id]);
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const idx = popupApoioData.findIndex(c => c.id === id);
+    if (idx !== -1) popupApoioData.splice(idx, 1);
     res.json({ success: true });
   });
 
