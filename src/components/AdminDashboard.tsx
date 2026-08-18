@@ -9,6 +9,13 @@ import 'leaflet/dist/leaflet.css';
 
 const NinaPassadoreAdminTab = () => {
   const [ninapassadore, setNinapassadore] = React.useState<any[]>([]);
+  const [cidadeFilter, setCidadeFilter] = React.useState("");
+
+  const uniqueCities = Array.from(new Set(ninapassadore.map(m => m.cidade))).filter(Boolean).sort();
+  const filteredData = ninapassadore.filter(m => cidadeFilter ? m.cidade === cidadeFilter : true);
+  const totalCount = ninapassadore.length;
+  const impressoCount = ninapassadore.filter(m => m.tipoMaterial === 'impresso').length;
+  const digitalCount = ninapassadore.filter(m => m.tipoMaterial === 'digital').length;
 
   const fetchNinapassadore = async () => {
     try {
@@ -57,11 +64,39 @@ const NinaPassadoreAdminTab = () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material Dobrada</h2>
-        <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
-          <Download className="w-5 h-5" /> Exportar Planilha
-        </button>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material Dobrada</h2>
+          <div className="flex gap-2">
+            <div className="text-sm font-bold bg-purple-50 text-purple-600 py-1 px-3 rounded-lg">
+              {totalCount} Geral
+            </div>
+            <div className="text-sm font-bold bg-orange-50 text-orange-600 py-1 px-3 rounded-lg">
+              {impressoCount} Impressos
+            </div>
+            <div className="text-sm font-bold bg-blue-50 text-blue-600 py-1 px-3 rounded-lg">
+              {digitalCount} Digitais
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <select
+              value={cidadeFilter}
+              onChange={(e) => setCidadeFilter(e.target.value)}
+              className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none bg-white font-medium text-gray-700 text-sm"
+            >
+              <option value="">Todas as cidades</option>
+              {uniqueCities.map(cidade => (
+                <option key={String(cidade)} value={String(cidade)}>{String(cidade)}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
+            <Download className="w-5 h-5" /> Exportar
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
@@ -70,20 +105,26 @@ const NinaPassadoreAdminTab = () => {
             <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider">
               <th className="p-4 font-bold">Data</th>
               <th className="p-4 font-bold">Nome</th>
-              <th className="p-4 font-bold">WhatsApp</th>
-              <th className="p-4 font-bold">Cidade</th>
+              <th className="p-4 font-bold">Contato</th>
+              <th className="p-4 font-bold">Endereço Completo</th>
               <th className="p-4 font-bold">Tipo</th>
               <th className="p-4 font-bold">Adesivo Perf.</th>
-              <th className="p-4 font-bold">Ações</th>
+              <th className="p-4 font-bold text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {ninapassadore.map(m => (
+            {filteredData.map(m => (
               <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                 <td className="p-4 text-sm font-medium text-gray-600">{new Date(m.createdAt).toLocaleDateString()}</td>
                 <td className="p-4 font-bold text-gray-800">{m.nome} {m.sobrenome}</td>
-                <td className="p-4 text-sm text-gray-600">{m.whatsapp}</td>
-                <td className="p-4 text-sm text-gray-600">{m.cidade}/{m.estado}</td>
+                <td className="p-4 text-sm text-gray-600">
+                  <div>{m.whatsapp}</div>
+                  <div className="text-xs text-gray-400">{m.email}</div>
+                </td>
+                <td className="p-4 text-sm text-gray-600">
+                  <div>{m.endereco}{m.numero ? `, ${m.numero}` : ''}{m.complemento ? ` - ${m.complemento}` : ''}</div>
+                  <div className="text-xs text-gray-400">{m.bairro}, {m.cidade}/{m.estado} - CEP: {m.cep}</div>
+                </td>
                 <td className="p-4 text-sm">
                   <span className={`px-2 py-1 rounded text-xs font-bold ${m.tipoMaterial === 'digital' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
                     {m.tipoMaterial}
@@ -92,7 +133,7 @@ const NinaPassadoreAdminTab = () => {
                 <td className="p-4 text-sm text-gray-600 font-medium">
                   {m.tipoMaterial === 'impresso' ? (m.adesivoPerfurado ? 'Sim' : 'Não') : '-'}
                 </td>
-                <td className="p-4">
+                <td className="p-4 text-right">
                   <button onClick={() => deleteNinapassadore(m.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-5 h-5" /></button>
                 </td>
               </tr>
@@ -110,6 +151,13 @@ const NinaPassadoreAdminTab = () => {
 };
 const MaterialAdminTab = () => {
   const [materials, setMaterials] = React.useState<any[]>([]);
+  const [cidadeFilter, setCidadeFilter] = React.useState("");
+
+  const uniqueCities = Array.from(new Set(materials.map(m => m.cidade))).filter(Boolean).sort();
+  const filteredData = materials.filter(m => cidadeFilter ? m.cidade === cidadeFilter : true);
+  const totalCount = materials.length;
+  const impressoCount = materials.filter(m => m.tipoMaterial === 'impresso').length;
+  const digitalCount = materials.filter(m => m.tipoMaterial === 'digital').length;
 
   const fetchMaterials = async () => {
     try {
@@ -158,11 +206,39 @@ const MaterialAdminTab = () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material de Campanha</h2>
-        <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
-          <Download className="w-5 h-5" /> Exportar Planilha
-        </button>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-black uppercase text-dark">Pedidos de Material de Campanha</h2>
+          <div className="flex gap-2">
+            <div className="text-sm font-bold bg-indigo-50 text-indigo-600 py-1 px-3 rounded-lg">
+              {totalCount} Geral
+            </div>
+            <div className="text-sm font-bold bg-orange-50 text-orange-600 py-1 px-3 rounded-lg">
+              {impressoCount} Impressos
+            </div>
+            <div className="text-sm font-bold bg-blue-50 text-blue-600 py-1 px-3 rounded-lg">
+              {digitalCount} Digitais
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <select
+              value={cidadeFilter}
+              onChange={(e) => setCidadeFilter(e.target.value)}
+              className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none bg-white font-medium text-gray-700 text-sm"
+            >
+              <option value="">Todas as cidades</option>
+              {uniqueCities.map(cidade => (
+                <option key={String(cidade)} value={String(cidade)}>{String(cidade)}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2">
+            <Download className="w-5 h-5" /> Exportar
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
@@ -171,20 +247,26 @@ const MaterialAdminTab = () => {
             <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider">
               <th className="p-4 font-bold">Data</th>
               <th className="p-4 font-bold">Nome</th>
-              <th className="p-4 font-bold">WhatsApp</th>
-              <th className="p-4 font-bold">Cidade</th>
+              <th className="p-4 font-bold">Contato</th>
+              <th className="p-4 font-bold">Endereço Completo</th>
               <th className="p-4 font-bold">Tipo</th>
               <th className="p-4 font-bold">Adesivo Perf.</th>
-              <th className="p-4 font-bold">Ações</th>
+              <th className="p-4 font-bold text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {materials.map(m => (
+            {filteredData.map(m => (
               <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                 <td className="p-4 text-sm font-medium text-gray-600">{new Date(m.createdAt).toLocaleDateString()}</td>
                 <td className="p-4 font-bold text-gray-800">{m.nome} {m.sobrenome}</td>
-                <td className="p-4 text-sm text-gray-600">{m.whatsapp}</td>
-                <td className="p-4 text-sm text-gray-600">{m.cidade}/{m.estado}</td>
+                <td className="p-4 text-sm text-gray-600">
+                  <div>{m.whatsapp}</div>
+                  <div className="text-xs text-gray-400">{m.email}</div>
+                </td>
+                <td className="p-4 text-sm text-gray-600">
+                  <div>{m.endereco}{m.numero ? `, ${m.numero}` : ''}{m.complemento ? ` - ${m.complemento}` : ''}</div>
+                  <div className="text-xs text-gray-400">{m.bairro}, {m.cidade}/{m.estado} - CEP: {m.cep}</div>
+                </td>
                 <td className="p-4 text-sm">
                   <span className={`px-2 py-1 rounded text-xs font-bold ${m.tipoMaterial === 'digital' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
                     {m.tipoMaterial}
@@ -193,7 +275,7 @@ const MaterialAdminTab = () => {
                 <td className="p-4 text-sm text-gray-600 font-medium">
                   {m.tipoMaterial === 'impresso' ? (m.adesivoPerfurado ? 'Sim' : 'Não') : '-'}
                 </td>
-                <td className="p-4">
+                <td className="p-4 text-right">
                   <button onClick={() => deleteMaterial(m.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-5 h-5" /></button>
                 </td>
               </tr>

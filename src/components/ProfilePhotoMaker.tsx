@@ -6,7 +6,7 @@ interface ProfilePhotoMakerProps {
   molduraUrl?: string;
 }
 
-export const ProfilePhotoMaker = ({ molduraUrl = '/modelura-foto-perfil_rafael-saraiva_44077.png' }: ProfilePhotoMakerProps = {}) => {
+export const ProfilePhotoMaker = ({ molduraUrl = '/moldura-foto-perfil_rafael-saraiva_44077.png' }: ProfilePhotoMakerProps = {}) => {
   const [userImage, setUserImage] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
