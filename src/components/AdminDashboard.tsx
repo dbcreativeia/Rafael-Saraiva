@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { CityDistributionMap } from './CityDistributionMap';
+import { DailyGrowthChart } from './DailyGrowthChart';
 
 
 const NinaPassadoreAdminTab = () => {
@@ -115,7 +117,7 @@ const NinaPassadoreAdminTab = () => {
               onChange={(e) => setCidadeFilter(e.target.value)}
               className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none bg-white font-medium text-gray-700 text-sm"
             >
-              <option value="">Todas as cidades</option>
+              <option value="">Todas as cidades ({uniqueCities.length})</option>
               {uniqueCities.map(cidade => (
                 <option key={String(cidade)} value={String(cidade)}>{String(cidade)}</option>
               ))}
@@ -147,6 +149,25 @@ const NinaPassadoreAdminTab = () => {
           </div>
         </div>
       </div>
+
+      {/* Gráfico de Crescimento Diário */}
+      <DailyGrowthChart 
+        items={ninapassadore}
+        title="Histórico de Crescimento - Material Dobrada"
+        subtitle="Acompanhamento diário de pedidos de material impresso e digital"
+        accentColor="#9333ea"
+        hasBreakdown={true}
+        itemNoun="Pedidos"
+      />
+
+      {/* Mapa de Distribuição por Cidade */}
+      <CityDistributionMap 
+        items={ninapassadore}
+        title="Distribuição Geográfica (Material Dobrada)"
+        subtitle="Concentração por município dos pedidos de material da dobrada"
+        itemLabel="pedido"
+        accentColor="#9333ea"
+      />
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[800px]">
@@ -306,7 +327,7 @@ const MaterialAdminTab = () => {
               onChange={(e) => setCidadeFilter(e.target.value)}
               className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none bg-white font-medium text-gray-700 text-sm"
             >
-              <option value="">Todas as cidades</option>
+              <option value="">Todas as cidades ({uniqueCities.length})</option>
               {uniqueCities.map(cidade => (
                 <option key={String(cidade)} value={String(cidade)}>{String(cidade)}</option>
               ))}
@@ -338,6 +359,25 @@ const MaterialAdminTab = () => {
           </div>
         </div>
       </div>
+
+      {/* Gráfico de Crescimento Diário */}
+      <DailyGrowthChart 
+        items={materials}
+        title="Histórico de Crescimento - Material de Campanha"
+        subtitle="Acompanhamento diário de pedidos de material impresso e digital"
+        accentColor="#4f46e5"
+        hasBreakdown={true}
+        itemNoun="Pedidos"
+      />
+
+      {/* Mapa de Distribuição por Cidade */}
+      <CityDistributionMap 
+        items={materials}
+        title="Distribuição Geográfica (Material de Campanha)"
+        subtitle="Concentração por município dos pedidos de material de campanha"
+        itemLabel="pedido"
+        accentColor="#4f46e5"
+      />
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[800px]">
@@ -393,7 +433,7 @@ const MaterialAdminTab = () => {
 const ApoioAdminTab = () => {
   const [citizens, setCitizens] = React.useState<any[]>([]);
   const [search, setSearch] = React.useState('');
-  const [bairroFilter, setBairroFilter] = React.useState('');
+  const [cidadeFilter, setCidadeFilter] = React.useState('');
   const [filterType, setFilterType] = React.useState<'all' | 'unique' | 'duplicates'>('all');
   const [loading, setLoading] = React.useState(false);
 
@@ -440,13 +480,13 @@ const ApoioAdminTab = () => {
     });
   }, [citizens]);
 
-  const uniqueBairros = Array.from(new Set(citizens.map(c => c.bairro))).filter(Boolean).sort();
+  const uniqueCities = Array.from(new Set(citizens.map(c => c.cidade || 'São Paulo'))).filter(Boolean).sort();
 
   const filteredData = React.useMemo(() => {
     return processedList.filter(item => {
       if (filterType === 'unique' && item.isDuplicate) return false;
       if (filterType === 'duplicates' && !item.isDuplicate) return false;
-      if (bairroFilter && item.bairro !== bairroFilter) return false;
+      if (cidadeFilter && (item.cidade || 'São Paulo') !== cidadeFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         const matchName = item.nome?.toLowerCase().includes(q);
@@ -454,11 +494,12 @@ const ApoioAdminTab = () => {
         const matchEmail = item.email?.toLowerCase().includes(q);
         const matchCep = item.cep?.includes(q);
         const matchBairro = item.bairro?.toLowerCase().includes(q);
-        return matchName || matchPhone || matchEmail || matchCep || matchBairro;
+        const matchCidade = item.cidade?.toLowerCase().includes(q);
+        return matchName || matchPhone || matchEmail || matchCep || matchBairro || matchCidade;
       }
       return true;
     });
-  }, [processedList, filterType, bairroFilter, search]);
+  }, [processedList, filterType, cidadeFilter, search]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredData.map(c => ({
@@ -513,25 +554,25 @@ const ApoioAdminTab = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por nome, WhatsApp, e-mail, bairro..."
+              placeholder="Buscar por nome, WhatsApp, e-mail, cidade..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/20 outline-none text-sm bg-white"
             />
           </div>
 
-          {/* Filtro por Bairro */}
-          {uniqueBairros.length > 0 && (
+          {/* Filtro por Cidade */}
+          {uniqueCities.length > 0 && (
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <select
-                value={bairroFilter}
-                onChange={(e) => setBairroFilter(e.target.value)}
+                value={cidadeFilter}
+                onChange={(e) => setCidadeFilter(e.target.value)}
                 className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/20 outline-none bg-white font-medium text-gray-700 text-sm"
               >
-                <option value="">Todos os Bairros ({uniqueBairros.length})</option>
-                {uniqueBairros.map(bairro => (
-                  <option key={String(bairro)} value={String(bairro)}>{String(bairro)}</option>
+                <option value="">Todas as Cidades ({uniqueCities.length})</option>
+                {uniqueCities.map(cidade => (
+                  <option key={String(cidade)} value={String(cidade)}>{String(cidade)}</option>
                 ))}
               </select>
             </div>
@@ -547,6 +588,24 @@ const ApoioAdminTab = () => {
         </div>
       </div>
 
+      {/* Gráfico de Crescimento Diário */}
+      <DailyGrowthChart 
+        items={citizens}
+        title="Histórico de Crescimento - Apoiadores (Pop-up)"
+        subtitle="Evolução temporal e volume diário de preenchimentos do formulário"
+        accentColor="#FF5500"
+        itemNoun="Apoiadores"
+      />
+
+      {/* Mapa de Calor por Cidade */}
+      <CityDistributionMap 
+        items={citizens}
+        title="Mapa de Calor (Apoiadores por Cidade)"
+        subtitle="Apoiadores cadastrados no Estado de São Paulo"
+        itemLabel="apoiador"
+        accentColor="#FF5500"
+      />
+
       {/* Tabela de Apoiadores */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[800px]">
@@ -557,7 +616,7 @@ const ApoioAdminTab = () => {
               <th className="p-4 font-bold">WhatsApp</th>
               <th className="p-4 font-bold">E-mail</th>
               <th className="p-4 font-bold">CEP</th>
-              <th className="p-4 font-bold">Bairro / Cidade</th>
+              <th className="p-4 font-bold">Cidade / Bairro</th>
               <th className="p-4 font-bold text-right">Ações</th>
             </tr>
           </thead>
@@ -583,8 +642,8 @@ const ApoioAdminTab = () => {
                   {c.cep}
                 </td>
                 <td className="p-4 text-sm text-gray-600">
-                  <span className="font-semibold text-gray-800">{c.bairro || 'Não informado'}</span>
-                  <div className="text-xs text-gray-400">{c.cidade || 'São Paulo'} - {c.estado || 'SP'}</div>
+                  <span className="font-semibold text-gray-800">{c.cidade || 'São Paulo'}</span>
+                  <div className="text-xs text-gray-400">{c.bairro || 'Não informado'} - {c.estado || 'SP'}</div>
                 </td>
                 <td className="p-4 text-right">
                   <button
