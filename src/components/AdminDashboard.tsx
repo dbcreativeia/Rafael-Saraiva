@@ -9,10 +9,15 @@ import { CityDistributionMap } from './CityDistributionMap';
 import { DailyGrowthChart } from './DailyGrowthChart';
 
 
-const NinaPassadoreAdminTab = () => {
+interface TabRefreshProps {
+  refreshTrigger?: number;
+}
+
+const NinaPassadoreAdminTab: React.FC<TabRefreshProps> = ({ refreshTrigger }) => {
   const [ninapassadore, setNinapassadore] = React.useState<any[]>([]);
   const [cidadeFilter, setCidadeFilter] = React.useState("");
   const [tipoFilter, setTipoFilter] = React.useState<"todos" | "impresso" | "digital">("todos");
+  const [loading, setLoading] = React.useState(false);
 
   const uniqueCities = Array.from(new Set(ninapassadore.map(m => m.cidade))).filter(Boolean).sort();
   const filteredData = ninapassadore.filter(m => {
@@ -25,20 +30,27 @@ const NinaPassadoreAdminTab = () => {
   const digitalCount = ninapassadore.filter(m => m.tipoMaterial === 'digital').length;
 
   const fetchNinapassadore = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/ninapassadore');
+      const res = await fetch(`/api/ninapassadore?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       const data = await res.json();
-      setNinapassadore(data);
+      setNinapassadore(Array.isArray(data) ? data : []);
     } catch(err) {
       console.warn("API request failed:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   React.useEffect(() => {
     fetchNinapassadore();
-  }, []);
+  }, [refreshTrigger]);
 
   const deleteNinapassadore = async (id: string) => {
+    if (!window.confirm("Deseja realmente remover este pedido?")) return;
     try {
       await fetch('/api/ninapassadore/' + id, { method: 'DELETE' });
       fetchNinapassadore();
@@ -125,6 +137,15 @@ const NinaPassadoreAdminTab = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button 
+              onClick={fetchNinapassadore}
+              disabled={loading}
+              title="Atualizar dados"
+              className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-purple-600' : ''}`} />
+              {loading ? 'Atualizando...' : 'Atualizar'}
+            </button>
             <button 
               onClick={() => exportFilteredToExcel('impresso')} 
               title="Exportar leads de material impresso"
@@ -219,10 +240,11 @@ const NinaPassadoreAdminTab = () => {
     </div>
   );
 };
-const MaterialAdminTab = () => {
+const MaterialAdminTab: React.FC<TabRefreshProps> = ({ refreshTrigger }) => {
   const [materials, setMaterials] = React.useState<any[]>([]);
   const [cidadeFilter, setCidadeFilter] = React.useState("");
   const [tipoFilter, setTipoFilter] = React.useState<"todos" | "impresso" | "digital">("todos");
+  const [loading, setLoading] = React.useState(false);
 
   const uniqueCities = Array.from(new Set(materials.map(m => m.cidade))).filter(Boolean).sort();
   const filteredData = materials.filter(m => {
@@ -235,20 +257,27 @@ const MaterialAdminTab = () => {
   const digitalCount = materials.filter(m => m.tipoMaterial === 'digital').length;
 
   const fetchMaterials = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/material');
+      const res = await fetch(`/api/material?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       const data = await res.json();
-      setMaterials(data);
+      setMaterials(Array.isArray(data) ? data : []);
     } catch(err) {
       console.warn("API request failed:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   React.useEffect(() => {
     fetchMaterials();
-  }, []);
+  }, [refreshTrigger]);
 
   const deleteMaterial = async (id: string) => {
+    if (!window.confirm("Deseja realmente remover este pedido?")) return;
     try {
       await fetch('/api/material/' + id, { method: 'DELETE' });
       fetchMaterials();
@@ -335,6 +364,15 @@ const MaterialAdminTab = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button 
+              onClick={fetchMaterials}
+              disabled={loading}
+              title="Atualizar dados"
+              className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
+              {loading ? 'Atualizando...' : 'Atualizar'}
+            </button>
             <button 
               onClick={() => exportFilteredToExcel('impresso')} 
               title="Exportar leads de material impresso"
@@ -430,7 +468,7 @@ const MaterialAdminTab = () => {
   );
 };
 
-const ApoioAdminTab = () => {
+const ApoioAdminTab: React.FC<TabRefreshProps> = ({ refreshTrigger }) => {
   const [citizens, setCitizens] = React.useState<any[]>([]);
   const [search, setSearch] = React.useState('');
   const [cidadeFilter, setCidadeFilter] = React.useState('');
@@ -440,18 +478,22 @@ const ApoioAdminTab = () => {
   const fetchCitizens = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/popup-apoio');
+      const res = await fetch(`/api/popup-apoio?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       const data = await res.json();
       setCitizens(Array.isArray(data) ? data : []);
     } catch(err) {
       console.warn("API request failed:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   React.useEffect(() => {
     fetchCitizens();
-  }, []);
+  }, [refreshTrigger]);
 
   const deleteCitizen = async (id: string) => {
     if (!window.confirm("Deseja realmente remover este cadastro de apoio?")) return;
@@ -578,6 +620,17 @@ const ApoioAdminTab = () => {
             </div>
           )}
 
+          {/* Botões de Ação */}
+          <button
+            onClick={fetchCitizens}
+            disabled={loading}
+            title="Atualizar dados"
+            className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-2 px-3.5 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#FF5500]' : ''}`} />
+            {loading ? 'Atualizando...' : 'Atualizar'}
+          </button>
+
           {/* Botão Exportar Excel */}
           <button
             onClick={exportToExcel}
@@ -693,6 +746,7 @@ export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<'APOIO' | 'PROTOCOLOS' | 'JOGO' | 'MATERIAL' | 'MATERIAL_DOBRADA'>('APOIO');
   const [jogoUsersData, setJogoUsersData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'unique' | 'duplicates'>('all');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [municipiosData, setMunicipiosData] = useState<any[]>([]);
 
@@ -732,12 +786,14 @@ export const AdminDashboard = () => {
 
   const fetchData = async (quiet = false) => {
     if (!quiet) setLoading(true);
+    setRefreshTrigger(prev => prev + 1);
     try {
+      const t = Date.now();
       const [response, citizensResponse, petitionsResponse, jogoUsersResponse] = await Promise.all([
-        fetch('/api/cities'),
-        fetch('/api/citizens'),
-        fetch('/api/petitions'),
-        fetch('/api/jogo/users')
+        fetch(`/api/cities?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+        fetch(`/api/citizens?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+        fetch(`/api/petitions?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+        fetch(`/api/jogo/users?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
       ]);
       const result = await response.json();
       const citizensResult = await citizensResponse.json();
@@ -1058,31 +1114,31 @@ export const AdminDashboard = () => {
 
         <div className="flex gap-4 mb-8 border-b border-gray-200 overflow-x-auto">
           <button
-            onClick={() => setActiveTab('APOIO')}
+            onClick={() => { setActiveTab('APOIO'); setRefreshTrigger(prev => prev + 1); fetchData(true); }}
             className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'APOIO' ? 'border-b-4 border-[#FF5500] text-[#FF5500]' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Apoio - Pop-up (SP)
           </button>
           <button
-            onClick={() => setActiveTab('PROTOCOLOS')}
+            onClick={() => { setActiveTab('PROTOCOLOS'); setRefreshTrigger(prev => prev + 1); fetchData(true); }}
             className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'PROTOCOLOS' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Protocolos e Abaixo-assinados
           </button>
           <button
-            onClick={() => setActiveTab('JOGO')}
+            onClick={() => { setActiveTab('JOGO'); setRefreshTrigger(prev => prev + 1); fetchData(true); }}
             className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'JOGO' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Jogo - Missão Resgate
           </button>
           <button
-            onClick={() => setActiveTab('MATERIAL')}
+            onClick={() => { setActiveTab('MATERIAL'); setRefreshTrigger(prev => prev + 1); fetchData(true); }}
             className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'MATERIAL' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Material de Campanha
           </button>
           <button
-            onClick={() => setActiveTab('MATERIAL_DOBRADA')}
+            onClick={() => { setActiveTab('MATERIAL_DOBRADA'); setRefreshTrigger(prev => prev + 1); fetchData(true); }}
             className={`pb-4 font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'MATERIAL_DOBRADA' ? 'border-b-4 border-primary text-primary' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Material Dobrada
@@ -1090,16 +1146,16 @@ export const AdminDashboard = () => {
         </div>
 
         {activeTab === 'APOIO' && (
-          <ApoioAdminTab />
+          <ApoioAdminTab refreshTrigger={refreshTrigger} />
         )}
 
         
         {activeTab === 'MATERIAL' && (
-          <MaterialAdminTab />
+          <MaterialAdminTab refreshTrigger={refreshTrigger} />
         )}
 
         {activeTab === 'MATERIAL_DOBRADA' && (
-          <NinaPassadoreAdminTab />
+          <NinaPassadoreAdminTab refreshTrigger={refreshTrigger} />
         )}
 
         {activeTab === 'PROTOCOLOS' && (

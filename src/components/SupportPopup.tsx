@@ -26,8 +26,8 @@ export const SupportPopup: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // Não exibir dentro do painel administrativo
-    if (location.hash === '#admin') return;
+    // Não exibir dentro do painel administrativo ou na página do jogo
+    if (location.pathname === '/jogo' || location.hash === '#admin') return;
 
     // Verificar se a pessoa já preencheu
     const hasSubmitted = localStorage.getItem('popup_apoio_submitted');

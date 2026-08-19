@@ -553,10 +553,10 @@ export const Jogo = () => {
         <meta property="twitter:description" content="Jogue o Jogo do Mandato do Rafael Saraiva 44077, resgate os animais e conheça mais sobre as ações do mandato em defesa da causa animal!" />
         <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" />
       </Helmet>
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center pt-24 md:pt-28 p-0 font-sans overflow-hidden">
+    <div className={`min-h-screen bg-gray-900 flex flex-col items-center justify-center font-sans overflow-hidden relative ${currentView === 'PLAYING' ? 'p-0 h-[100dvh]' : 'p-4'}`}>
       {currentView !== 'PLAYING' && (
-        <Link to="/" className="hidden absolute top-28 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors font-bold z-50">
-          <ArrowLeft className="w-5 h-5" /> Voltar
+        <Link to="/" className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-xl transition-all font-bold text-sm z-50 shadow-sm">
+          <ArrowLeft className="w-4 h-4" /> Voltar ao site
         </Link>
       )}
 

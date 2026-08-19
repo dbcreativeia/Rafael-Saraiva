@@ -12,6 +12,14 @@ async function startServer() {
   // Middleware para parsear JSON no body
   app.use(express.json());
 
+  // Desabilitar cache para todas as rotas da API
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+  });
+
   // In-memory data store for cities and protocols (fallback)
   const protocolsData: any[] = [];
   const citizensData: any[] = [];

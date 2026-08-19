@@ -26,7 +26,7 @@ export function Navbar() {
     closeMenu();
   };
 
-  if (location.hash === '#admin') return null;
+  if (location.pathname === '/jogo' || location.hash === '#admin') return null;
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 bg-dark/90 backdrop-blur-md border-b border-white/10 shadow-lg">
