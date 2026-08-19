@@ -47,6 +47,15 @@ async function startServer() {
     const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const data = { ...req.body, id, createdAt };
     
+    // Validação estrita de SP para material impresso (CEPs entre 01000-000 e 19999-999)
+    if (data.tipoMaterial === 'impresso') {
+      const cleanCep = (data.cep || '').replace(/\D/g, '');
+      const numCep = parseInt(cleanCep, 10);
+      if (cleanCep.length !== 8 || isNaN(numCep) || numCep < 1000000 || numCep > 19999999 || data.estado !== 'SP') {
+        return res.status(400).json({ error: "A entrega de material impresso é exclusiva para o Estado de São Paulo (CEPs de SP entre 01000-000 e 19999-999)." });
+      }
+    }
+
     if (db) {
       try {
         await db.query(
@@ -97,6 +106,15 @@ async function startServer() {
     const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const data = { ...req.body, id, createdAt };
     
+    // Validação estrita de SP para material impresso (CEPs entre 01000-000 e 19999-999)
+    if (data.tipoMaterial === 'impresso') {
+      const cleanCep = (data.cep || '').replace(/\D/g, '');
+      const numCep = parseInt(cleanCep, 10);
+      if (cleanCep.length !== 8 || isNaN(numCep) || numCep < 1000000 || numCep > 19999999 || data.estado !== 'SP') {
+        return res.status(400).json({ error: "A entrega de material impresso é exclusiva para o Estado de São Paulo (CEPs de SP entre 01000-000 e 19999-999)." });
+      }
+    }
+
     if (db) {
       try {
         await db.query(
@@ -311,6 +329,15 @@ async function startServer() {
     const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const data = { ...req.body, id, createdAt };
     
+    // Validação estrita: apenas CEPs do Estado de São Paulo (01000-000 a 19999-999)
+    const cleanCep = (data.cep || '').replace(/\D/g, '');
+    if (cleanCep) {
+      const numCep = parseInt(cleanCep, 10);
+      if (cleanCep.length !== 8 || isNaN(numCep) || numCep < 1000000 || numCep > 19999999) {
+        return res.status(400).json({ error: "Cadastro exclusivo para residentes do Estado de São Paulo (CEPs de SP entre 01000-000 e 19999-999)." });
+      }
+    }
+
     if (db) {
       try {
         await db.query(

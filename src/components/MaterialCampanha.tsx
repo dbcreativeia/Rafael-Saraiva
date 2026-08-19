@@ -28,6 +28,9 @@ export const MaterialCampanha = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [autoPreenchido, setAutoPreenchido] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState('');
+  const [cepValid, setCepValid] = useState<boolean | null>(null);
   
   const formRef = React.useRef<HTMLFormElement>(null);
   const successRef = React.useRef<HTMLDivElement>(null);
@@ -107,28 +110,49 @@ export const MaterialCampanha = () => {
     return numbers.replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
   };
 
-  const buscarCEP = async (cep: string) => {
-    const cleanCEP = cep.replace(/\D/g, '');
+  const buscarCEP = async (cepVal: string) => {
+    const cleanCEP = cepVal.replace(/\D/g, '');
     if (cleanCEP.length === 8) {
+      setCepLoading(true);
+      setCepError('');
+      setCepValid(null);
       try {
         const response = await fetch(`https://viacep.com.br/ws/${cleanCEP}/json/`);
         const data = await response.json();
-        if (!data.erro) {
-          if (data.uf !== 'SP' && tipoMaterial === 'impresso') {
-            setError('Infelizmente o material impresso está disponível apenas para o estado de São Paulo (SP).');
+        if (data.erro) {
+          setCepValid(false);
+          const msg = 'CEP não encontrado. Por favor, verifique o número informado.';
+          setCepError(msg);
+          if (tipoMaterial === 'impresso') setError(msg);
+        } else {
+          const uf = (data.uf || '').trim().toUpperCase();
+          const localidade = (data.localidade || '').trim();
+          
+          if (tipoMaterial === 'impresso' && uf !== 'SP') {
+            setCepValid(false);
+            const msg = `A entrega de material impresso é exclusiva para o Estado de São Paulo (SP). O CEP informado pertence a ${localidade || 'outro estado'} (${uf}).`;
+            setCepError(msg);
+            setError(msg);
             return;
           }
+
+          setCepValid(true);
+          setCepError('');
           setError('');
           setFormData(prev => ({
             ...prev,
             endereco: data.logradouro || '',
             bairro: data.bairro || '',
-            cidade: data.localidade || '',
-            estado: data.uf || 'SP'
+            cidade: localidade || 'São Paulo',
+            estado: uf || 'SP'
           }));
         }
       } catch (err) {
         console.warn('Erro ao buscar CEP:', err);
+        setCepError('Não foi possível validar o CEP no momento. Verifique sua conexão.');
+        setCepValid(false);
+      } finally {
+        setCepLoading(false);
       }
     }
   };
@@ -155,9 +179,14 @@ export const MaterialCampanha = () => {
       return;
     }
 
-    if (formData.estado !== 'SP' && tipoMaterial === 'impresso') {
-      setError('O material impresso está disponível apenas para o estado de São Paulo (SP).');
-      return;
+    const cleanCep = formData.cep.replace(/\D/g, '');
+    const numCep = parseInt(cleanCep, 10);
+
+    if (tipoMaterial === 'impresso') {
+      if (cleanCep.length !== 8 || isNaN(numCep) || numCep < 1000000 || numCep > 19999999 || formData.estado !== 'SP' || cepValid === false) {
+        setError(cepError || 'A entrega de material impresso é exclusiva para residentes do Estado de São Paulo (CEPs de SP entre 01000-000 e 19999-999).');
+        return;
+      }
     }
 
     if (!validateEmail(formData.email)) {
@@ -462,7 +491,20 @@ export const MaterialCampanha = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2 uppercase">CEP *</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-bold text-gray-700 uppercase">CEP *</label>
+                        {cepLoading && (
+                          <span className="text-xs text-orange-600 font-semibold flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></span>
+                            Consultando...
+                          </span>
+                        )}
+                        {!cepLoading && cepValid === true && (
+                          <span className="text-xs text-green-700 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> SP Válido
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         required
@@ -470,11 +512,24 @@ export const MaterialCampanha = () => {
                         onChange={e => {
                           const val = formatCEP(e.target.value);
                           setFormData({...formData, cep: val});
-                          if (val.length === 9) buscarCEP(val);
+                          if (val.length === 9) {
+                            buscarCEP(val);
+                          } else {
+                            setCepValid(null);
+                            setCepError('');
+                          }
                         }}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all font-medium"
+                        className={`w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:border-transparent transition-all font-medium ${
+                          cepError ? 'border-red-400 focus:ring-red-400 bg-red-50/30' : cepValid === true ? 'border-green-400 focus:ring-green-400' : 'border-gray-200 focus:ring-orange-500'
+                        }`}
                         placeholder="00000-000"
                       />
+                      {cepError && (
+                        <p className="mt-1.5 text-xs font-semibold text-red-600 flex items-start gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>{cepError}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-bold text-gray-700 mb-2 uppercase">Endereço *</label>

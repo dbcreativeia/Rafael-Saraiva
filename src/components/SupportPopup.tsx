@@ -131,8 +131,9 @@ export const SupportPopup: React.FC = () => {
       return;
     }
 
-    if (cepValid === false) {
-      setError(cepError || 'O cadastro é exclusivo para residentes do Estado de São Paulo.');
+    const numCep = parseInt(cleanCep, 10);
+    if (isNaN(numCep) || numCep < 1000000 || numCep > 19999999 || cepValid === false) {
+      setError(cepError || 'O cadastro é exclusivo para residentes do Estado de São Paulo (CEPs de SP entre 01000-000 e 19999-999).');
       return;
     }
 
