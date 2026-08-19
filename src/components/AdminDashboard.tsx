@@ -785,8 +785,10 @@ export const AdminDashboard = () => {
   };
 
   const fetchData = async (quiet = false) => {
-    if (!quiet) setLoading(true);
-    setRefreshTrigger(prev => prev + 1);
+    if (!quiet) {
+      setLoading(true);
+      setRefreshTrigger(prev => prev + 1);
+    }
     try {
       const t = Date.now();
       const [response, citizensResponse, petitionsResponse, jogoUsersResponse] = await Promise.all([
@@ -805,15 +807,17 @@ export const AdminDashboard = () => {
       setJogoUsersData(Array.isArray(jogoUsersResult) ? jogoUsersResult : []);
     } catch (err) {
       console.warn("API request failed:", err);
+    } finally {
+      if (!quiet) setLoading(false);
     }
-    if (!quiet) setLoading(false);
   };
 
   useEffect(() => {
     if (isAuthenticated) {
+      // Gentle 60s background sync without flickering the UI
       const interval = setInterval(() => {
         fetchData(true);
-      }, 5000);
+      }, 60000);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);

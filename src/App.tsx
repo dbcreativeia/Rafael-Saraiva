@@ -25,7 +25,7 @@ function ScrollToTop() {
   const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    if (hash) {
+    if (hash && hash !== '#admin') {
       setTimeout(() => {
         const element = document.getElementById(hash.replace('#', ''));
         if (element) {
@@ -247,6 +247,7 @@ function App() {
       <FloatingWhatsApp />
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/codigoanimal" element={<CodigoAnimal />} />
         <Route path="/contramaustratos" element={<ContraMausTratos />} />
         <Route path="/material" element={<MaterialCampanha />} />
