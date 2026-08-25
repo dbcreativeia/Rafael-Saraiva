@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   Search, 
   RefreshCw, 
@@ -109,12 +109,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   // Filters & State
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [estadoFilter, setEstadoFilter] = useState('');
   const [cidadeFilter, setCidadeFilter] = useState('');
   const [multiActionFilter, setMultiActionFilter] = useState<'all' | 'multi' | 'super' | 'single'>('all');
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<'lastDate' | 'firstDate' | 'totalActions' | 'nome' | 'cidade'>('lastDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 100;
 
   // Selected Lead for Detailed 360º View Modal
   const [selectedLead, setSelectedLead] = useState<ConsolidatedLead | null>(null);
@@ -744,16 +747,17 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   // Filtered & Sorted Leads
   const filteredLeads = useMemo(() => {
+    const q = deferredSearch.toLowerCase().trim();
+
     return consolidatedLeads.filter(lead => {
       // 1. Search filter (Name, WhatsApp, Email, City, Address, CEP)
-      if (search.trim()) {
-        const q = search.toLowerCase().trim();
+      if (q) {
         const matchNome = lead.nome.toLowerCase().includes(q);
         const matchPhone = lead.whatsapp.toLowerCase().includes(q);
         const matchEmail = lead.email.toLowerCase().includes(q);
-        const matchCidade = lead.cidade.toLowerCase().includes(q);
-        const matchBairro = lead.bairro.toLowerCase().includes(q);
-        const matchCep = lead.cep.toLowerCase().includes(q);
+        const matchCidade = (lead.cidade || '').toLowerCase().includes(q);
+        const matchBairro = (lead.bairro || '').toLowerCase().includes(q);
+        const matchCep = (lead.cep || '').toLowerCase().includes(q);
         const matchCampaign = lead.distinctCampaigns.some(c => c.toLowerCase().includes(q));
         if (!matchNome && !matchPhone && !matchEmail && !matchCidade && !matchBairro && !matchCep && !matchCampaign) {
           return false;
@@ -805,7 +809,19 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [consolidatedLeads, search, estadoFilter, cidadeFilter, multiActionFilter, campaignFilter, sortField, sortOrder]);
+  }, [consolidatedLeads, deferredSearch, estadoFilter, cidadeFilter, multiActionFilter, campaignFilter, sortField, sortOrder]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, estadoFilter, cidadeFilter, multiActionFilter, campaignFilter, sortField, sortOrder]);
+
+  // Paginated Leads
+  const paginatedLeads = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredLeads.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredLeads, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
 
   // Global KPIs
   const totalUniqueLeads = consolidatedLeads.length;
@@ -895,6 +911,43 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
     return points.sort((a, b) => b.count - a.count);
   }, [consolidatedLeads, municipiosData]);
+
+  const exportMailMergeExcel = () => {
+    const listToExport = filteredLeads.length > 0 ? filteredLeads : consolidatedLeads;
+    
+    // Filtra apenas leads que tem endereço consideravelmente completo
+    const completeAddresses = listToExport.filter(lead => {
+      return lead.endereco && lead.endereco.trim().length > 3 && 
+             lead.numero && lead.numero.trim().length > 0 &&
+             lead.cidade && lead.cidade.trim().length > 2 &&
+             lead.estado && lead.estado.trim().length > 1 &&
+             lead.cep && lead.cep.trim().length >= 8;
+    });
+    
+    if (completeAddresses.length === 0) {
+      alert("Nenhum lead com endereço completo encontrado.");
+      return;
+    }
+
+    const data = completeAddresses.map(lead => {
+      return {
+        'Nome Completo': lead.nome,
+        'WhatsApp / Telefone': lead.whatsapp || 'Não informado',
+        'Endereço': lead.endereco ? `${lead.endereco}, ${lead.numero || 'S/N'} ${lead.complemento ? `(${lead.complemento})` : ''}`.trim() : '',
+        'Bairro': lead.bairro || '',
+        'Cidade': lead.cidade || 'São Paulo',
+        'Estado': lead.estado || 'SP',
+        'CEP': lead.cep || ''
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Endereços Postais');
+    
+    const count = completeAddresses.length;
+    XLSX.writeFile(workbook, `Enderecos_Correios_N${count}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   // Export Unified List to Excel (.xlsx)
   const exportConsolidatedExcel = () => {
@@ -1052,8 +1105,18 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               <span>Importar Base (.CSV/.XLSX)</span>
             </button>
 
+            
+            <button
+              onClick={exportMailMergeExcel}
+              disabled={consolidatedLeads.length === 0}
+              className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-amber-900/30 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>Endereços Correios</span>
+            </button>
             <button
               onClick={exportConsolidatedExcel}
+
               disabled={consolidatedLeads.length === 0}
               className="bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-emerald-900/30 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer"
             >
@@ -1530,7 +1593,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {filteredLeads.map((lead) => {
+                    {paginatedLeads.map((lead) => {
                       const cleanPhone = lead.whatsapp.replace(/\D/g, '');
                       const waLink = cleanPhone ? `https://wa.me/55${cleanPhone.startsWith('55') ? cleanPhone.substring(2) : cleanPhone}` : null;
 
@@ -1668,7 +1731,34 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </div>
             )}
 
+            
+            {/* Controles de Paginação */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-white">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                
+                <span className="text-sm font-medium text-gray-700">
+                  Página {currentPage} de {totalPages}
+                </span>
+
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Próxima
+                </button>
+              </div>
+            )}
+
             {/* Footer da Tabela com Totais */}
+
             <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 font-medium gap-2">
               <div>
                 Exibindo <strong className="text-gray-900">{filteredLeads.length}</strong> de <strong className="text-gray-900">{consolidatedLeads.length}</strong> leads consolidados
