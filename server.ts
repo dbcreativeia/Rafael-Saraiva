@@ -10,7 +10,8 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
 
   // Middleware para parsear JSON no body
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Desabilitar cache para todas as rotas da API
   app.use('/api', (req, res, next) => {

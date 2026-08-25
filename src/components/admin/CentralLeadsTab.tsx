@@ -274,7 +274,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
           const whatsapp = findValue(['whatsapp', 'whats', 'celular', 'telefone', 'phone', 'tel', 'fone', 'mobile', 'contato']);
           const email = findValue(['email', 'e-mail', 'mail', 'correio']);
-          const cidade = findValue(['cidade', 'city', 'municipio', 'municipio']) || 'São Paulo';
+          const cidade = formatCityName(findValue(['cidade', 'city', 'municipio', 'municipio']));
           let estado = (findValue(['estado', 'state', 'uf']) || 'SP').toUpperCase();
           if (estado.length > 2) estado = estado.substring(0, 2);
           const cep = findValue(['cep', 'zip', 'zipcode', 'codigo postal', 'postal']);
@@ -336,7 +336,16 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         })
       });
 
-      const data = await res.json();
+      let data;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        console.error('Resposta do servidor não é JSON:', text.substring(0, 200));
+        throw new Error('Servidor retornou um formato inesperado. O arquivo pode ser muito grande.');
+      }
+
       if (res.ok && data.success) {
         setUploadSuccessMessage(`Sucesso! ${data.count} leads importados para a campanha "${campaignInput.trim()}".`);
         // Atualiza a listagem consolidada imediatamente
@@ -389,6 +398,25 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       .trim();
   };
 
+  const formatCityName = (city?: string) => {
+    if (!city) return 'São Paulo';
+    
+    const normalized = city.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalized === 'sao paulo' || normalized === 'sp' || normalized === 'sao paulo sp' || normalized === 'sao paulo - sp' || normalized === 'capital') {
+      return 'São Paulo';
+    }
+    
+    return city
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .map(word => {
+        if (['de', 'da', 'do', 'das', 'dos', 'e'].includes(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(' ');
+  };
+
   // Consolidate all actions into unique lead profiles
   const consolidatedLeads = useMemo(() => {
     const rawActions: LeadAction[] = [];
@@ -403,7 +431,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           bairro: item.bairro,
@@ -425,7 +453,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         details: {
           tipoMaterial: item.tipoMaterial,
           adesivoPerfurado: !!item.adesivoPerfurado,
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -448,7 +476,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         details: {
           tipoMaterial: item.tipoMaterial,
           adesivoPerfurado: !!item.adesivoPerfurado,
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -468,7 +496,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -488,7 +516,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -508,7 +536,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -528,7 +556,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           cep: item.cep,
           usuario: item.usuario,
@@ -547,7 +575,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: item.cidade || 'São Paulo',
+          cidade: formatCityName(item.cidade),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -570,7 +598,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const fullName = item.nomeCompleto || (item.sobrenome ? `${item.nome} ${item.sobrenome}`.trim() : item.nome) || 'Anônimo';
       const phone = item.whatsapp || '';
       const email = item.email || '';
-      const cidade = item.cidade || 'São Paulo';
+      const cidade = formatCityName(item.cidade);
       const estado = (item.estado || 'SP').toUpperCase();
       const cep = item.cep || '';
       const endereco = item.endereco || '';
