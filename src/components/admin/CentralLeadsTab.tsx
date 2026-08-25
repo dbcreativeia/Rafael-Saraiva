@@ -277,10 +277,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
           const whatsapp = findValue(['whatsapp', 'whats', 'celular', 'telefone', 'phone', 'tel', 'fone', 'mobile', 'contato']);
           const email = findValue(['email', 'e-mail', 'mail', 'correio']);
-          const cidade = formatCityName(findValue(['cidade', 'city', 'municipio', 'municipio']));
-          let estado = (findValue(['estado', 'state', 'uf']) || 'SP').toUpperCase();
-          if (estado.length > 2) estado = estado.substring(0, 2);
-          const cep = findValue(['cep', 'zip', 'zipcode', 'codigo postal', 'postal']);
+          const cep = findValue(['cep', 'zip', 'zipcode', 'codigo postal', 'postal']) || '';
+          const deducedState = getStateFromCep(cep);
+          const estado = normalizeState(findValue(['estado', 'state', 'uf']), deducedState);
+          const cidade = getIbgeCityName(findValue(['cidade', 'city', 'municipio', 'município']), estado, cep);
           const endereco = findValue(['endereco', 'endereço', 'rua', 'logradouro', 'address', 'street']);
           const numero = findValue(['numero', 'número', 'num', 'number']);
           const complemento = findValue(['complemento', 'comp', 'complement']);
@@ -401,23 +401,2776 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       .trim();
   };
 
-  const formatCityName = (city?: string) => {
-    if (!city) return 'São Paulo';
+
+
+
+  const normalizeState = (stateStr, deducedState) => {
+    const defaultState = deducedState || 'SP';
+    if (!stateStr) return defaultState;
+    let s = stateStr.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
-    const normalized = city.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (normalized === 'sao paulo' || normalized === 'sp' || normalized === 'sao paulo sp' || normalized === 'sao paulo - sp' || normalized === 'capital') {
-      return 'São Paulo';
+    if (s === 'SAO PAULO' || s.startsWith('SAO') || s.startsWith('SÃ') || s === 'S.P' || s === 'SP.' || s === 'S/' || s === 'SA' || s === 'S') return 'SP';
+    
+    const stateMap = {
+      'SAO PAULO': 'SP', 'RIO DE JANEIRO': 'RJ', 'MINAS GERAIS': 'MG', 'ESPIRITO SANTO': 'ES',
+      'PARANA': 'PR', 'SANTA CATARINA': 'SC', 'RIO GRANDE DO SUL': 'RS',
+      'BAHIA': 'BA', 'SERGIPE': 'SE', 'ALAGOAS': 'AL', 'PERNAMBUCO': 'PE',
+      'PARAIBA': 'PB', 'RIO GRANDE DO NORTE': 'RN', 'CEARA': 'CE', 'PIAUI': 'PI', 'MARANHAO': 'MA',
+      'TOCANTINS': 'TO', 'GOIAS': 'GO', 'DISTRITO FEDERAL': 'DF', 'MATO GROSSO': 'MT', 'MATO GROSSO DO SUL': 'MS',
+      'RONDONIA': 'RO', 'ACRE': 'AC', 'AMAZONAS': 'AM', 'RORAIMA': 'RR', 'AMAPA': 'AP', 'PARA': 'PA',
+    };
+    if (stateMap[s]) return stateMap[s];
+    
+    const officialStates = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+    
+    // Sometimes they type exactly 2 chars but it's a typo like "SA" or "S/"
+    if (s.length === 2) {
+      if (officialStates.includes(s)) return s;
+      return defaultState;
     }
     
-    return city
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .map(word => {
-        if (['de', 'da', 'do', 'das', 'dos', 'e'].includes(word)) return word;
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      })
-      .join(' ');
+    return defaultState;
+  };
+
+  const getStateFromCep = (cep) => {
+    if (!cep) return null;
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return null;
+    const prefix = parseInt(cleanCep.substring(0, 5), 10);
+    
+    if (prefix >= 1000 && prefix <= 19999) return 'SP';
+    if (prefix >= 20000 && prefix <= 28999) return 'RJ';
+    if (prefix >= 29000 && prefix <= 29999) return 'ES';
+    if (prefix >= 30000 && prefix <= 39999) return 'MG';
+    if (prefix >= 40000 && prefix <= 48999) return 'BA';
+    if (prefix >= 49000 && prefix <= 49999) return 'SE';
+    if (prefix >= 50000 && prefix <= 56999) return 'PE';
+    if (prefix >= 57000 && prefix <= 57999) return 'AL';
+    if (prefix >= 58000 && prefix <= 58999) return 'PB';
+    if (prefix >= 59000 && prefix <= 59999) return 'RN';
+    if (prefix >= 60000 && prefix <= 63999) return 'CE';
+    if (prefix >= 64000 && prefix <= 64999) return 'PI';
+    if (prefix >= 65000 && prefix <= 65999) return 'MA';
+    if (prefix >= 66000 && prefix <= 68899) return 'PA';
+    if (prefix >= 68900 && prefix <= 68999) return 'AP';
+    if (prefix >= 69000 && prefix <= 69299) return 'AM';
+    if (prefix >= 69300 && prefix <= 69399) return 'RR';
+    if (prefix >= 69900 && prefix <= 69999) return 'AC';
+    if (prefix >= 70000 && prefix <= 73699) return 'DF';
+    if (prefix >= 73700 && prefix <= 76799) return 'GO';
+    if (prefix >= 77000 && prefix <= 77999) return 'TO';
+    if (prefix >= 78000 && prefix <= 78899) return 'MT';
+    if (prefix >= 78900 && prefix <= 78999) return 'RO';
+    if (prefix >= 79000 && prefix <= 79999) return 'MS';
+    if (prefix >= 80000 && prefix <= 87999) return 'PR';
+    if (prefix >= 88000 && prefix <= 89999) return 'SC';
+    if (prefix >= 90000 && prefix <= 99999) return 'RS';
+    return null;
+  };
+
+
+
+  const spCitiesList = [
+  {
+    "norm": "adamantina",
+    "official": "Adamantina"
+  },
+  {
+    "norm": "adolfo",
+    "official": "Adolfo"
+  },
+  {
+    "norm": "aguai",
+    "official": "Aguaí"
+  },
+  {
+    "norm": "aguas da prata",
+    "official": "Águas da Prata"
+  },
+  {
+    "norm": "aguas de lindoia",
+    "official": "Águas de Lindóia"
+  },
+  {
+    "norm": "aguas de santa barbara",
+    "official": "Águas de Santa Bárbara"
+  },
+  {
+    "norm": "aguas de sao pedro",
+    "official": "Águas de São Pedro"
+  },
+  {
+    "norm": "agudos",
+    "official": "Agudos"
+  },
+  {
+    "norm": "alambari",
+    "official": "Alambari"
+  },
+  {
+    "norm": "alfredo marcondes",
+    "official": "Alfredo Marcondes"
+  },
+  {
+    "norm": "altair",
+    "official": "Altair"
+  },
+  {
+    "norm": "altinopolis",
+    "official": "Altinópolis"
+  },
+  {
+    "norm": "alto alegre",
+    "official": "Alto Alegre"
+  },
+  {
+    "norm": "aluminio",
+    "official": "Alumínio"
+  },
+  {
+    "norm": "alvares florence",
+    "official": "Álvares Florence"
+  },
+  {
+    "norm": "alvares machado",
+    "official": "Álvares Machado"
+  },
+  {
+    "norm": "alvaro de carvalho",
+    "official": "Álvaro de Carvalho"
+  },
+  {
+    "norm": "alvinlandia",
+    "official": "Alvinlândia"
+  },
+  {
+    "norm": "americana",
+    "official": "Americana"
+  },
+  {
+    "norm": "americo brasiliense",
+    "official": "Américo Brasiliense"
+  },
+  {
+    "norm": "americo de campos",
+    "official": "Américo de Campos"
+  },
+  {
+    "norm": "amparo",
+    "official": "Amparo"
+  },
+  {
+    "norm": "analandia",
+    "official": "Analândia"
+  },
+  {
+    "norm": "andradina",
+    "official": "Andradina"
+  },
+  {
+    "norm": "angatuba",
+    "official": "Angatuba"
+  },
+  {
+    "norm": "anhembi",
+    "official": "Anhembi"
+  },
+  {
+    "norm": "anhumas",
+    "official": "Anhumas"
+  },
+  {
+    "norm": "aparecida",
+    "official": "Aparecida"
+  },
+  {
+    "norm": "aparecida doeste",
+    "official": "Aparecida d'Oeste"
+  },
+  {
+    "norm": "apiai",
+    "official": "Apiaí"
+  },
+  {
+    "norm": "aracariguama",
+    "official": "Araçariguama"
+  },
+  {
+    "norm": "aracatuba",
+    "official": "Araçatuba"
+  },
+  {
+    "norm": "aracoiaba da serra",
+    "official": "Araçoiaba da Serra"
+  },
+  {
+    "norm": "aramina",
+    "official": "Aramina"
+  },
+  {
+    "norm": "arandu",
+    "official": "Arandu"
+  },
+  {
+    "norm": "arapei",
+    "official": "Arapeí"
+  },
+  {
+    "norm": "araraquara",
+    "official": "Araraquara"
+  },
+  {
+    "norm": "araras",
+    "official": "Araras"
+  },
+  {
+    "norm": "arcoiris",
+    "official": "Arco-Íris"
+  },
+  {
+    "norm": "arealva",
+    "official": "Arealva"
+  },
+  {
+    "norm": "areias",
+    "official": "Areias"
+  },
+  {
+    "norm": "areiopolis",
+    "official": "Areiópolis"
+  },
+  {
+    "norm": "ariranha",
+    "official": "Ariranha"
+  },
+  {
+    "norm": "artur nogueira",
+    "official": "Artur Nogueira"
+  },
+  {
+    "norm": "aruja",
+    "official": "Arujá"
+  },
+  {
+    "norm": "aspasia",
+    "official": "Aspásia"
+  },
+  {
+    "norm": "assis",
+    "official": "Assis"
+  },
+  {
+    "norm": "atibaia",
+    "official": "Atibaia"
+  },
+  {
+    "norm": "auriflama",
+    "official": "Auriflama"
+  },
+  {
+    "norm": "avai",
+    "official": "Avaí"
+  },
+  {
+    "norm": "avanhandava",
+    "official": "Avanhandava"
+  },
+  {
+    "norm": "avare",
+    "official": "Avaré"
+  },
+  {
+    "norm": "bady bassitt",
+    "official": "Bady Bassitt"
+  },
+  {
+    "norm": "balbinos",
+    "official": "Balbinos"
+  },
+  {
+    "norm": "balsamo",
+    "official": "Bálsamo"
+  },
+  {
+    "norm": "bananal",
+    "official": "Bananal"
+  },
+  {
+    "norm": "barao de antonina",
+    "official": "Barão de Antonina"
+  },
+  {
+    "norm": "barbosa",
+    "official": "Barbosa"
+  },
+  {
+    "norm": "bariri",
+    "official": "Bariri"
+  },
+  {
+    "norm": "barra bonita",
+    "official": "Barra Bonita"
+  },
+  {
+    "norm": "barra do chapeu",
+    "official": "Barra do Chapéu"
+  },
+  {
+    "norm": "barra do turvo",
+    "official": "Barra do Turvo"
+  },
+  {
+    "norm": "barretos",
+    "official": "Barretos"
+  },
+  {
+    "norm": "barrinha",
+    "official": "Barrinha"
+  },
+  {
+    "norm": "barueri",
+    "official": "Barueri"
+  },
+  {
+    "norm": "bastos",
+    "official": "Bastos"
+  },
+  {
+    "norm": "batatais",
+    "official": "Batatais"
+  },
+  {
+    "norm": "bauru",
+    "official": "Bauru"
+  },
+  {
+    "norm": "bebedouro",
+    "official": "Bebedouro"
+  },
+  {
+    "norm": "bento de abreu",
+    "official": "Bento de Abreu"
+  },
+  {
+    "norm": "bernardino de campos",
+    "official": "Bernardino de Campos"
+  },
+  {
+    "norm": "bertioga",
+    "official": "Bertioga"
+  },
+  {
+    "norm": "bilac",
+    "official": "Bilac"
+  },
+  {
+    "norm": "birigui",
+    "official": "Birigui"
+  },
+  {
+    "norm": "biritiba mirim",
+    "official": "Biritiba Mirim"
+  },
+  {
+    "norm": "boa esperanca do sul",
+    "official": "Boa Esperança do Sul"
+  },
+  {
+    "norm": "bocaina",
+    "official": "Bocaina"
+  },
+  {
+    "norm": "bofete",
+    "official": "Bofete"
+  },
+  {
+    "norm": "boituva",
+    "official": "Boituva"
+  },
+  {
+    "norm": "bom jesus dos perdoes",
+    "official": "Bom Jesus dos Perdões"
+  },
+  {
+    "norm": "bom sucesso de itarare",
+    "official": "Bom Sucesso de Itararé"
+  },
+  {
+    "norm": "bora",
+    "official": "Borá"
+  },
+  {
+    "norm": "boraceia",
+    "official": "Boraceia"
+  },
+  {
+    "norm": "borborema",
+    "official": "Borborema"
+  },
+  {
+    "norm": "borebi",
+    "official": "Borebi"
+  },
+  {
+    "norm": "botucatu",
+    "official": "Botucatu"
+  },
+  {
+    "norm": "braganca paulista",
+    "official": "Bragança Paulista"
+  },
+  {
+    "norm": "brauna",
+    "official": "Braúna"
+  },
+  {
+    "norm": "brejo alegre",
+    "official": "Brejo Alegre"
+  },
+  {
+    "norm": "brodowski",
+    "official": "Brodowski"
+  },
+  {
+    "norm": "brotas",
+    "official": "Brotas"
+  },
+  {
+    "norm": "buri",
+    "official": "Buri"
+  },
+  {
+    "norm": "buritama",
+    "official": "Buritama"
+  },
+  {
+    "norm": "buritizal",
+    "official": "Buritizal"
+  },
+  {
+    "norm": "cabralia paulista",
+    "official": "Cabrália Paulista"
+  },
+  {
+    "norm": "cabreuva",
+    "official": "Cabreúva"
+  },
+  {
+    "norm": "cacapava",
+    "official": "Caçapava"
+  },
+  {
+    "norm": "cachoeira paulista",
+    "official": "Cachoeira Paulista"
+  },
+  {
+    "norm": "caconde",
+    "official": "Caconde"
+  },
+  {
+    "norm": "cafelandia",
+    "official": "Cafelândia"
+  },
+  {
+    "norm": "caiabu",
+    "official": "Caiabu"
+  },
+  {
+    "norm": "caieiras",
+    "official": "Caieiras"
+  },
+  {
+    "norm": "caiua",
+    "official": "Caiuá"
+  },
+  {
+    "norm": "cajamar",
+    "official": "Cajamar"
+  },
+  {
+    "norm": "cajati",
+    "official": "Cajati"
+  },
+  {
+    "norm": "cajobi",
+    "official": "Cajobi"
+  },
+  {
+    "norm": "cajuru",
+    "official": "Cajuru"
+  },
+  {
+    "norm": "campina do monte alegre",
+    "official": "Campina do Monte Alegre"
+  },
+  {
+    "norm": "campinas",
+    "official": "Campinas"
+  },
+  {
+    "norm": "campo limpo paulista",
+    "official": "Campo Limpo Paulista"
+  },
+  {
+    "norm": "campos do jordao",
+    "official": "Campos do Jordão"
+  },
+  {
+    "norm": "campos novos paulista",
+    "official": "Campos Novos Paulista"
+  },
+  {
+    "norm": "cananeia",
+    "official": "Cananéia"
+  },
+  {
+    "norm": "canas",
+    "official": "Canas"
+  },
+  {
+    "norm": "candido mota",
+    "official": "Cândido Mota"
+  },
+  {
+    "norm": "candido rodrigues",
+    "official": "Cândido Rodrigues"
+  },
+  {
+    "norm": "canitar",
+    "official": "Canitar"
+  },
+  {
+    "norm": "capao bonito",
+    "official": "Capão Bonito"
+  },
+  {
+    "norm": "capela do alto",
+    "official": "Capela do Alto"
+  },
+  {
+    "norm": "capivari",
+    "official": "Capivari"
+  },
+  {
+    "norm": "caraguatatuba",
+    "official": "Caraguatatuba"
+  },
+  {
+    "norm": "carapicuiba",
+    "official": "Carapicuíba"
+  },
+  {
+    "norm": "cardoso",
+    "official": "Cardoso"
+  },
+  {
+    "norm": "casa branca",
+    "official": "Casa Branca"
+  },
+  {
+    "norm": "cassia dos coqueiros",
+    "official": "Cássia dos Coqueiros"
+  },
+  {
+    "norm": "castilho",
+    "official": "Castilho"
+  },
+  {
+    "norm": "catanduva",
+    "official": "Catanduva"
+  },
+  {
+    "norm": "catigua",
+    "official": "Catiguá"
+  },
+  {
+    "norm": "cedral",
+    "official": "Cedral"
+  },
+  {
+    "norm": "cerqueira cesar",
+    "official": "Cerqueira César"
+  },
+  {
+    "norm": "cerquilho",
+    "official": "Cerquilho"
+  },
+  {
+    "norm": "cesario lange",
+    "official": "Cesário Lange"
+  },
+  {
+    "norm": "charqueada",
+    "official": "Charqueada"
+  },
+  {
+    "norm": "chavantes",
+    "official": "Chavantes"
+  },
+  {
+    "norm": "clementina",
+    "official": "Clementina"
+  },
+  {
+    "norm": "colina",
+    "official": "Colina"
+  },
+  {
+    "norm": "colombia",
+    "official": "Colômbia"
+  },
+  {
+    "norm": "conchal",
+    "official": "Conchal"
+  },
+  {
+    "norm": "conchas",
+    "official": "Conchas"
+  },
+  {
+    "norm": "cordeiropolis",
+    "official": "Cordeirópolis"
+  },
+  {
+    "norm": "coroados",
+    "official": "Coroados"
+  },
+  {
+    "norm": "coronel macedo",
+    "official": "Coronel Macedo"
+  },
+  {
+    "norm": "corumbatai",
+    "official": "Corumbataí"
+  },
+  {
+    "norm": "cosmopolis",
+    "official": "Cosmópolis"
+  },
+  {
+    "norm": "cosmorama",
+    "official": "Cosmorama"
+  },
+  {
+    "norm": "cotia",
+    "official": "Cotia"
+  },
+  {
+    "norm": "cravinhos",
+    "official": "Cravinhos"
+  },
+  {
+    "norm": "cristais paulista",
+    "official": "Cristais Paulista"
+  },
+  {
+    "norm": "cruzalia",
+    "official": "Cruzália"
+  },
+  {
+    "norm": "cruzeiro",
+    "official": "Cruzeiro"
+  },
+  {
+    "norm": "cubatao",
+    "official": "Cubatão"
+  },
+  {
+    "norm": "cunha",
+    "official": "Cunha"
+  },
+  {
+    "norm": "descalvado",
+    "official": "Descalvado"
+  },
+  {
+    "norm": "diadema",
+    "official": "Diadema"
+  },
+  {
+    "norm": "dirce reis",
+    "official": "Dirce Reis"
+  },
+  {
+    "norm": "divinolandia",
+    "official": "Divinolândia"
+  },
+  {
+    "norm": "dobrada",
+    "official": "Dobrada"
+  },
+  {
+    "norm": "dois corregos",
+    "official": "Dois Córregos"
+  },
+  {
+    "norm": "dolcinopolis",
+    "official": "Dolcinópolis"
+  },
+  {
+    "norm": "dourado",
+    "official": "Dourado"
+  },
+  {
+    "norm": "dracena",
+    "official": "Dracena"
+  },
+  {
+    "norm": "duartina",
+    "official": "Duartina"
+  },
+  {
+    "norm": "dumont",
+    "official": "Dumont"
+  },
+  {
+    "norm": "echapora",
+    "official": "Echaporã"
+  },
+  {
+    "norm": "eldorado",
+    "official": "Eldorado"
+  },
+  {
+    "norm": "elias fausto",
+    "official": "Elias Fausto"
+  },
+  {
+    "norm": "elisiario",
+    "official": "Elisiário"
+  },
+  {
+    "norm": "embauba",
+    "official": "Embaúba"
+  },
+  {
+    "norm": "embu das artes",
+    "official": "Embu das Artes"
+  },
+  {
+    "norm": "embuguacu",
+    "official": "Embu-Guaçu"
+  },
+  {
+    "norm": "emilianopolis",
+    "official": "Emilianópolis"
+  },
+  {
+    "norm": "engenheiro coelho",
+    "official": "Engenheiro Coelho"
+  },
+  {
+    "norm": "espirito santo do pinhal",
+    "official": "Espírito Santo do Pinhal"
+  },
+  {
+    "norm": "espirito santo do turvo",
+    "official": "Espírito Santo do Turvo"
+  },
+  {
+    "norm": "estiva gerbi",
+    "official": "Estiva Gerbi"
+  },
+  {
+    "norm": "estrela do norte",
+    "official": "Estrela do Norte"
+  },
+  {
+    "norm": "estrela doeste",
+    "official": "Estrela d'Oeste"
+  },
+  {
+    "norm": "euclides da cunha paulista",
+    "official": "Euclides da Cunha Paulista"
+  },
+  {
+    "norm": "fartura",
+    "official": "Fartura"
+  },
+  {
+    "norm": "fernando prestes",
+    "official": "Fernando Prestes"
+  },
+  {
+    "norm": "fernandopolis",
+    "official": "Fernandópolis"
+  },
+  {
+    "norm": "fernao",
+    "official": "Fernão"
+  },
+  {
+    "norm": "ferraz de vasconcelos",
+    "official": "Ferraz de Vasconcelos"
+  },
+  {
+    "norm": "flora rica",
+    "official": "Flora Rica"
+  },
+  {
+    "norm": "floreal",
+    "official": "Floreal"
+  },
+  {
+    "norm": "florida paulista",
+    "official": "Flórida Paulista"
+  },
+  {
+    "norm": "florinea",
+    "official": "Florínea"
+  },
+  {
+    "norm": "franca",
+    "official": "Franca"
+  },
+  {
+    "norm": "francisco morato",
+    "official": "Francisco Morato"
+  },
+  {
+    "norm": "franco da rocha",
+    "official": "Franco da Rocha"
+  },
+  {
+    "norm": "gabriel monteiro",
+    "official": "Gabriel Monteiro"
+  },
+  {
+    "norm": "galia",
+    "official": "Gália"
+  },
+  {
+    "norm": "garca",
+    "official": "Garça"
+  },
+  {
+    "norm": "gastao vidigal",
+    "official": "Gastão Vidigal"
+  },
+  {
+    "norm": "gaviao peixoto",
+    "official": "Gavião Peixoto"
+  },
+  {
+    "norm": "general salgado",
+    "official": "General Salgado"
+  },
+  {
+    "norm": "getulina",
+    "official": "Getulina"
+  },
+  {
+    "norm": "glicerio",
+    "official": "Glicério"
+  },
+  {
+    "norm": "guaicara",
+    "official": "Guaiçara"
+  },
+  {
+    "norm": "guaimbe",
+    "official": "Guaimbê"
+  },
+  {
+    "norm": "guaira",
+    "official": "Guaíra"
+  },
+  {
+    "norm": "guapiacu",
+    "official": "Guapiaçu"
+  },
+  {
+    "norm": "guapiara",
+    "official": "Guapiara"
+  },
+  {
+    "norm": "guara",
+    "official": "Guará"
+  },
+  {
+    "norm": "guaracai",
+    "official": "Guaraçaí"
+  },
+  {
+    "norm": "guaraci",
+    "official": "Guaraci"
+  },
+  {
+    "norm": "guarani doeste",
+    "official": "Guarani d'Oeste"
+  },
+  {
+    "norm": "guaranta",
+    "official": "Guarantã"
+  },
+  {
+    "norm": "guararapes",
+    "official": "Guararapes"
+  },
+  {
+    "norm": "guararema",
+    "official": "Guararema"
+  },
+  {
+    "norm": "guaratingueta",
+    "official": "Guaratinguetá"
+  },
+  {
+    "norm": "guarei",
+    "official": "Guareí"
+  },
+  {
+    "norm": "guariba",
+    "official": "Guariba"
+  },
+  {
+    "norm": "guaruja",
+    "official": "Guarujá"
+  },
+  {
+    "norm": "guarulhos",
+    "official": "Guarulhos"
+  },
+  {
+    "norm": "guatapara",
+    "official": "Guatapará"
+  },
+  {
+    "norm": "guzolandia",
+    "official": "Guzolândia"
+  },
+  {
+    "norm": "herculandia",
+    "official": "Herculândia"
+  },
+  {
+    "norm": "holambra",
+    "official": "Holambra"
+  },
+  {
+    "norm": "hortolandia",
+    "official": "Hortolândia"
+  },
+  {
+    "norm": "iacanga",
+    "official": "Iacanga"
+  },
+  {
+    "norm": "iacri",
+    "official": "Iacri"
+  },
+  {
+    "norm": "iaras",
+    "official": "Iaras"
+  },
+  {
+    "norm": "ibate",
+    "official": "Ibaté"
+  },
+  {
+    "norm": "ibira",
+    "official": "Ibirá"
+  },
+  {
+    "norm": "ibirarema",
+    "official": "Ibirarema"
+  },
+  {
+    "norm": "ibitinga",
+    "official": "Ibitinga"
+  },
+  {
+    "norm": "ibiuna",
+    "official": "Ibiúna"
+  },
+  {
+    "norm": "icem",
+    "official": "Icém"
+  },
+  {
+    "norm": "iepe",
+    "official": "Iepê"
+  },
+  {
+    "norm": "igaracu do tiete",
+    "official": "Igaraçu do Tietê"
+  },
+  {
+    "norm": "igarapava",
+    "official": "Igarapava"
+  },
+  {
+    "norm": "igarata",
+    "official": "Igaratá"
+  },
+  {
+    "norm": "iguape",
+    "official": "Iguape"
+  },
+  {
+    "norm": "ilha comprida",
+    "official": "Ilha Comprida"
+  },
+  {
+    "norm": "ilha solteira",
+    "official": "Ilha Solteira"
+  },
+  {
+    "norm": "ilhabela",
+    "official": "Ilhabela"
+  },
+  {
+    "norm": "indaiatuba",
+    "official": "Indaiatuba"
+  },
+  {
+    "norm": "indiana",
+    "official": "Indiana"
+  },
+  {
+    "norm": "indiapora",
+    "official": "Indiaporã"
+  },
+  {
+    "norm": "inubia paulista",
+    "official": "Inúbia Paulista"
+  },
+  {
+    "norm": "ipaussu",
+    "official": "Ipaussu"
+  },
+  {
+    "norm": "ipero",
+    "official": "Iperó"
+  },
+  {
+    "norm": "ipeuna",
+    "official": "Ipeúna"
+  },
+  {
+    "norm": "ipigua",
+    "official": "Ipiguá"
+  },
+  {
+    "norm": "iporanga",
+    "official": "Iporanga"
+  },
+  {
+    "norm": "ipua",
+    "official": "Ipuã"
+  },
+  {
+    "norm": "iracemapolis",
+    "official": "Iracemápolis"
+  },
+  {
+    "norm": "irapua",
+    "official": "Irapuã"
+  },
+  {
+    "norm": "irapuru",
+    "official": "Irapuru"
+  },
+  {
+    "norm": "itabera",
+    "official": "Itaberá"
+  },
+  {
+    "norm": "itai",
+    "official": "Itaí"
+  },
+  {
+    "norm": "itajobi",
+    "official": "Itajobi"
+  },
+  {
+    "norm": "itaju",
+    "official": "Itaju"
+  },
+  {
+    "norm": "itanhaem",
+    "official": "Itanhaém"
+  },
+  {
+    "norm": "itaoca",
+    "official": "Itaoca"
+  },
+  {
+    "norm": "itapecerica da serra",
+    "official": "Itapecerica da Serra"
+  },
+  {
+    "norm": "itapetininga",
+    "official": "Itapetininga"
+  },
+  {
+    "norm": "itapeva",
+    "official": "Itapeva"
+  },
+  {
+    "norm": "itapevi",
+    "official": "Itapevi"
+  },
+  {
+    "norm": "itapira",
+    "official": "Itapira"
+  },
+  {
+    "norm": "itapirapua paulista",
+    "official": "Itapirapuã Paulista"
+  },
+  {
+    "norm": "itapolis",
+    "official": "Itápolis"
+  },
+  {
+    "norm": "itaporanga",
+    "official": "Itaporanga"
+  },
+  {
+    "norm": "itapui",
+    "official": "Itapuí"
+  },
+  {
+    "norm": "itapura",
+    "official": "Itapura"
+  },
+  {
+    "norm": "itaquaquecetuba",
+    "official": "Itaquaquecetuba"
+  },
+  {
+    "norm": "itarare",
+    "official": "Itararé"
+  },
+  {
+    "norm": "itariri",
+    "official": "Itariri"
+  },
+  {
+    "norm": "itatiba",
+    "official": "Itatiba"
+  },
+  {
+    "norm": "itatinga",
+    "official": "Itatinga"
+  },
+  {
+    "norm": "itirapina",
+    "official": "Itirapina"
+  },
+  {
+    "norm": "itirapua",
+    "official": "Itirapuã"
+  },
+  {
+    "norm": "itobi",
+    "official": "Itobi"
+  },
+  {
+    "norm": "itu",
+    "official": "Itu"
+  },
+  {
+    "norm": "itupeva",
+    "official": "Itupeva"
+  },
+  {
+    "norm": "ituverava",
+    "official": "Ituverava"
+  },
+  {
+    "norm": "jaborandi",
+    "official": "Jaborandi"
+  },
+  {
+    "norm": "jaboticabal",
+    "official": "Jaboticabal"
+  },
+  {
+    "norm": "jacarei",
+    "official": "Jacareí"
+  },
+  {
+    "norm": "jaci",
+    "official": "Jaci"
+  },
+  {
+    "norm": "jacupiranga",
+    "official": "Jacupiranga"
+  },
+  {
+    "norm": "jaguariuna",
+    "official": "Jaguariúna"
+  },
+  {
+    "norm": "jales",
+    "official": "Jales"
+  },
+  {
+    "norm": "jambeiro",
+    "official": "Jambeiro"
+  },
+  {
+    "norm": "jandira",
+    "official": "Jandira"
+  },
+  {
+    "norm": "jardinopolis",
+    "official": "Jardinópolis"
+  },
+  {
+    "norm": "jarinu",
+    "official": "Jarinu"
+  },
+  {
+    "norm": "jau",
+    "official": "Jaú"
+  },
+  {
+    "norm": "jeriquara",
+    "official": "Jeriquara"
+  },
+  {
+    "norm": "joanopolis",
+    "official": "Joanópolis"
+  },
+  {
+    "norm": "joao ramalho",
+    "official": "João Ramalho"
+  },
+  {
+    "norm": "jose bonifacio",
+    "official": "José Bonifácio"
+  },
+  {
+    "norm": "julio mesquita",
+    "official": "Júlio Mesquita"
+  },
+  {
+    "norm": "jumirim",
+    "official": "Jumirim"
+  },
+  {
+    "norm": "jundiai",
+    "official": "Jundiaí"
+  },
+  {
+    "norm": "junqueiropolis",
+    "official": "Junqueirópolis"
+  },
+  {
+    "norm": "juquia",
+    "official": "Juquiá"
+  },
+  {
+    "norm": "juquitiba",
+    "official": "Juquitiba"
+  },
+  {
+    "norm": "lagoinha",
+    "official": "Lagoinha"
+  },
+  {
+    "norm": "laranjal paulista",
+    "official": "Laranjal Paulista"
+  },
+  {
+    "norm": "lavinia",
+    "official": "Lavínia"
+  },
+  {
+    "norm": "lavrinhas",
+    "official": "Lavrinhas"
+  },
+  {
+    "norm": "leme",
+    "official": "Leme"
+  },
+  {
+    "norm": "lencois paulista",
+    "official": "Lençóis Paulista"
+  },
+  {
+    "norm": "limeira",
+    "official": "Limeira"
+  },
+  {
+    "norm": "lindoia",
+    "official": "Lindoia"
+  },
+  {
+    "norm": "lins",
+    "official": "Lins"
+  },
+  {
+    "norm": "lorena",
+    "official": "Lorena"
+  },
+  {
+    "norm": "lourdes",
+    "official": "Lourdes"
+  },
+  {
+    "norm": "louveira",
+    "official": "Louveira"
+  },
+  {
+    "norm": "lucelia",
+    "official": "Lucélia"
+  },
+  {
+    "norm": "lucianopolis",
+    "official": "Lucianópolis"
+  },
+  {
+    "norm": "luiz antonio",
+    "official": "Luiz Antônio"
+  },
+  {
+    "norm": "luiziania",
+    "official": "Luiziânia"
+  },
+  {
+    "norm": "lupercio",
+    "official": "Lupércio"
+  },
+  {
+    "norm": "lutecia",
+    "official": "Lutécia"
+  },
+  {
+    "norm": "macatuba",
+    "official": "Macatuba"
+  },
+  {
+    "norm": "macaubal",
+    "official": "Macaubal"
+  },
+  {
+    "norm": "macedonia",
+    "official": "Macedônia"
+  },
+  {
+    "norm": "magda",
+    "official": "Magda"
+  },
+  {
+    "norm": "mairinque",
+    "official": "Mairinque"
+  },
+  {
+    "norm": "mairipora",
+    "official": "Mairiporã"
+  },
+  {
+    "norm": "manduri",
+    "official": "Manduri"
+  },
+  {
+    "norm": "maraba paulista",
+    "official": "Marabá Paulista"
+  },
+  {
+    "norm": "maracai",
+    "official": "Maracaí"
+  },
+  {
+    "norm": "marapoama",
+    "official": "Marapoama"
+  },
+  {
+    "norm": "mariapolis",
+    "official": "Mariápolis"
+  },
+  {
+    "norm": "marilia",
+    "official": "Marília"
+  },
+  {
+    "norm": "marinopolis",
+    "official": "Marinópolis"
+  },
+  {
+    "norm": "martinopolis",
+    "official": "Martinópolis"
+  },
+  {
+    "norm": "matao",
+    "official": "Matão"
+  },
+  {
+    "norm": "maua",
+    "official": "Mauá"
+  },
+  {
+    "norm": "mendonca",
+    "official": "Mendonça"
+  },
+  {
+    "norm": "meridiano",
+    "official": "Meridiano"
+  },
+  {
+    "norm": "mesopolis",
+    "official": "Mesópolis"
+  },
+  {
+    "norm": "miguelopolis",
+    "official": "Miguelópolis"
+  },
+  {
+    "norm": "mineiros do tiete",
+    "official": "Mineiros do Tietê"
+  },
+  {
+    "norm": "mira estrela",
+    "official": "Mira Estrela"
+  },
+  {
+    "norm": "miracatu",
+    "official": "Miracatu"
+  },
+  {
+    "norm": "mirandopolis",
+    "official": "Mirandópolis"
+  },
+  {
+    "norm": "mirante do paranapanema",
+    "official": "Mirante do Paranapanema"
+  },
+  {
+    "norm": "mirassol",
+    "official": "Mirassol"
+  },
+  {
+    "norm": "mirassolandia",
+    "official": "Mirassolândia"
+  },
+  {
+    "norm": "mococa",
+    "official": "Mococa"
+  },
+  {
+    "norm": "mogi das cruzes",
+    "official": "Mogi das Cruzes"
+  },
+  {
+    "norm": "mogi guacu",
+    "official": "Mogi Guaçu"
+  },
+  {
+    "norm": "mogi mirim",
+    "official": "Mogi Mirim"
+  },
+  {
+    "norm": "mombuca",
+    "official": "Mombuca"
+  },
+  {
+    "norm": "moncoes",
+    "official": "Monções"
+  },
+  {
+    "norm": "mongagua",
+    "official": "Mongaguá"
+  },
+  {
+    "norm": "monte alegre do sul",
+    "official": "Monte Alegre do Sul"
+  },
+  {
+    "norm": "monte alto",
+    "official": "Monte Alto"
+  },
+  {
+    "norm": "monte aprazivel",
+    "official": "Monte Aprazível"
+  },
+  {
+    "norm": "monte azul paulista",
+    "official": "Monte Azul Paulista"
+  },
+  {
+    "norm": "monte castelo",
+    "official": "Monte Castelo"
+  },
+  {
+    "norm": "monte mor",
+    "official": "Monte Mor"
+  },
+  {
+    "norm": "monteiro lobato",
+    "official": "Monteiro Lobato"
+  },
+  {
+    "norm": "morro agudo",
+    "official": "Morro Agudo"
+  },
+  {
+    "norm": "morungaba",
+    "official": "Morungaba"
+  },
+  {
+    "norm": "motuca",
+    "official": "Motuca"
+  },
+  {
+    "norm": "murutinga do sul",
+    "official": "Murutinga do Sul"
+  },
+  {
+    "norm": "nantes",
+    "official": "Nantes"
+  },
+  {
+    "norm": "narandiba",
+    "official": "Narandiba"
+  },
+  {
+    "norm": "natividade da serra",
+    "official": "Natividade da Serra"
+  },
+  {
+    "norm": "nazare paulista",
+    "official": "Nazaré Paulista"
+  },
+  {
+    "norm": "neves paulista",
+    "official": "Neves Paulista"
+  },
+  {
+    "norm": "nhandeara",
+    "official": "Nhandeara"
+  },
+  {
+    "norm": "nipoa",
+    "official": "Nipoã"
+  },
+  {
+    "norm": "nova alianca",
+    "official": "Nova Aliança"
+  },
+  {
+    "norm": "nova campina",
+    "official": "Nova Campina"
+  },
+  {
+    "norm": "nova canaa paulista",
+    "official": "Nova Canaã Paulista"
+  },
+  {
+    "norm": "nova castilho",
+    "official": "Nova Castilho"
+  },
+  {
+    "norm": "nova europa",
+    "official": "Nova Europa"
+  },
+  {
+    "norm": "nova granada",
+    "official": "Nova Granada"
+  },
+  {
+    "norm": "nova guataporanga",
+    "official": "Nova Guataporanga"
+  },
+  {
+    "norm": "nova independencia",
+    "official": "Nova Independência"
+  },
+  {
+    "norm": "nova luzitania",
+    "official": "Nova Luzitânia"
+  },
+  {
+    "norm": "nova odessa",
+    "official": "Nova Odessa"
+  },
+  {
+    "norm": "novais",
+    "official": "Novais"
+  },
+  {
+    "norm": "novo horizonte",
+    "official": "Novo Horizonte"
+  },
+  {
+    "norm": "nuporanga",
+    "official": "Nuporanga"
+  },
+  {
+    "norm": "ocaucu",
+    "official": "Ocauçu"
+  },
+  {
+    "norm": "oleo",
+    "official": "Óleo"
+  },
+  {
+    "norm": "olimpia",
+    "official": "Olímpia"
+  },
+  {
+    "norm": "onda verde",
+    "official": "Onda Verde"
+  },
+  {
+    "norm": "oriente",
+    "official": "Oriente"
+  },
+  {
+    "norm": "orindiuva",
+    "official": "Orindiúva"
+  },
+  {
+    "norm": "orlandia",
+    "official": "Orlândia"
+  },
+  {
+    "norm": "osasco",
+    "official": "Osasco"
+  },
+  {
+    "norm": "oscar bressane",
+    "official": "Oscar Bressane"
+  },
+  {
+    "norm": "osvaldo cruz",
+    "official": "Osvaldo Cruz"
+  },
+  {
+    "norm": "ourinhos",
+    "official": "Ourinhos"
+  },
+  {
+    "norm": "ouro verde",
+    "official": "Ouro Verde"
+  },
+  {
+    "norm": "ouroeste",
+    "official": "Ouroeste"
+  },
+  {
+    "norm": "pacaembu",
+    "official": "Pacaembu"
+  },
+  {
+    "norm": "palestina",
+    "official": "Palestina"
+  },
+  {
+    "norm": "palmares paulista",
+    "official": "Palmares Paulista"
+  },
+  {
+    "norm": "palmeira doeste",
+    "official": "Palmeira d'Oeste"
+  },
+  {
+    "norm": "palmital",
+    "official": "Palmital"
+  },
+  {
+    "norm": "panorama",
+    "official": "Panorama"
+  },
+  {
+    "norm": "paraguacu paulista",
+    "official": "Paraguaçu Paulista"
+  },
+  {
+    "norm": "paraibuna",
+    "official": "Paraibuna"
+  },
+  {
+    "norm": "paraiso",
+    "official": "Paraíso"
+  },
+  {
+    "norm": "paranapanema",
+    "official": "Paranapanema"
+  },
+  {
+    "norm": "paranapua",
+    "official": "Paranapuã"
+  },
+  {
+    "norm": "parapua",
+    "official": "Parapuã"
+  },
+  {
+    "norm": "pardinho",
+    "official": "Pardinho"
+  },
+  {
+    "norm": "pariqueraacu",
+    "official": "Pariquera-Açu"
+  },
+  {
+    "norm": "parisi",
+    "official": "Parisi"
+  },
+  {
+    "norm": "patrocinio paulista",
+    "official": "Patrocínio Paulista"
+  },
+  {
+    "norm": "pauliceia",
+    "official": "Paulicéia"
+  },
+  {
+    "norm": "paulinia",
+    "official": "Paulínia"
+  },
+  {
+    "norm": "paulistania",
+    "official": "Paulistânia"
+  },
+  {
+    "norm": "paulo de faria",
+    "official": "Paulo de Faria"
+  },
+  {
+    "norm": "pederneiras",
+    "official": "Pederneiras"
+  },
+  {
+    "norm": "pedra bela",
+    "official": "Pedra Bela"
+  },
+  {
+    "norm": "pedranopolis",
+    "official": "Pedranópolis"
+  },
+  {
+    "norm": "pedregulho",
+    "official": "Pedregulho"
+  },
+  {
+    "norm": "pedreira",
+    "official": "Pedreira"
+  },
+  {
+    "norm": "pedrinhas paulista",
+    "official": "Pedrinhas Paulista"
+  },
+  {
+    "norm": "pedro de toledo",
+    "official": "Pedro de Toledo"
+  },
+  {
+    "norm": "penapolis",
+    "official": "Penápolis"
+  },
+  {
+    "norm": "pereira barreto",
+    "official": "Pereira Barreto"
+  },
+  {
+    "norm": "pereiras",
+    "official": "Pereiras"
+  },
+  {
+    "norm": "peruibe",
+    "official": "Peruíbe"
+  },
+  {
+    "norm": "piacatu",
+    "official": "Piacatu"
+  },
+  {
+    "norm": "piedade",
+    "official": "Piedade"
+  },
+  {
+    "norm": "pilar do sul",
+    "official": "Pilar do Sul"
+  },
+  {
+    "norm": "pindamonhangaba",
+    "official": "Pindamonhangaba"
+  },
+  {
+    "norm": "pindorama",
+    "official": "Pindorama"
+  },
+  {
+    "norm": "pinhalzinho",
+    "official": "Pinhalzinho"
+  },
+  {
+    "norm": "piquerobi",
+    "official": "Piquerobi"
+  },
+  {
+    "norm": "piquete",
+    "official": "Piquete"
+  },
+  {
+    "norm": "piracaia",
+    "official": "Piracaia"
+  },
+  {
+    "norm": "piracicaba",
+    "official": "Piracicaba"
+  },
+  {
+    "norm": "piraju",
+    "official": "Piraju"
+  },
+  {
+    "norm": "pirajui",
+    "official": "Pirajuí"
+  },
+  {
+    "norm": "pirangi",
+    "official": "Pirangi"
+  },
+  {
+    "norm": "pirapora do bom jesus",
+    "official": "Pirapora do Bom Jesus"
+  },
+  {
+    "norm": "pirapozinho",
+    "official": "Pirapozinho"
+  },
+  {
+    "norm": "pirassununga",
+    "official": "Pirassununga"
+  },
+  {
+    "norm": "piratininga",
+    "official": "Piratininga"
+  },
+  {
+    "norm": "pitangueiras",
+    "official": "Pitangueiras"
+  },
+  {
+    "norm": "planalto",
+    "official": "Planalto"
+  },
+  {
+    "norm": "platina",
+    "official": "Platina"
+  },
+  {
+    "norm": "poa",
+    "official": "Poá"
+  },
+  {
+    "norm": "poloni",
+    "official": "Poloni"
+  },
+  {
+    "norm": "pompeia",
+    "official": "Pompeia"
+  },
+  {
+    "norm": "pongai",
+    "official": "Pongaí"
+  },
+  {
+    "norm": "pontal",
+    "official": "Pontal"
+  },
+  {
+    "norm": "pontalinda",
+    "official": "Pontalinda"
+  },
+  {
+    "norm": "pontes gestal",
+    "official": "Pontes Gestal"
+  },
+  {
+    "norm": "populina",
+    "official": "Populina"
+  },
+  {
+    "norm": "porangaba",
+    "official": "Porangaba"
+  },
+  {
+    "norm": "porto feliz",
+    "official": "Porto Feliz"
+  },
+  {
+    "norm": "porto ferreira",
+    "official": "Porto Ferreira"
+  },
+  {
+    "norm": "potim",
+    "official": "Potim"
+  },
+  {
+    "norm": "potirendaba",
+    "official": "Potirendaba"
+  },
+  {
+    "norm": "pracinha",
+    "official": "Pracinha"
+  },
+  {
+    "norm": "pradopolis",
+    "official": "Pradópolis"
+  },
+  {
+    "norm": "praia grande",
+    "official": "Praia Grande"
+  },
+  {
+    "norm": "pratania",
+    "official": "Pratânia"
+  },
+  {
+    "norm": "presidente alves",
+    "official": "Presidente Alves"
+  },
+  {
+    "norm": "presidente bernardes",
+    "official": "Presidente Bernardes"
+  },
+  {
+    "norm": "presidente epitacio",
+    "official": "Presidente Epitácio"
+  },
+  {
+    "norm": "presidente prudente",
+    "official": "Presidente Prudente"
+  },
+  {
+    "norm": "presidente venceslau",
+    "official": "Presidente Venceslau"
+  },
+  {
+    "norm": "promissao",
+    "official": "Promissão"
+  },
+  {
+    "norm": "quadra",
+    "official": "Quadra"
+  },
+  {
+    "norm": "quata",
+    "official": "Quatá"
+  },
+  {
+    "norm": "queiroz",
+    "official": "Queiroz"
+  },
+  {
+    "norm": "queluz",
+    "official": "Queluz"
+  },
+  {
+    "norm": "quintana",
+    "official": "Quintana"
+  },
+  {
+    "norm": "rafard",
+    "official": "Rafard"
+  },
+  {
+    "norm": "rancharia",
+    "official": "Rancharia"
+  },
+  {
+    "norm": "redencao da serra",
+    "official": "Redenção da Serra"
+  },
+  {
+    "norm": "regente feijo",
+    "official": "Regente Feijó"
+  },
+  {
+    "norm": "reginopolis",
+    "official": "Reginópolis"
+  },
+  {
+    "norm": "registro",
+    "official": "Registro"
+  },
+  {
+    "norm": "restinga",
+    "official": "Restinga"
+  },
+  {
+    "norm": "ribeira",
+    "official": "Ribeira"
+  },
+  {
+    "norm": "ribeirao bonito",
+    "official": "Ribeirão Bonito"
+  },
+  {
+    "norm": "ribeirao branco",
+    "official": "Ribeirão Branco"
+  },
+  {
+    "norm": "ribeirao corrente",
+    "official": "Ribeirão Corrente"
+  },
+  {
+    "norm": "ribeirao do sul",
+    "official": "Ribeirão do Sul"
+  },
+  {
+    "norm": "ribeirao dos indios",
+    "official": "Ribeirão dos Índios"
+  },
+  {
+    "norm": "ribeirao grande",
+    "official": "Ribeirão Grande"
+  },
+  {
+    "norm": "ribeirao pires",
+    "official": "Ribeirão Pires"
+  },
+  {
+    "norm": "ribeirao preto",
+    "official": "Ribeirão Preto"
+  },
+  {
+    "norm": "rifaina",
+    "official": "Rifaina"
+  },
+  {
+    "norm": "rincao",
+    "official": "Rincão"
+  },
+  {
+    "norm": "rinopolis",
+    "official": "Rinópolis"
+  },
+  {
+    "norm": "rio claro",
+    "official": "Rio Claro"
+  },
+  {
+    "norm": "rio das pedras",
+    "official": "Rio das Pedras"
+  },
+  {
+    "norm": "rio grande da serra",
+    "official": "Rio Grande da Serra"
+  },
+  {
+    "norm": "riolandia",
+    "official": "Riolândia"
+  },
+  {
+    "norm": "riversul",
+    "official": "Riversul"
+  },
+  {
+    "norm": "rosana",
+    "official": "Rosana"
+  },
+  {
+    "norm": "roseira",
+    "official": "Roseira"
+  },
+  {
+    "norm": "rubiacea",
+    "official": "Rubiácea"
+  },
+  {
+    "norm": "rubineia",
+    "official": "Rubineia"
+  },
+  {
+    "norm": "sabino",
+    "official": "Sabino"
+  },
+  {
+    "norm": "sagres",
+    "official": "Sagres"
+  },
+  {
+    "norm": "sales",
+    "official": "Sales"
+  },
+  {
+    "norm": "sales oliveira",
+    "official": "Sales Oliveira"
+  },
+  {
+    "norm": "salesopolis",
+    "official": "Salesópolis"
+  },
+  {
+    "norm": "salmourao",
+    "official": "Salmourão"
+  },
+  {
+    "norm": "saltinho",
+    "official": "Saltinho"
+  },
+  {
+    "norm": "salto",
+    "official": "Salto"
+  },
+  {
+    "norm": "salto de pirapora",
+    "official": "Salto de Pirapora"
+  },
+  {
+    "norm": "salto grande",
+    "official": "Salto Grande"
+  },
+  {
+    "norm": "sandovalina",
+    "official": "Sandovalina"
+  },
+  {
+    "norm": "santa adelia",
+    "official": "Santa Adélia"
+  },
+  {
+    "norm": "santa albertina",
+    "official": "Santa Albertina"
+  },
+  {
+    "norm": "santa barbara doeste",
+    "official": "Santa Bárbara d'Oeste"
+  },
+  {
+    "norm": "santa branca",
+    "official": "Santa Branca"
+  },
+  {
+    "norm": "santa clara doeste",
+    "official": "Santa Clara d'Oeste"
+  },
+  {
+    "norm": "santa cruz da conceicao",
+    "official": "Santa Cruz da Conceição"
+  },
+  {
+    "norm": "santa cruz da esperanca",
+    "official": "Santa Cruz da Esperança"
+  },
+  {
+    "norm": "santa cruz das palmeiras",
+    "official": "Santa Cruz das Palmeiras"
+  },
+  {
+    "norm": "santa cruz do rio pardo",
+    "official": "Santa Cruz do Rio Pardo"
+  },
+  {
+    "norm": "santa ernestina",
+    "official": "Santa Ernestina"
+  },
+  {
+    "norm": "santa fe do sul",
+    "official": "Santa Fé do Sul"
+  },
+  {
+    "norm": "santa gertrudes",
+    "official": "Santa Gertrudes"
+  },
+  {
+    "norm": "santa isabel",
+    "official": "Santa Isabel"
+  },
+  {
+    "norm": "santa lucia",
+    "official": "Santa Lúcia"
+  },
+  {
+    "norm": "santa maria da serra",
+    "official": "Santa Maria da Serra"
+  },
+  {
+    "norm": "santa mercedes",
+    "official": "Santa Mercedes"
+  },
+  {
+    "norm": "santa rita do passa quatro",
+    "official": "Santa Rita do Passa Quatro"
+  },
+  {
+    "norm": "santa rita doeste",
+    "official": "Santa Rita d'Oeste"
+  },
+  {
+    "norm": "santa rosa de viterbo",
+    "official": "Santa Rosa de Viterbo"
+  },
+  {
+    "norm": "santa salete",
+    "official": "Santa Salete"
+  },
+  {
+    "norm": "santana da ponte pensa",
+    "official": "Santana da Ponte Pensa"
+  },
+  {
+    "norm": "santana de parnaiba",
+    "official": "Santana de Parnaíba"
+  },
+  {
+    "norm": "santo anastacio",
+    "official": "Santo Anastácio"
+  },
+  {
+    "norm": "santo andre",
+    "official": "Santo André"
+  },
+  {
+    "norm": "santo antonio da alegria",
+    "official": "Santo Antônio da Alegria"
+  },
+  {
+    "norm": "santo antonio de posse",
+    "official": "Santo Antônio de Posse"
+  },
+  {
+    "norm": "santo antonio do aracangua",
+    "official": "Santo Antônio do Aracanguá"
+  },
+  {
+    "norm": "santo antonio do jardim",
+    "official": "Santo Antônio do Jardim"
+  },
+  {
+    "norm": "santo antonio do pinhal",
+    "official": "Santo Antônio do Pinhal"
+  },
+  {
+    "norm": "santo expedito",
+    "official": "Santo Expedito"
+  },
+  {
+    "norm": "santopolis do aguapei",
+    "official": "Santópolis do Aguapeí"
+  },
+  {
+    "norm": "santos",
+    "official": "Santos"
+  },
+  {
+    "norm": "sao bento do sapucai",
+    "official": "São Bento do Sapucaí"
+  },
+  {
+    "norm": "sao bernardo do campo",
+    "official": "São Bernardo do Campo"
+  },
+  {
+    "norm": "sao caetano do sul",
+    "official": "São Caetano do Sul"
+  },
+  {
+    "norm": "sao carlos",
+    "official": "São Carlos"
+  },
+  {
+    "norm": "sao francisco",
+    "official": "São Francisco"
+  },
+  {
+    "norm": "sao joao da boa vista",
+    "official": "São João da Boa Vista"
+  },
+  {
+    "norm": "sao joao das duas pontes",
+    "official": "São João das Duas Pontes"
+  },
+  {
+    "norm": "sao joao de iracema",
+    "official": "São João de Iracema"
+  },
+  {
+    "norm": "sao joao do paudalho",
+    "official": "São João do Pau-d'Alho"
+  },
+  {
+    "norm": "sao joaquim da barra",
+    "official": "São Joaquim da Barra"
+  },
+  {
+    "norm": "sao jose da bela vista",
+    "official": "São José da Bela Vista"
+  },
+  {
+    "norm": "sao jose do barreiro",
+    "official": "São José do Barreiro"
+  },
+  {
+    "norm": "sao jose do rio pardo",
+    "official": "São José do Rio Pardo"
+  },
+  {
+    "norm": "sao jose do rio preto",
+    "official": "São José do Rio Preto"
+  },
+  {
+    "norm": "sao jose dos campos",
+    "official": "São José dos Campos"
+  },
+  {
+    "norm": "sao lourenco da serra",
+    "official": "São Lourenço da Serra"
+  },
+  {
+    "norm": "sao luiz do paraitinga",
+    "official": "São Luiz do Paraitinga"
+  },
+  {
+    "norm": "sao manuel",
+    "official": "São Manuel"
+  },
+  {
+    "norm": "sao miguel arcanjo",
+    "official": "São Miguel Arcanjo"
+  },
+  {
+    "norm": "sao paulo",
+    "official": "São Paulo"
+  },
+  {
+    "norm": "sao pedro",
+    "official": "São Pedro"
+  },
+  {
+    "norm": "sao pedro do turvo",
+    "official": "São Pedro do Turvo"
+  },
+  {
+    "norm": "sao roque",
+    "official": "São Roque"
+  },
+  {
+    "norm": "sao sebastiao",
+    "official": "São Sebastião"
+  },
+  {
+    "norm": "sao sebastiao da grama",
+    "official": "São Sebastião da Grama"
+  },
+  {
+    "norm": "sao simao",
+    "official": "São Simão"
+  },
+  {
+    "norm": "sao vicente",
+    "official": "São Vicente"
+  },
+  {
+    "norm": "sarapui",
+    "official": "Sarapuí"
+  },
+  {
+    "norm": "sarutaia",
+    "official": "Sarutaiá"
+  },
+  {
+    "norm": "sebastianopolis do sul",
+    "official": "Sebastianópolis do Sul"
+  },
+  {
+    "norm": "serra azul",
+    "official": "Serra Azul"
+  },
+  {
+    "norm": "serra negra",
+    "official": "Serra Negra"
+  },
+  {
+    "norm": "serrana",
+    "official": "Serrana"
+  },
+  {
+    "norm": "sertaozinho",
+    "official": "Sertãozinho"
+  },
+  {
+    "norm": "sete barras",
+    "official": "Sete Barras"
+  },
+  {
+    "norm": "severinia",
+    "official": "Severínia"
+  },
+  {
+    "norm": "silveiras",
+    "official": "Silveiras"
+  },
+  {
+    "norm": "socorro",
+    "official": "Socorro"
+  },
+  {
+    "norm": "sorocaba",
+    "official": "Sorocaba"
+  },
+  {
+    "norm": "sud mennucci",
+    "official": "Sud Mennucci"
+  },
+  {
+    "norm": "sumare",
+    "official": "Sumaré"
+  },
+  {
+    "norm": "suzanapolis",
+    "official": "Suzanápolis"
+  },
+  {
+    "norm": "suzano",
+    "official": "Suzano"
+  },
+  {
+    "norm": "tabapua",
+    "official": "Tabapuã"
+  },
+  {
+    "norm": "tabatinga",
+    "official": "Tabatinga"
+  },
+  {
+    "norm": "taboao da serra",
+    "official": "Taboão da Serra"
+  },
+  {
+    "norm": "taciba",
+    "official": "Taciba"
+  },
+  {
+    "norm": "taguai",
+    "official": "Taguaí"
+  },
+  {
+    "norm": "taiacu",
+    "official": "Taiaçu"
+  },
+  {
+    "norm": "taiuva",
+    "official": "Taiúva"
+  },
+  {
+    "norm": "tambau",
+    "official": "Tambaú"
+  },
+  {
+    "norm": "tanabi",
+    "official": "Tanabi"
+  },
+  {
+    "norm": "tapirai",
+    "official": "Tapiraí"
+  },
+  {
+    "norm": "tapiratiba",
+    "official": "Tapiratiba"
+  },
+  {
+    "norm": "taquaral",
+    "official": "Taquaral"
+  },
+  {
+    "norm": "taquaritinga",
+    "official": "Taquaritinga"
+  },
+  {
+    "norm": "taquarituba",
+    "official": "Taquarituba"
+  },
+  {
+    "norm": "taquarivai",
+    "official": "Taquarivaí"
+  },
+  {
+    "norm": "tarabai",
+    "official": "Tarabai"
+  },
+  {
+    "norm": "taruma",
+    "official": "Tarumã"
+  },
+  {
+    "norm": "tatui",
+    "official": "Tatuí"
+  },
+  {
+    "norm": "taubate",
+    "official": "Taubaté"
+  },
+  {
+    "norm": "tejupa",
+    "official": "Tejupá"
+  },
+  {
+    "norm": "teodoro sampaio",
+    "official": "Teodoro Sampaio"
+  },
+  {
+    "norm": "terra roxa",
+    "official": "Terra Roxa"
+  },
+  {
+    "norm": "tiete",
+    "official": "Tietê"
+  },
+  {
+    "norm": "timburi",
+    "official": "Timburi"
+  },
+  {
+    "norm": "torre de pedra",
+    "official": "Torre de Pedra"
+  },
+  {
+    "norm": "torrinha",
+    "official": "Torrinha"
+  },
+  {
+    "norm": "trabiju",
+    "official": "Trabiju"
+  },
+  {
+    "norm": "tremembe",
+    "official": "Tremembé"
+  },
+  {
+    "norm": "tres fronteiras",
+    "official": "Três Fronteiras"
+  },
+  {
+    "norm": "tuiuti",
+    "official": "Tuiuti"
+  },
+  {
+    "norm": "tupa",
+    "official": "Tupã"
+  },
+  {
+    "norm": "tupi paulista",
+    "official": "Tupi Paulista"
+  },
+  {
+    "norm": "turiuba",
+    "official": "Turiúba"
+  },
+  {
+    "norm": "turmalina",
+    "official": "Turmalina"
+  },
+  {
+    "norm": "ubarana",
+    "official": "Ubarana"
+  },
+  {
+    "norm": "ubatuba",
+    "official": "Ubatuba"
+  },
+  {
+    "norm": "ubirajara",
+    "official": "Ubirajara"
+  },
+  {
+    "norm": "uchoa",
+    "official": "Uchoa"
+  },
+  {
+    "norm": "uniao paulista",
+    "official": "União Paulista"
+  },
+  {
+    "norm": "urania",
+    "official": "Urânia"
+  },
+  {
+    "norm": "uru",
+    "official": "Uru"
+  },
+  {
+    "norm": "urupes",
+    "official": "Urupês"
+  },
+  {
+    "norm": "valentim gentil",
+    "official": "Valentim Gentil"
+  },
+  {
+    "norm": "valinhos",
+    "official": "Valinhos"
+  },
+  {
+    "norm": "valparaiso",
+    "official": "Valparaíso"
+  },
+  {
+    "norm": "vargem",
+    "official": "Vargem"
+  },
+  {
+    "norm": "vargem grande do sul",
+    "official": "Vargem Grande do Sul"
+  },
+  {
+    "norm": "vargem grande paulista",
+    "official": "Vargem Grande Paulista"
+  },
+  {
+    "norm": "varzea paulista",
+    "official": "Várzea Paulista"
+  },
+  {
+    "norm": "vera cruz",
+    "official": "Vera Cruz"
+  },
+  {
+    "norm": "vinhedo",
+    "official": "Vinhedo"
+  },
+  {
+    "norm": "viradouro",
+    "official": "Viradouro"
+  },
+  {
+    "norm": "vista alegre do alto",
+    "official": "Vista Alegre do Alto"
+  },
+  {
+    "norm": "vitoria brasil",
+    "official": "Vitória Brasil"
+  },
+  {
+    "norm": "votorantim",
+    "official": "Votorantim"
+  },
+  {
+    "norm": "votuporanga",
+    "official": "Votuporanga"
+  },
+  {
+    "norm": "zacarias",
+    "official": "Zacarias"
+  }
+];
+  
+  const levenshtein = (a, b) => {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+        }
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  const cityCache = new Map();
+
+  const getIbgeCityName = (cityStr, stateStr, cepStr) => {
+    let deducedState = getStateFromCep(cepStr);
+    let finalState = normalizeState(stateStr, deducedState);
+
+    if (!cityStr) {
+      if (finalState === 'SP') return 'São Paulo';
+      return 'Não Informada';
+    }
+    
+    // Convert to lowercase, remove accents
+    let norm = cityStr.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
+    // Remove state abbreviations at the end
+    norm = norm.replace(/[-\/,\s]+sp$/, '').trim();
+    norm = norm.replace(/[-\/,\s]+rj$/, '').trim();
+    norm = norm.replace(/[-\/,\s]+mg$/, '').trim();
+    
+    // Aggressive cleaning to handle mojibake like Sã£o Paulo -> sa£o paulo -> sao paulo
+    norm = norm.replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
+    
+    const cacheKey = `${norm}_${finalState}`;
+    if (cityCache.has(cacheKey)) {
+      return cityCache.get(cacheKey);
+    }
+    
+    // Very aggressive common mappings for edge cases that Levenshtein might miss
+    const cityMap = {
+      'sao paulo': 'São Paulo', 'sp': 'São Paulo', 'capital': 'São Paulo', 'sampa': 'São Paulo',
+      'sbc': 'São Bernardo do Campo', 'sao bernardo': 'São Bernardo do Campo', 'sao bernardo do campo': 'São Bernardo do Campo',
+      'scs': 'São Caetano do Sul', 'sao caetano': 'São Caetano do Sul', 'sao caetano do sul': 'São Caetano do Sul',
+      'sa': 'Santo André', 'santo andre': 'Santo André', 'sta andre': 'Santo André',
+      'sjc': 'São José dos Campos', 'sao jose': 'São José dos Campos', 'sao jose dos campos': 'São José dos Campos',
+      's j dos campos': 'São José dos Campos', 's jose dos campos': 'São José dos Campos', 'sao jose dps campos': 'São José dos Campos',
+      'mogi': 'Mogi das Cruzes', 'mogi das cruzes': 'Mogi das Cruzes',
+      'rib preto': 'Ribeirão Preto', 'ribeirao preto': 'Ribeirão Preto',
+      'sjrp': 'São José do Rio Preto', 'rio preto': 'São José do Rio Preto', 'sao jose do rio preto': 'São José do Rio Preto',
+      's j rio preto': 'São José do Rio Preto', 'sj do rio preto': 'São José do Rio Preto',
+      'pinda': 'Pindamonhangaba', 'pindamonhangaba': 'Pindamonhangaba',
+      'itaq': 'Itaquaquecetuba', 'itaqua': 'Itaquaquecetuba', 'itaquaquecetuba': 'Itaquaquecetuba',
+      'guarulhos': 'Guarulhos', 'campinas': 'Campinas', 'osasco': 'Osasco', 'barueri': 'Barueri', 'diadema': 'Diadema',
+      'maua': 'Mauá', 'carapicuiba': 'Carapicuíba', 'piracicaba': 'Piracicaba', 'bauru': 'Bauru', 'franca': 'Franca',
+      'taubate': 'Taubaté', 'suzano': 'Suzano', 'taboao da serra': 'Taboão da Serra', 'sorocaba': 'Sorocaba', 'jundiai': 'Jundiaí',
+      'poa': 'Poá', 'itapecerica': 'Itapecerica da Serra', 'itapecerica da serra': 'Itapecerica da Serra',
+      'embu': 'Embu das Artes', 'embu das artes': 'Embu das Artes',
+      's b do campo': 'São Bernardo do Campo',
+      's andre': 'Santo André', 'sta barbara': "Santa Bárbara d'Oeste", 'santa barbara': "Santa Bárbara d'Oeste",
+      'santa barbara d oeste': "Santa Bárbara d'Oeste", 'sta barbara d oeste': "Santa Bárbara d'Oeste"
+    };
+
+    let result;
+    if (cityMap[norm]) {
+      result = cityMap[norm];
+    } else if (finalState === 'SP') {
+      // For SP, ALWAYS snap to the closest of the 645 cities
+      let bestMatch = 'São Paulo';
+      let bestDist = Infinity;
+      
+      for (const item of spCitiesList) {
+        if (item.norm === norm) {
+          bestMatch = item.official;
+          bestDist = 0;
+          break; // exact match
+        }
+        
+        // Find closest
+        const dist = levenshtein(norm, item.norm);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestMatch = item.official;
+        }
+      }
+      
+      // Only accept if distance is reasonable
+      if (bestDist <= Math.max(3, Math.floor(norm.length * 0.5))) {
+        result = bestMatch;
+      } else {
+        result = 'São Paulo'; // Fallback for pure garbage strings in SP
+      }
+    } else {
+      // Capitalize properly for non-SP
+      result = cityStr
+        .trim()
+        .toLowerCase()
+        .replace(/[-\/,\s]+(sp|rj|mg|es|pr|sc|rs|ba|pe|ce|df|go)$/i, '')
+        .split(/\s+/)
+        .map(word => {
+          if (['de', 'da', 'do', 'das', 'dos', 'e'].includes(word)) return word;
+          return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+    }
+    
+    cityCache.set(cacheKey, result);
+    return result;
   };
 
   // Consolidate all actions into unique lead profiles
@@ -434,7 +3187,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           bairro: item.bairro,
@@ -456,7 +3209,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         details: {
           tipoMaterial: item.tipoMaterial,
           adesivoPerfurado: !!item.adesivoPerfurado,
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -479,7 +3232,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         details: {
           tipoMaterial: item.tipoMaterial,
           adesivoPerfurado: !!item.adesivoPerfurado,
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -499,7 +3252,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -519,7 +3272,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -539,7 +3292,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -559,7 +3312,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           cep: item.cep,
           usuario: item.usuario,
@@ -578,7 +3331,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         date: item.createdAt || new Date().toISOString(),
         rawItem: item,
         details: {
-          cidade: formatCityName(item.cidade),
+          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
           estado: item.estado || 'SP',
           endereco: item.endereco,
           numero: item.numero,
@@ -601,9 +3354,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const fullName = item.nomeCompleto || (item.sobrenome ? `${item.nome} ${item.sobrenome}`.trim() : item.nome) || 'Anônimo';
       const phone = item.whatsapp || '';
       const email = item.email || '';
-      const cidade = formatCityName(item.cidade);
-      const estado = (item.estado || 'SP').toUpperCase();
-      const cep = item.cep || '';
+      const cep = (item.cep || '').trim();
+      const deducedState = getStateFromCep(cep);
+      const estado = normalizeState(item.estado, deducedState);
+      const cidade = getIbgeCityName(item.cidade, estado, cep);
       const endereco = item.endereco || '';
       const numero = item.numero || '';
       const complemento = item.complemento || '';
@@ -628,8 +3382,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       if (targetIdx !== -1) {
         // Merge into existing lead
         const existing = leads[targetIdx];
-        existing.actions.push(action);
-        existing.totalActions = existing.actions.length;
+        const isDuplicate = existing.actions.some(a => a.sourceCategory === action.sourceCategory);
+        if (!isDuplicate) {
+          existing.actions.push(action);
+          existing.totalActions = existing.actions.length;
+        }
 
         // Upgrade data with non-empty fields
         if (fullName && fullName.length > existing.nome.length && !existing.nome.includes(fullName)) {
@@ -778,7 +3535,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       if (multiActionFilter === 'multi' && lead.totalActions <= 1) {
         return false;
       }
-      if (multiActionFilter === 'super' && lead.totalActions < 3) {
+      if (multiActionFilter === 'super' && lead.distinctCampaigns.length < 3) {
         return false;
       }
       if (multiActionFilter === 'single' && lead.totalActions > 1) {
@@ -832,7 +3589,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     return consolidatedLeads.filter(l => l.isMultiAction).length;
   }, [consolidatedLeads]);
   const superSupportersCount = useMemo(() => {
-    return consolidatedLeads.filter(l => l.totalActions >= 3).length;
+    return consolidatedLeads.filter(l => l.distinctCampaigns.length >= 3).length;
   }, [consolidatedLeads]);
   const spLeadsCount = useMemo(() => {
     return consolidatedLeads.filter(l => l.estado?.toUpperCase() === 'SP' || !l.estado).length;
@@ -1609,7 +4366,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                               {lead.nome}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                              {lead.totalActions >= 3 ? (
+                              {lead.distinctCampaigns.length >= 3 ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
                                   <Sparkles className="w-3 h-3 text-purple-600" />
                                   Super Apoiador ({lead.totalActions})
@@ -1688,8 +4445,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                           {/* Coluna 5: Total de Ações */}
                           <td className="py-3.5 px-4 text-center">
                             <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-black ${
-                              lead.totalActions >= 3
-                                ? 'bg-purple-600 text-white shadow-xs'
+                              lead.distinctCampaigns.length >= 3 ? 'bg-purple-600 text-white shadow-xs'
                                 : lead.isMultiAction
                                 ? 'bg-amber-500 text-white shadow-xs'
                                 : 'bg-gray-100 text-gray-700'
@@ -1804,7 +4560,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </h2>
 
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                {selectedLead.totalActions >= 3 ? (
+                {selectedLead.distinctCampaigns.length >= 3 ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase bg-purple-500 text-white shadow-sm">
                     <Sparkles className="w-3.5 h-3.5" />
                     Super Apoiador ({selectedLead.totalActions} ações no site)
