@@ -28,6 +28,29 @@ async function startServer() {
   const jogoScoresData: any[] = [];
   const popupApoioData: any[] = [];
 
+  // Persistent disk storage for imported leads to guarantee persistence
+  const IMPORTED_LEADS_FILE = path.join(process.cwd(), 'imported_leads_store.json');
+  let importedLeadsData: any[] = [];
+  try {
+    if (fs.existsSync(IMPORTED_LEADS_FILE)) {
+      const content = fs.readFileSync(IMPORTED_LEADS_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        importedLeadsData = parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Error reading imported_leads_store.json:", e);
+  }
+
+  function saveImportedLeadsToDisk() {
+    try {
+      fs.writeFileSync(IMPORTED_LEADS_FILE, JSON.stringify(importedLeadsData, null, 2), 'utf-8');
+    } catch (e) {
+      console.error("Error saving imported_leads_store.json:", e);
+    }
+  }
+
   let db: any = null;
   // Initialize DB in the background without blocking server startup
   getDbConnection().then(connection => {
@@ -434,6 +457,163 @@ async function startServer() {
     const idx = popupApoioData.findIndex(c => c.id === id);
     if (idx !== -1) popupApoioData.splice(idx, 1);
     res.json({ success: true });
+  });
+
+  // API routing for imported-leads (Uploads de bases CSV)
+  app.get('/api/imported-leads', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT * FROM imported_leads ORDER BY createdAt DESC');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    res.json(importedLeadsData);
+  });
+
+  app.post('/api/imported-leads/bulk', async (req, res) => {
+    const { leads, campanha } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: "Nenhum lead fornecido para importação." });
+    }
+    if (!campanha || !campanha.trim()) {
+      return res.status(400).json({ error: "O nome da campanha é obrigatório." });
+    }
+
+    const campaignName = campanha.trim();
+    const insertedRecords: any[] = [];
+
+    for (const item of leads) {
+      const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+      const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const record = {
+        id,
+        nome: (item.nome || item.name || item.nomeCompleto || 'Sem Nome').trim(),
+        whatsapp: (item.whatsapp || item.telefone || item.celular || item.phone || '').trim(),
+        email: (item.email || item.mail || '').trim(),
+        cep: (item.cep || '').trim(),
+        endereco: (item.endereco || item.logradouro || item.rua || '').trim(),
+        numero: (item.numero || '').trim(),
+        complemento: (item.complemento || '').trim(),
+        bairro: (item.bairro || '').trim(),
+        cidade: (item.cidade || item.municipio || 'São Paulo').trim(),
+        estado: ((item.estado || item.uf || 'SP').toUpperCase()).trim().substring(0, 2),
+        campanha: campaignName,
+        origem: 'Importação CSV',
+        createdAt
+      };
+
+      if (db) {
+        try {
+          await db.query(
+            `INSERT INTO imported_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, origem, createdAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              record.id,
+              record.nome,
+              record.whatsapp,
+              record.email,
+              record.cep,
+              record.endereco,
+              record.numero,
+              record.complemento,
+              record.bairro,
+              record.cidade,
+              record.estado,
+              record.campanha,
+              record.origem,
+              record.createdAt
+            ]
+          );
+        } catch (e) {
+          console.error("Erro ao inserir lead importado:", e);
+        }
+      } else {
+        importedLeadsData.push(record);
+      }
+      insertedRecords.push(record);
+    }
+    
+    if (!db) {
+      saveImportedLeadsToDisk();
+    }
+
+    return res.json({
+      success: true,
+      count: insertedRecords.length,
+      campanha: campaignName
+    });
+  });
+
+  app.delete('/api/imported-leads/:id', async (req, res) => {
+    const id = req.params.id;
+    if (db) {
+      try {
+        await db.query('DELETE FROM imported_leads WHERE id = ?', [id]);
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const idx = importedLeadsData.findIndex(c => c.id === id);
+    if (idx !== -1) {
+      importedLeadsData.splice(idx, 1);
+      saveImportedLeadsToDisk();
+    }
+    res.json({ success: true });
+  });
+
+  // Consolidated Leads Endpoint
+  app.get('/api/leads/consolidated', async (req, res) => {
+    try {
+      if (db) {
+        const [
+          [popupApoio],
+          [materialCampaign],
+          [ninaCampaign],
+          [citizens],
+          [petitions],
+          [contraMausTratos],
+          [jogoUsers],
+          [importedLeads]
+        ] = await Promise.all([
+          db.query('SELECT * FROM popup_apoio ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM material_campaign ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM ninapassadore_campaign ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM citizens ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM petitions ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM contra_maus_tratos ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM jogo_users ORDER BY createdAt DESC').catch(() => [[]]),
+          db.query('SELECT * FROM imported_leads ORDER BY createdAt DESC').catch(() => [[]])
+        ]);
+
+        return res.json({
+          popupApoio,
+          materialCampaign,
+          ninaCampaign,
+          citizens,
+          petitions,
+          contraMausTratos,
+          jogoUsers,
+          importedLeads
+        });
+      }
+
+      return res.json({
+        popupApoio: popupApoioData,
+        materialCampaign: materialData,
+        ninaCampaign: ninapassadoreData,
+        citizens: citizensData,
+        petitions: petitionsData,
+        contraMausTratos: contraMausTratosData,
+        jogoUsers: [],
+        importedLeads: importedLeadsData
+      });
+    } catch (err) {
+      console.error("Error in /api/leads/consolidated:", err);
+      return res.status(500).json({ error: "Erro ao consolidar leads" });
+    }
   });
 
 

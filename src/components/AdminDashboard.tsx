@@ -10,7 +10,8 @@ import {
   Gamepad2, 
   FileText, 
   LogOut, 
-  ShieldCheck 
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -19,14 +20,15 @@ import { MaterialCampanhaTab } from './admin/MaterialCampanhaTab';
 import { MaterialDobradaTab } from './admin/MaterialDobradaTab';
 import { JogoTab } from './admin/JogoTab';
 import { ProtocolosTab } from './admin/ProtocolosTab';
+import { CentralLeadsTab } from './admin/CentralLeadsTab';
 
-export type AdminTab = 'APOIO' | 'MATERIAL' | 'MATERIAL_DOBRADA' | 'JOGO' | 'PROTOCOLOS';
+export type AdminTab = 'LEADS' | 'APOIO' | 'MATERIAL' | 'MATERIAL_DOBRADA' | 'JOGO' | 'PROTOCOLOS';
 
 export const AdminDashboard: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<AdminTab>('APOIO');
+  const [activeTab, setActiveTab] = useState<AdminTab>('LEADS');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -114,6 +116,14 @@ export const AdminDashboard: React.FC = () => {
   }
 
   const tabsConfig = [
+    {
+      id: 'LEADS' as AdminTab,
+      label: 'Central de Leads',
+      subtitle: 'Visão 360º Consolidada',
+      icon: Users,
+      activeColor: 'bg-blue-600 text-white shadow-md shadow-blue-500/20',
+      tagColor: 'bg-blue-100 text-blue-700'
+    },
     {
       id: 'APOIO' as AdminTab,
       label: 'Apoio',
@@ -249,6 +259,10 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Conteúdo Dinâmico da Aba Selecionada */}
         <div className="transition-opacity duration-200">
+          {activeTab === 'LEADS' && (
+            <CentralLeadsTab refreshTrigger={refreshTrigger} />
+          )}
+
           {activeTab === 'APOIO' && (
             <ApoioTab refreshTrigger={refreshTrigger} />
           )}

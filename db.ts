@@ -178,6 +178,25 @@ export async function getDbConnection() {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS imported_leads (
+        id VARCHAR(255) PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        whatsapp VARCHAR(255),
+        email VARCHAR(255),
+        cep VARCHAR(20),
+        endereco TEXT,
+        numero VARCHAR(50),
+        complemento VARCHAR(255),
+        bairro VARCHAR(255),
+        cidade VARCHAR(255),
+        estado VARCHAR(2),
+        campanha VARCHAR(255) NOT NULL,
+        origem VARCHAR(255) DEFAULT 'Importação CSV',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     try {
       await pool.query(`ALTER TABLE material_campaign ADD COLUMN adesivoPerfurado BOOLEAN DEFAULT false`);
     } catch (e) {
