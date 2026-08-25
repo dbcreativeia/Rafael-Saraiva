@@ -97,6 +97,29 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.post('/api/material/batch-delete', async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Nenhum ID fornecido" });
+    }
+    if (db) {
+      try {
+        const placeholders = ids.map(() => '?').join(',');
+        await db.query(`DELETE FROM material_campaign WHERE id IN (${placeholders})`, ids);
+        return res.json({ success: true, count: ids.length });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const idSet = new Set(ids);
+    for (let i = materialData.length - 1; i >= 0; i--) {
+      if (idSet.has(materialData[i].id)) {
+        materialData.splice(i, 1);
+      }
+    }
+    res.json({ success: true, count: ids.length });
+  });
+
   app.get('/api/ninapassadore', async (req, res) => {
     if (db) {
       try {
@@ -153,6 +176,29 @@ async function startServer() {
     const idx = ninapassadoreData.findIndex(p => p.id === id);
     if (idx !== -1) ninapassadoreData.splice(idx, 1);
     res.json({ success: true });
+  });
+
+  app.post('/api/ninapassadore/batch-delete', async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Nenhum ID fornecido" });
+    }
+    if (db) {
+      try {
+        const placeholders = ids.map(() => '?').join(',');
+        await db.query(`DELETE FROM ninapassadore_campaign WHERE id IN (${placeholders})`, ids);
+        return res.json({ success: true, count: ids.length });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    const idSet = new Set(ids);
+    for (let i = ninapassadoreData.length - 1; i >= 0; i--) {
+      if (idSet.has(ninapassadoreData[i].id)) {
+        ninapassadoreData.splice(i, 1);
+      }
+    }
+    res.json({ success: true, count: ids.length });
   });
 
   // API routing for petitions

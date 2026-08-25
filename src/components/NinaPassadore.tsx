@@ -34,6 +34,30 @@ export const NinaPassadore = () => {
   const formRef = React.useRef<HTMLFormElement>(null);
   const successRef = React.useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem('rafael_saraiva_user_profile');
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile);
+        setFormData(prev => ({
+          ...prev,
+          nome: prev.nome || profile.nome || '',
+          sobrenome: prev.sobrenome || profile.sobrenome || '',
+          whatsapp: prev.whatsapp || profile.whatsapp || '',
+          email: prev.email || profile.email || '',
+          cep: prev.cep || profile.cep || '',
+          endereco: prev.endereco || profile.endereco || '',
+          bairro: prev.bairro || profile.bairro || '',
+          cidade: prev.cidade || profile.cidade || 'São Paulo',
+          estado: prev.estado || profile.estado || 'SP'
+        }));
+        setLgpdAccepted(true);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar perfil salvo:', e);
+    }
+  }, []);
+
   const handleTipoMaterialSelect = (tipo: 'impresso' | 'digital' | 'foto') => {
     setTipoMaterial(tipo);
     setTimeout(() => {
@@ -187,6 +211,24 @@ export const NinaPassadore = () => {
       
       const data = await response.json();
       if (data.success) {
+        try {
+          const profile = {
+            nome: formData.nome,
+            sobrenome: formData.sobrenome,
+            nomeCompleto: `${formData.nome} ${formData.sobrenome}`.trim(),
+            whatsapp: formData.whatsapp,
+            email: formData.email,
+            cep: formData.cep,
+            endereco: formData.endereco,
+            bairro: formData.bairro,
+            cidade: formData.cidade,
+            estado: formData.estado
+          };
+          localStorage.setItem('rafael_saraiva_user_profile', JSON.stringify(profile));
+        } catch (e) {
+          console.warn('Erro ao salvar perfil local:', e);
+        }
+
         setIsSubmitted(true);
         trackEvent('Lead');
         trackEvent('Lead_NinaPassadore');

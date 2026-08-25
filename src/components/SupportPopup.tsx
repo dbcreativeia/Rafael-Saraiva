@@ -18,6 +18,7 @@ export const SupportPopup: React.FC = () => {
   const [cepError, setCepError] = useState('');
   
   const [autorizoDados, setAutorizoDados] = useState(false);
+  const [autoPreenchido, setAutoPreenchido] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,22 +26,102 @@ export const SupportPopup: React.FC = () => {
 
   const location = useLocation();
 
+  // Carregar dados previamente preenchidos em qualquer formulário do site
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem('rafael_saraiva_user_profile');
+      const savedJogo = localStorage.getItem('jogo_user_v3');
+      
+      let profile: any = null;
+      if (savedProfile) {
+        profile = JSON.parse(savedProfile);
+      } else if (savedJogo) {
+        profile = JSON.parse(savedJogo);
+      }
+
+      if (profile) {
+        const fullNome = profile.nomeCompleto || (profile.nome ? `${profile.nome} ${profile.sobrenome || ''}`.trim() : '');
+        if (fullNome) setNome(fullNome);
+        if (profile.whatsapp) setWhatsapp(formatPhone(profile.whatsapp));
+        if (profile.email) setEmail(profile.email);
+        if (profile.cep) {
+          const formattedCep = formatCEP(profile.cep);
+          setCep(formattedCep);
+          setCepValid(true);
+        }
+        if (profile.endereco) setEndereco(profile.endereco);
+        if (profile.bairro) setBairro(profile.bairro);
+        if (profile.cidade) setCidade(profile.cidade);
+        setAutorizoDados(true);
+        setAutoPreenchido(true);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar dados salvos no popup:', e);
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     // Não exibir dentro do painel administrativo ou na página do jogo
     if (location.pathname === '/jogo' || location.pathname === '/admin' || location.hash === '#admin') return;
 
-    // Verificar se a pessoa já preencheu
+    // Verificar se a pessoa já preencheu ou já fechou na sessão atual
     const hasSubmitted = localStorage.getItem('popup_apoio_submitted');
-    if (hasSubmitted === 'true') {
+    const hasDismissed = sessionStorage.getItem('popup_apoio_dismissed');
+    if (hasSubmitted === 'true' || hasDismissed === 'true') {
       return;
     }
 
-    // Exibir o popup após um breve intervalo ao entrar no site
-    const timer = setTimeout(() => {
-      setIsOpen(true);
-    }, 1000);
+    let triggered = false;
 
-    return () => clearTimeout(timer);
+    const triggerPopup = () => {
+      if (triggered) return;
+      const isSub = localStorage.getItem('popup_apoio_submitted');
+      const isDism = sessionStorage.getItem('popup_apoio_dismissed');
+      if (isSub === 'true' || isDism === 'true') return;
+
+      triggered = true;
+      setIsOpen(true);
+    };
+
+    // 1. Detecção de intenção de saída no Desktop (Cursor do mouse se movendo para fora do topo da janela)
+    const handleMouseLeave = (e: MouseEvent) => {
+      // Quando o cursor sobe para a barra de navegação/fechar aba
+      if (e.clientY <= 25 || e.clientY === 0 || !e.relatedTarget) {
+        triggerPopup();
+      }
+    };
+
+    // 2. Detecção no Mobile e Desktop: Scroll rápido para cima após navegar na página
+    let lastScrollY = window.scrollY;
+    let maxScrollY = window.scrollY;
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > maxScrollY) {
+        maxScrollY = currentScrollY;
+      }
+      // Se rolou pelo menos 400px para baixo e agora subiu rapidamente mais de 150px
+      if (maxScrollY > 400 && lastScrollY - currentScrollY > 150) {
+        triggerPopup();
+      }
+      lastScrollY = currentScrollY;
+    };
+
+    // 3. Detecção de mudança de aba / visibilidade (quando o usuário vai trocar de aba/sair)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && maxScrollY > 200) {
+        triggerPopup();
+      }
+    };
+
+    document.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [location.hash, location.pathname]);
 
   const formatPhone = (val: string) => {
@@ -206,6 +287,7 @@ export const SupportPopup: React.FC = () => {
   };
 
   const handleClose = () => {
+    sessionStorage.setItem('popup_apoio_dismissed', 'true');
     setIsOpen(false);
   };
 
@@ -280,6 +362,13 @@ export const SupportPopup: React.FC = () => {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                {autoPreenchido && !error && (
+                  <div className="bg-orange-50 border border-orange-200 text-orange-800 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#FF5500] shrink-0" />
+                    <span>Seus dados foram preenchidos automaticamente com base no seu cadastro anterior no site.</span>
+                  </div>
+                )}
+
                 {error && (
                   <div className="bg-red-50 border-l-4 border-red-500 p-3.5 rounded-r-xl flex items-start gap-3 text-red-700 text-sm font-medium">
                     <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

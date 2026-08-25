@@ -53,6 +53,25 @@ export const Jogo = () => {
     const saved = localStorage.getItem('jogo_user_v3');
     if (saved) {
       setLoggedUser(JSON.parse(saved));
+    } else {
+      try {
+        const savedProfile = localStorage.getItem('rafael_saraiva_user_profile');
+        if (savedProfile) {
+          const profile = JSON.parse(savedProfile);
+          const nomeFull = profile.nomeCompleto || `${profile.nome || ''} ${profile.sobrenome || ''}`.trim();
+          setAuthForm(prev => ({
+            ...prev,
+            nomeCompleto: prev.nomeCompleto || nomeFull || '',
+            whatsapp: prev.whatsapp || profile.whatsapp || '',
+            email: prev.email || profile.email || '',
+            cep: prev.cep || profile.cep || '',
+            cidade: prev.cidade || profile.cidade || '',
+            estado: prev.estado || profile.estado || ''
+          }));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar dados no jogo:', e);
+      }
     }
 
     // Track PageView
@@ -165,6 +184,22 @@ export const Jogo = () => {
       const data = await res.json();
       if (data.success) {
         localStorage.setItem('jogo_user_v3', JSON.stringify(data.data));
+        try {
+          const nameParts = (authForm.nomeCompleto || '').trim().split(/\s+/);
+          const profile = {
+            nome: nameParts[0] || '',
+            sobrenome: nameParts.slice(1).join(' ') || '',
+            nomeCompleto: (authForm.nomeCompleto || '').trim(),
+            whatsapp: authForm.whatsapp,
+            email: authForm.email,
+            cep: authForm.cep,
+            cidade: authForm.cidade,
+            estado: authForm.estado
+          };
+          localStorage.setItem('rafael_saraiva_user_profile', JSON.stringify(profile));
+        } catch (e) {
+          console.warn('Erro ao salvar perfil no jogo:', e);
+        }
         setLoggedUser(data.data);
         setCurrentView('INSTRUCTIONS');
         

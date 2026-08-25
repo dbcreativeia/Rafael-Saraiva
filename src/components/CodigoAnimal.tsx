@@ -67,6 +67,41 @@ export const CodigoAnimal = () => {
         console.warn("API request failed:", err);
         setLoadingCities(false);
       });
+
+    // Auto-preenchimento caso já tenha preenchido outro formulário
+    try {
+      const savedProfile = localStorage.getItem('rafael_saraiva_user_profile');
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile);
+        const nomeFull = profile.nomeCompleto || `${profile.nome || ''} ${profile.sobrenome || ''}`.trim();
+        if (nomeFull) {
+          setCitizenFormData(prev => ({
+            ...prev,
+            nome: prev.nome || nomeFull,
+            whatsapp: prev.whatsapp || profile.whatsapp || '',
+            email: prev.email || profile.email || '',
+            cep: prev.cep || profile.cep || '',
+            endereco: prev.endereco || profile.endereco || '',
+            bairro: prev.bairro || profile.bairro || '',
+            cidade: prev.cidade || profile.cidade || '',
+            estado: prev.estado || profile.estado || ''
+          }));
+          setPetitionFormData(prev => ({
+            ...prev,
+            nome: prev.nome || nomeFull,
+            whatsapp: prev.whatsapp || profile.whatsapp || '',
+            email: prev.email || profile.email || '',
+            cep: prev.cep || profile.cep || '',
+            endereco: prev.endereco || profile.endereco || '',
+            bairro: prev.bairro || profile.bairro || '',
+            cidade: prev.cidade || profile.cidade || '',
+            estado: prev.estado || profile.estado || ''
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao carregar perfil salvo:", e);
+    }
   }, []);
 
   // States for city search
@@ -91,6 +126,25 @@ export const CodigoAnimal = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(citizenFormData)
       });
+
+      try {
+        const nameParts = (citizenFormData.nome || '').trim().split(/\s+/);
+        const profile = {
+          nome: nameParts[0] || '',
+          sobrenome: nameParts.slice(1).join(' ') || '',
+          nomeCompleto: (citizenFormData.nome || '').trim(),
+          whatsapp: citizenFormData.whatsapp,
+          email: citizenFormData.email,
+          cep: citizenFormData.cep,
+          endereco: citizenFormData.endereco,
+          bairro: citizenFormData.bairro,
+          cidade: citizenFormData.cidade,
+          estado: citizenFormData.estado
+        };
+        localStorage.setItem('rafael_saraiva_user_profile', JSON.stringify(profile));
+      } catch (e) {
+        console.warn('Erro ao salvar perfil local:', e);
+      }
     } catch (err) {
       console.warn("API request failed:", err);
     }
@@ -114,6 +168,25 @@ export const CodigoAnimal = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(petitionFormData)
       });
+
+      try {
+        const nameParts = (petitionFormData.nome || '').trim().split(/\s+/);
+        const profile = {
+          nome: nameParts[0] || '',
+          sobrenome: nameParts.slice(1).join(' ') || '',
+          nomeCompleto: (petitionFormData.nome || '').trim(),
+          whatsapp: petitionFormData.whatsapp,
+          email: petitionFormData.email,
+          cep: petitionFormData.cep,
+          endereco: petitionFormData.endereco,
+          bairro: petitionFormData.bairro,
+          cidade: petitionFormData.cidade,
+          estado: petitionFormData.estado
+        };
+        localStorage.setItem('rafael_saraiva_user_profile', JSON.stringify(profile));
+      } catch (e) {
+        console.warn('Erro ao salvar perfil local:', e);
+      }
     } catch (err) {
       console.warn("API request failed:", err);
     }
