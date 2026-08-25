@@ -485,6 +485,7 @@ async function startServer() {
     const campaignName = campanha.trim();
     const insertedRecords: any[] = [];
 
+    const valuesArray = [];
     for (const item of leads) {
       const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
       const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -505,38 +506,43 @@ async function startServer() {
         createdAt
       };
 
-      if (db) {
-        try {
-          await db.query(
-            `INSERT INTO imported_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, origem, createdAt)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              record.id,
-              record.nome,
-              record.whatsapp,
-              record.email,
-              record.cep,
-              record.endereco,
-              record.numero,
-              record.complemento,
-              record.bairro,
-              record.cidade,
-              record.estado,
-              record.campanha,
-              record.origem,
-              record.createdAt
-            ]
-          );
-        } catch (e) {
-          console.error("Erro ao inserir lead importado:", e);
-        }
-      } else {
+      if (!db) {
         importedLeadsData.push(record);
       }
       insertedRecords.push(record);
+
+      valuesArray.push([
+        record.id,
+        record.nome,
+        record.whatsapp,
+        record.email,
+        record.cep,
+        record.endereco,
+        record.numero,
+        record.complemento,
+        record.bairro,
+        record.cidade,
+        record.estado,
+        record.campanha,
+        record.origem,
+        record.createdAt
+      ]);
     }
-    
-    if (!db) {
+
+    if (db && valuesArray.length > 0) {
+      try {
+        const CHUNK_SIZE = 1000;
+        for (let i = 0; i < valuesArray.length; i += CHUNK_SIZE) {
+          const chunk = valuesArray.slice(i, i + CHUNK_SIZE);
+          await db.query(
+            `INSERT INTO imported_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, origem, createdAt) VALUES ?`,
+            [chunk]
+          );
+        }
+      } catch (e) {
+        console.error("Erro ao inserir leads importados em lote:", e);
+      }
+    } else if (!db) {
       saveImportedLeadsToDisk();
     }
 
@@ -545,6 +551,58 @@ async function startServer() {
       count: insertedRecords.length,
       campanha: campaignName
     });
+  });
+
+
+  app.get('/api/imported-leads/campaigns', async (req, res) => {
+    if (db) {
+      try {
+        const [rows] = await db.query('SELECT campanha, COUNT(*) as count, MAX(createdAt) as lastImport FROM imported_leads GROUP BY campanha ORDER BY lastImport DESC');
+        return res.json(rows);
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    
+    // In-memory fallback
+    const campaignsMap = new Map();
+    importedLeadsData.forEach(lead => {
+      if (!campaignsMap.has(lead.campanha)) {
+        campaignsMap.set(lead.campanha, { count: 0, lastImport: lead.createdAt });
+      }
+      const c = campaignsMap.get(lead.campanha);
+      c.count += 1;
+      if (new Date(lead.createdAt) > new Date(c.lastImport)) {
+        c.lastImport = lead.createdAt;
+      }
+    });
+    const result = Array.from(campaignsMap.entries()).map(([campanha, data]) => ({
+      campanha,
+      count: data.count,
+      lastImport: data.lastImport
+    }));
+    return res.json(result);
+  });
+
+  app.delete('/api/imported-leads/campaign/:campaignName', async (req, res) => {
+    const campaignName = req.params.campaignName;
+    if (db) {
+      try {
+        await db.query('DELETE FROM imported_leads WHERE campanha = ?', [campaignName]);
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: "DB erro" });
+      }
+    }
+    
+    const initialLength = importedLeadsData.length;
+    // In-memory fallback
+    const filtered = importedLeadsData.filter(lead => lead.campanha !== campaignName);
+    importedLeadsData.length = 0;
+    importedLeadsData.push(...filtered);
+    saveImportedLeadsToDisk();
+    
+    res.json({ success: true, deleted: initialLength - importedLeadsData.length });
   });
 
   app.delete('/api/imported-leads/:id', async (req, res) => {

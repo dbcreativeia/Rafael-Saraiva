@@ -4,6 +4,8 @@ import {
   RefreshCw, 
   Download, 
   Upload,
+  Database,
+  Trash2,
   FileSpreadsheet,
   Filter, 
   Users, 
@@ -82,6 +84,20 @@ interface CentralLeadsTabProps {
   refreshTrigger?: number;
 }
 
+const SYSTEM_FIELDS = [
+  { id: 'nome', label: 'Nome Completo', aliases: ['nome completo', 'full name', 'nomecompleto', 'nome', 'name', 'contato', 'lead', 'apoiador', 'primeiro nome'] },
+  { id: 'sobrenome', label: 'Sobrenome', aliases: ['sobrenome', 'last name', 'segundo nome'] },
+  { id: 'whatsapp', label: 'WhatsApp / Celular', aliases: ['whatsapp', 'whats', 'celular', 'telefone', 'phone', 'tel', 'fone', 'mobile', 'contato'] },
+  { id: 'email', label: 'E-mail', aliases: ['email', 'e-mail', 'mail', 'correio'] },
+  { id: 'cep', label: 'CEP', aliases: ['cep', 'zip', 'zipcode', 'codigo postal', 'postal'] },
+  { id: 'estado', label: 'Estado (UF)', aliases: ['estado', 'state', 'uf'] },
+  { id: 'cidade', label: 'Cidade', aliases: ['cidade', 'city', 'municipio', 'município'] },
+  { id: 'endereco', label: 'Endereço / Rua', aliases: ['endereco', 'endereço', 'rua', 'logradouro', 'address', 'street'] },
+  { id: 'numero', label: 'Número', aliases: ['numero', 'número', 'num', 'number'] },
+  { id: 'complemento', label: 'Complemento', aliases: ['complemento', 'comp', 'complement'] },
+  { id: 'bairro', label: 'Bairro', aliases: ['bairro', 'neighborhood', 'distrito'] },
+];
+
 export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState<'LIST' | 'HEATMAP'>('LIST');
@@ -123,11 +139,20 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [selectedLead, setSelectedLead] = useState<ConsolidatedLead | null>(null);
 
   // CSV Upload Modal State
+
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isManageBasesModalOpen, setIsManageBasesModalOpen] = useState(false);
+  const [importedBases, setImportedBases] = useState<any[]>([]);
+  const [isDeletingBase, setIsDeletingBase] = useState('');
+  const [confirmDeleteBase, setConfirmDeleteBase] = useState('');
+
   const [campaignInput, setCampaignInput] = useState('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvFileName, setCsvFileName] = useState('');
   const [parsedCsvLeads, setParsedCsvLeads] = useState<any[]>([]);
+  const [csvMappedHeaders, setCsvMappedHeaders] = useState<{systemFieldId: string; originalHeader: string | null}[]>([]);
+  const [csvRawRows, setCsvRawRows] = useState<any[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccessMessage, setUploadSuccessMessage] = useState('');
@@ -206,6 +231,59 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     }
   };
 
+  
+  const generateParsedLeads = (rows: any[], mapping: any[]) => {
+    const getMapVal = (mappingList: any[], row: any, sysField: string) => {
+      const m = mappingList.find((x: any) => x.systemFieldId === sysField);
+      if (m && m.originalHeader && row[m.originalHeader] !== undefined && row[m.originalHeader] !== null && String(row[m.originalHeader]).trim() !== '') {
+        return String(row[m.originalHeader]).trim();
+      }
+      return '';
+    };
+
+    const list = rows.map((row) => {
+      const nome = getMapVal(mapping, row, 'nome');
+      const sobrenome = getMapVal(mapping, row, 'sobrenome');
+      const finalName = sobrenome ? `${nome} ${sobrenome}`.trim() : nome;
+
+      const whatsapp = getMapVal(mapping, row, 'whatsapp');
+      const email = getMapVal(mapping, row, 'email');
+      const cep = getMapVal(mapping, row, 'cep') || '';
+      const deducedState = getStateFromCep(cep);
+      const estado = normalizeState(getMapVal(mapping, row, 'estado'), deducedState);
+      const cidade = getIbgeCityName(getMapVal(mapping, row, 'cidade'), estado, cep);
+      const endereco = getMapVal(mapping, row, 'endereco');
+      const numero = getMapVal(mapping, row, 'numero');
+      const complemento = getMapVal(mapping, row, 'complemento');
+      const bairro = getMapVal(mapping, row, 'bairro');
+
+      return {
+        nome: finalName || 'Apoiador Importado',
+        whatsapp,
+        email,
+        cidade: cidade.trim(),
+        estado: estado.trim() || 'SP',
+        cep,
+        endereco,
+        numero,
+        complemento,
+        bairro
+      };
+    }).filter((item: any) => item.nome !== 'Apoiador Importado' || item.whatsapp || item.email);
+    
+    setParsedCsvLeads(list);
+  };
+
+  const handleHeaderMappingChange = (systemFieldId: string, newOriginalHeader: string) => {
+    const newMapping = csvMappedHeaders.map(m => 
+      m.systemFieldId === systemFieldId 
+        ? { ...m, originalHeader: newOriginalHeader === '' ? null : newOriginalHeader }
+        : m
+    );
+    setCsvMappedHeaders(newMapping);
+    generateParsedLeads(csvRawRows, newMapping);
+  };
+
   const handleProcessCsvFile = (file: File) => {
     setUploadError('');
     setUploadSuccessMessage('');
@@ -225,6 +303,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         if (!data || data.byteLength === 0) {
           setUploadError('O arquivo selecionado está vazio.');
           setParsedCsvLeads([]);
+                    setCsvMappedHeaders([]);
           return;
         }
 
@@ -237,76 +316,32 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         if (!rows || rows.length === 0) {
           setUploadError('Não foram encontradas linhas de dados no arquivo.');
           setParsedCsvLeads([]);
+                    setCsvMappedHeaders([]);
           return;
         }
 
-        // Intelligently map column names from any CSV source
-        const normalizedList = rows.map((row) => {
-          const findValue = (aliases: string[]) => {
-            const keys = Object.keys(row);
-            for (const key of keys) {
-              const cleanKey = key
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9]/g, '')
-                .trim();
+        const headers = Object.keys(rows[0] || {});
+        setCsvHeaders(headers);
+        setCsvRawRows(rows);
 
-              for (const alias of aliases) {
-                const cleanAlias = alias
-                  .toLowerCase()
-                  .normalize('NFD')
-                  .replace(/[\u0300-\u036f]/g, '')
-                  .replace(/[^a-z0-9]/g, '')
-                  .trim();
-
-                if (cleanKey === cleanAlias || cleanKey.includes(cleanAlias)) {
-                  const val = row[key];
-                  if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    return String(val).trim();
-                  }
-                }
+        const initialMapping = SYSTEM_FIELDS.map(field => {
+          let matchedHeader: string | null = null;
+          for (const header of headers) {
+            const cleanHeader = header.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim();
+            for (const alias of field.aliases) {
+              const cleanAlias = alias.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim();
+              if (cleanHeader === cleanAlias || cleanHeader.includes(cleanAlias)) {
+                matchedHeader = header;
+                break;
               }
             }
-            return '';
-          };
+            if (matchedHeader) break;
+          }
+          return { systemFieldId: field.id, originalHeader: matchedHeader };
+        });
 
-          const nome = findValue(['nome completo', 'full name', 'nomecompleto', 'nome', 'name', 'contato', 'lead', 'apoiador', 'primeiro nome']);
-          const sobrenome = findValue(['sobrenome', 'last name', 'segundo nome']);
-          const finalName = sobrenome ? `${nome} ${sobrenome}`.trim() : nome;
-
-          const whatsapp = findValue(['whatsapp', 'whats', 'celular', 'telefone', 'phone', 'tel', 'fone', 'mobile', 'contato']);
-          const email = findValue(['email', 'e-mail', 'mail', 'correio']);
-          const cep = findValue(['cep', 'zip', 'zipcode', 'codigo postal', 'postal']) || '';
-          const deducedState = getStateFromCep(cep);
-          const estado = normalizeState(findValue(['estado', 'state', 'uf']), deducedState);
-          const cidade = getIbgeCityName(findValue(['cidade', 'city', 'municipio', 'município']), estado, cep);
-          const endereco = findValue(['endereco', 'endereço', 'rua', 'logradouro', 'address', 'street']);
-          const numero = findValue(['numero', 'número', 'num', 'number']);
-          const complemento = findValue(['complemento', 'comp', 'complement']);
-          const bairro = findValue(['bairro', 'neighborhood', 'distrito']);
-
-          return {
-            nome: finalName || 'Apoiador Importado',
-            whatsapp,
-            email,
-            cidade: cidade.trim(),
-            estado: estado.trim() || 'SP',
-            cep,
-            endereco,
-            numero,
-            complemento,
-            bairro
-          };
-        }).filter(item => item.nome || item.whatsapp || item.email);
-
-        if (normalizedList.length === 0) {
-          setUploadError('Nenhum registro com nome, WhatsApp ou e-mail válido foi encontrado no CSV.');
-          setParsedCsvLeads([]);
-          return;
-        }
-
-        setParsedCsvLeads(normalizedList);
+        setCsvMappedHeaders(initialMapping);
+        generateParsedLeads(rows, initialMapping);
       } catch (err) {
         console.error('Erro ao processar arquivo:', err);
         setUploadError('Erro ao ler a formatação do arquivo. Verifique o arquivo enviado.');
@@ -357,8 +392,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           setIsUploadModalOpen(false);
           setUploadSuccessMessage('');
           setParsedCsvLeads([]);
+                    setCsvMappedHeaders([]);
           setCsvFile(null);
           setCsvFileName('');
+          setCsvRawRows([]);
+          setCsvHeaders([]);
           setCampaignInput('');
         }, 1800);
       } else {
@@ -377,7 +415,39 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   }, [refreshTrigger]);
 
   // Helpers for normalization & deduplication
+
+  const fetchImportedBases = async () => {
+    try {
+      const res = await fetch('/api/imported-leads/campaigns');
+      if (res.ok) {
+        const data = await res.json();
+        setImportedBases(data);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar bases importadas:', err);
+    }
+  };
+
+  const handleDeleteBase = async (campaignName: string) => {
+    setIsDeletingBase(campaignName);
+    try {
+      const res = await fetch(`/api/imported-leads/campaign/${encodeURIComponent(campaignName)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        await fetchImportedBases();
+        fetchAllLeads(); // Atualiza os leads consolidados
+        setConfirmDeleteBase('');
+      }
+    } catch (err) {
+      console.error('Erro ao excluir base:', err);
+    } finally {
+      setIsDeletingBase('');
+    }
+  };
+
   const normalizePhone = (phone?: string) => {
+
     if (!phone) return '';
     let digits = phone.replace(/\D/g, '');
     if (digits.startsWith('55') && digits.length >= 12) {
@@ -3846,14 +3916,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={fetchAllLeads}
-              disabled={loading}
-              className="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-bold py-2.5 px-4 rounded-xl border border-white/20 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer shadow-sm"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-300' : ''}`} />
-              <span>{loading ? 'Atualizando...' : 'Sincronizar'}</span>
-            </button>
 
             <button
               onClick={() => {
@@ -3866,6 +3928,18 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               <Upload className="w-4 h-4" />
               <span>Importar Base (.CSV/.XLSX)</span>
             </button>
+
+            <button
+              onClick={() => {
+                fetchImportedBases();
+                setIsManageBasesModalOpen(true);
+              }}
+              className="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-slate-900/40 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer border border-slate-500/40"
+            >
+              <Database className="w-4 h-4" />
+              <span>Gerenciar Bases</span>
+            </button>
+
 
             
             <button
@@ -4733,7 +4807,99 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         </div>
       )}
 
+      
+      {/* MODAL DE GERENCIAMENTO DE BASES */}
+      {isManageBasesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 text-white relative">
+              <button
+                onClick={() => setIsManageBasesModalOpen(false)}
+                className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-500/20 border border-slate-400/30 flex items-center justify-center text-slate-300">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white">
+                    Gerenciar Bases Importadas
+                  </h2>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Visualize e exclua lotes de contatos importados manualmente.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 bg-gray-50/50">
+              {importedBases.length === 0 ? (
+                <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-gray-300">
+                  <Database className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 font-medium text-sm">Nenhuma base importada encontrada.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {importedBases.map((base, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between gap-4">
+                      <div>
+                        <h4 className="font-black text-gray-800">{base.campanha}</h4>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" />
+                            {base.count} leads
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(base.lastImport).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                      </div>
+                      {confirmDeleteBase === base.campanha ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-red-600 font-bold hidden sm:inline">Excluir tudo?</span>
+                          <button
+                            onClick={() => handleDeleteBase(base.campanha)}
+                            disabled={isDeletingBase === base.campanha}
+                            className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-colors flex items-center gap-1"
+                          >
+                            {isDeletingBase === base.campanha ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Sim'}
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteBase('')}
+                            disabled={isDeletingBase === base.campanha}
+                            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteBase(base.campanha)}
+                          className="p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors border border-red-100"
+                          title="Excluir Base Inteira"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE UPLOAD DE CSV */}
+
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200">
@@ -4747,8 +4913,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     setUploadError('');
                     setUploadSuccessMessage('');
                     setParsedCsvLeads([]);
+                    setCsvMappedHeaders([]);
                     setCsvFile(null);
-                    setCsvFileName('');
+          setCsvFileName('');
+          setCsvRawRows([]);
+          setCsvHeaders([]);
                   }
                 }}
                 className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors cursor-pointer"
@@ -4915,6 +5084,49 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 </div>
               </div>
 
+              
+              {/* Confirmação de Mapeamento de Colunas */}
+              {csvMappedHeaders.length > 0 && (
+                <div className="space-y-3 pt-4 border-t border-gray-100">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">2</span>
+                    Verificação e Mapeamento de Colunas
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Analise e ajuste as correspondências entre as colunas da sua planilha e os campos do sistema:
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {csvMappedHeaders.map((mapping, idx) => {
+                      const sysField = SYSTEM_FIELDS.find(f => f.id === mapping.systemFieldId);
+                      return (
+                        <div key={idx} className={`p-3 rounded-xl border flex flex-col gap-1 text-xs ${mapping.originalHeader ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-gray-700">{sysField?.label}</span>
+                            {mapping.originalHeader ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            ) : (
+                              <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">Vazio</span>
+                            )}
+                          </div>
+                          
+                          <select 
+                            value={mapping.originalHeader || ''}
+                            onChange={(e) => handleHeaderMappingChange(mapping.systemFieldId, e.target.value)}
+                            className="mt-1 w-full bg-white border border-gray-300 rounded-lg text-xs p-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">-- Não importar --</option>
+                            {csvHeaders.map(h => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Prévia dos Dados */}
               {parsedCsvLeads.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-gray-100">
@@ -4964,8 +5176,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     setUploadError('');
                     setUploadSuccessMessage('');
                     setParsedCsvLeads([]);
+                    setCsvMappedHeaders([]);
                     setCsvFile(null);
-                    setCsvFileName('');
+          setCsvFileName('');
+          setCsvRawRows([]);
+          setCsvHeaders([]);
                   }
                 }}
                 disabled={isUploading}
