@@ -3639,19 +3639,24 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const cityData = cityMap[munNorm];
 
       if (cityData && cityData.count > 0) {
-        // Color scale for heatmap
-        let densityColor = '#3B82F6'; // Blue for 1
-        if (cityData.count >= 20) {
-          densityColor = '#DC2626'; // Red intense
-        } else if (cityData.count >= 10) {
-          densityColor = '#EA580C'; // Orange fire
-        } else if (cityData.count >= 5) {
-          densityColor = '#F59E0B'; // Amber warm
-        } else if (cityData.count >= 2) {
-          densityColor = '#8B5CF6'; // Purple medium
+        // Escala de cor hiper-segmentada baseada na distribuição real do Estado de SP
+        let densityColor = '#3B82F6'; // Azul (Cidades muito pequenas: 1 a 14)
+        if (cityData.count >= 5000) {
+          densityColor = '#450A0A'; // Vinho Escuro (Exclusivo para a Capital / Anomalias massivas)
+        } else if (cityData.count >= 800) {
+          densityColor = '#7F1D1D'; // Vermelho Escuro (Mega-Cidades ex: Guarulhos, Campinas)
+        } else if (cityData.count >= 400) {
+          densityColor = '#DC2626'; // Vermelho (Polos Regionais ex: Sorocaba, SJC, Ribeirão Preto, ABC)
+        } else if (cityData.count >= 150) {
+          densityColor = '#EA580C'; // Laranja (Cidades Médias-Grandes)
+        } else if (cityData.count >= 50) {
+          densityColor = '#F59E0B'; // Amarelo (Cidades Médias)
+        } else if (cityData.count >= 15) {
+          densityColor = '#8B5CF6'; // Roxo (Cidades Pequenas-Médias)
         }
 
-        const radius = Math.min(36, Math.max(7, Math.sqrt(cityData.count) * 6.5));
+        // Crescimento logarítmico calibrado (Raio máximo ligeiramente menor para evitar sobreposição na Grande SP)
+        const radius = Math.min(38, Math.max(5, Math.log10(cityData.count + 1) * 10));
 
         points.push({
           lat: mun.latitude,
@@ -4027,8 +4032,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     pathOptions={{
                       color: pt.densityColor,
                       fillColor: pt.densityColor,
-                      fillOpacity: 0.65,
-                      weight: 2
+                      fillOpacity: 0.55,
+                      weight: 1
                     }}
                   >
                     <Tooltip>
