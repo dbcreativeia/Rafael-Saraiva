@@ -35,7 +35,7 @@ import {
   Check
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 export interface LeadAction {
@@ -100,7 +100,7 @@ const SYSTEM_FIELDS = [
 
 export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
-  const [activeView, setActiveView] = useState<'LIST' | 'HEATMAP'>('LIST');
+  const [activeView, setActiveView] = useState<'LIST' | 'HEATMAP' | 'MATERIAL'>('LIST');
 
   // Raw data from sources
   const [rawData, setRawData] = useState<{
@@ -3653,6 +3653,108 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
 
+
+  const physicalMaterials = useMemo(() => {
+    const materialsMap = new Map();
+
+    const normalizePhone = (p) => p ? p.replace(/\D/g, '') : '';
+    const normalizeEmail = (e) => e ? e.toLowerCase().trim() : '';
+    const normalizeNameCity = (n, c) => {
+       const nn = n ? n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
+       const cc = c ? c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
+       return nn && nn.length > 5 ? `${nn}__${cc}` : '';
+    };
+    
+    const processItem = (item, sourceName, requireImpressoField = true) => {
+      if (requireImpressoField && item.tipoMaterial !== 'impresso') return;
+      
+      const phone = normalizePhone(item.whatsapp);
+      const email = normalizeEmail(item.email);
+      const nameCity = normalizeNameCity(item.nome + ' ' + (item.sobrenome || ''), item.cidade);
+      
+      let key = null;
+      if (phone && phone.length >= 8) key = phone;
+      else if (email && email.includes('@')) key = email;
+      else if (nameCity) key = nameCity;
+      else key = `fallback_${Math.random()}`;
+
+      if (materialsMap.has(key)) {
+        const existing = materialsMap.get(key);
+        
+        // Merge sources if different
+        if (existing.source !== sourceName && !existing.source.includes('Ambos')) {
+          if ((existing.source === 'Oficial Rafael' && sourceName === 'Dobrada Nina') || 
+              (existing.source === 'Dobrada Nina' && sourceName === 'Oficial Rafael')) {
+            existing.source = 'Ambos (Rafael + Nina)';
+          } else if (!existing.source.includes(sourceName)) {
+            existing.source = existing.source + ' + ' + sourceName;
+          }
+        }
+        
+        // Merge adesivo perfurado
+        if (item.adesivoPerfurado || (item.campanha && typeof item.campanha === 'string' && item.campanha.toLowerCase().includes('perfurado'))) {
+          existing.adesivoPerfurado = true;
+        }
+        
+        // Merge date (keep most recent)
+        if (new Date(item.createdAt).getTime() > new Date(existing.date).getTime()) {
+          existing.date = item.createdAt;
+        }
+
+      } else {
+        materialsMap.set(key, {
+          ...item,
+          source: sourceName,
+          date: item.createdAt,
+          adesivoPerfurado: !!item.adesivoPerfurado || (item.campanha && typeof item.campanha === 'string' && item.campanha.toLowerCase().includes('perfurado'))
+        });
+      }
+    };
+
+    (rawData.materialCampaign || []).forEach(item => processItem(item, 'Oficial Rafael'));
+    (rawData.ninaCampaign || []).forEach(item => processItem(item, 'Dobrada Nina'));
+    
+    // Process imported leads that indicate physical materials
+    (rawData.importedLeads || []).forEach(item => {
+      const campName = (item.campanha || '').toLowerCase();
+      if (campName.includes('material') || campName.includes('impresso') || campName.includes('físico') || campName.includes('fisico') || campName.includes('adesivo')) {
+        let originName = item.campanha || 'Importação (Material)';
+        if (originName.length > 25) originName = originName.substring(0, 25) + '...';
+        processItem(item, originName, false);
+      }
+    });
+    
+    return Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [rawData.materialCampaign, rawData.ninaCampaign]);
+
+  const handleExportPhysicalMaterials = () => {
+    if (!physicalMaterials || physicalMaterials.length === 0) return;
+
+    const dataToExport = physicalMaterials.map(m => ({
+      'Data Solicitação': new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      'Origem': m.source,
+      'Nome': m.nome,
+      'Sobrenome': m.sobrenome || '',
+      'WhatsApp': m.whatsapp || '',
+      'E-mail': m.email || '',
+      'Adesivo Perfurado': m.adesivoPerfurado ? 'Sim' : 'Não',
+      'Endereço': m.endereco || '',
+      'Número': m.numero || '',
+      'Complemento': m.complemento || '',
+      'Bairro': m.bairro || '',
+      'Cidade': m.cidade || '',
+      'Estado': m.estado || '',
+      'CEP': m.cep || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Materiais_Fisicos");
+
+    XLSX.writeFile(workbook, `exportacao_materiais_fisicos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+
   // Global KPIs
   const totalUniqueLeads = consolidatedLeads.length;
   const totalSubmissions = useMemo(() => {
@@ -4039,12 +4141,19 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             }`}
           >
             <MapIcon className="w-4 h-4" />
-            <span>Mapa de Calor Estado de SP</span>
-            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-              activeView === 'HEATMAP' ? 'bg-red-800 text-white' : 'bg-red-100 text-red-700'
-            }`}>
-              {spHeatmapPoints.length} cidades
-            </span>
+            <span>Mapa de Calor</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('MATERIAL')}
+            className={`py-2 px-4 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeView === 'MATERIAL'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Materiais Físicos</span>
           </button>
         </div>
 
@@ -4123,18 +4232,25 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                             <div className="text-amber-700 font-bold">🔥 {pt.multiCount} Multi-Campanhas</div>
                           )}
                         </div>
+                        <div className="text-[10px] text-gray-400 mt-2 text-center">(Clique para Ver Leads)</div>
+                      </div>
+                    </Tooltip>
+                    <Popup>
+                      <div className="p-1 min-w-[170px]">
+                        <div className="font-black text-gray-900 text-sm">{pt.name} / SP</div>
                         <button
                           onClick={() => {
                             setCidadeFilter(pt.name);
                             setEstadoFilter('SP');
                             setActiveView('LIST');
                           }}
-                          className="mt-2 w-full py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold text-center cursor-pointer shadow-xs"
+                          className="mt-2 w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold text-center cursor-pointer shadow-xs flex items-center justify-center gap-1"
                         >
-                          Ver Leads de {pt.name} →
+                          <Search className="w-3.5 h-3.5" />
+                          Ver Leads de {pt.name}
                         </button>
                       </div>
-                    </Tooltip>
+                    </Popup>
                   </CircleMarker>
                 ))}
               </MapContainer>
@@ -4179,6 +4295,106 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           </div>
         </div>
       )}
+
+            {/* VIEW 3: MATERIAIS FÍSICOS */}
+      {activeView === 'MATERIAL' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-black uppercase text-dark flex items-center gap-2">
+                  <Package className="w-6 h-6 text-indigo-500" />
+                  Logística de Materiais Físicos
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                  Lista unificada de apoiadores que solicitaram material impresso (Oficial ou Dobrada Nina).
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportPhysicalMaterials}
+                  disabled={physicalMaterials.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Exportar XLSX</span>
+                </button>
+                <div className="flex items-center gap-2 text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl border border-indigo-100">
+                  <span>Total Solicitado:</span>
+                  <span className="text-base">{physicalMaterials.length}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
+                  <tr>
+                    <th className="p-3">Data</th>
+                    <th className="p-3">Origem</th>
+                    <th className="p-3">Nome / Contato</th>
+                    <th className="p-3">Endereço de Entrega</th>
+                    <th className="p-3">Adesivo Perfurado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {physicalMaterials.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-gray-400 font-medium">
+                        Nenhuma solicitação de material impresso encontrada.
+                      </td>
+                    </tr>
+                  ) : (
+                    physicalMaterials.map((item, i) => (
+                      <tr key={i} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-3 text-xs text-gray-500">
+                          {new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase whitespace-nowrap ${
+                            item.source === 'Oficial Rafael' ? 'bg-blue-100 text-blue-700' : item.source === 'Dobrada Nina' ? 'bg-pink-100 text-pink-700' : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {item.source}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-gray-900">{item.nome} {item.sobrenome}</div>
+                          <div className="text-xs text-gray-500 flex flex-col gap-0.5 mt-0.5">
+                            {item.whatsapp && <span>WhatsApp: {item.whatsapp}</span>}
+                            {item.email && <span>Email: {item.email}</span>}
+                          </div>
+                        </td>
+                        <td className="p-3 text-xs text-gray-600">
+                          {item.endereco ? (
+                            <>
+                              <div>{item.endereco}, {item.numero} {item.complemento && `(${item.complemento})`}</div>
+                              <div>{item.bairro} - {item.cidade}/{item.estado}</div>
+                              <div className="text-gray-400 font-medium">CEP: {item.cep}</div>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Não informado</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {item.adesivoPerfurado ? (
+                            <span className="flex items-center gap-1 text-emerald-600 text-[11px] font-bold uppercase">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Solicitou Adesivo
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-[11px] uppercase font-bold">Não</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* VIEW 2: LISTA DE LEADS & FILTROS INTELIGENTES */}
       {activeView === 'LIST' && (

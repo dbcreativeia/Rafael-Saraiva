@@ -34,6 +34,7 @@ export const MaterialCampanha = () => {
   
   const formRef = React.useRef<HTMLFormElement>(null);
   const successRef = React.useRef<HTMLDivElement>(null);
+  const thumbnailsRef = React.useRef<HTMLDivElement>(null);
 
   // Auto-preencher dados se o usuário já tiver preenchido o pop-up de apoio ou formulário anterior
   useEffect(() => {
@@ -250,6 +251,9 @@ export const MaterialCampanha = () => {
   };
 
   const triggerDownload = async () => {
+    setTimeout(() => {
+      thumbnailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
     const files = [
       'A-Luta-Continua.png',
       'Capa-Facebook.png',
@@ -257,7 +261,8 @@ export const MaterialCampanha = () => {
       'Estou-fechado-com-ele.png',
       'Mais-Direitos-e-Protecao.png',
       'Marque-5-Amigos_Feed.png',
-      'Marque-5-Amigos_Stories.png'
+      'Marque-5-Amigos_Stories.png',
+      'Santao-Rafael.jpg'
     ];
 
     for (let i = 0; i < files.length; i++) {
@@ -680,7 +685,7 @@ export const MaterialCampanha = () => {
                         Atenção ao Download
                       </h4>
                       <p className="text-amber-800 text-sm font-medium leading-relaxed">
-                        Como são 6 arquivos diferentes, o seu navegador pode pedir permissão para baixar múltiplos arquivos. Clique em <strong className="font-bold underline text-amber-950">Permitir</strong> na barra superior.
+                        O seu navegador pode pedir permissão para iniciar o download de múltiplos arquivos. Clique em <strong className="font-bold underline text-amber-950">Permitir</strong> na barra superior, se necessário.
                       </p>
                     </div>
                   </div>
@@ -694,7 +699,7 @@ export const MaterialCampanha = () => {
                   </button>
                   
                   {/* Galeria de Miniaturas das Artes */}
-                  <div className="w-full max-w-2xl bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-200 text-left">
+                  <div ref={thumbnailsRef} className="w-full max-w-2xl bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-200 text-left">
                     <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-200">
                       <div>
                         <h3 className="text-lg md:text-xl font-black text-gray-800 uppercase">
@@ -714,7 +719,8 @@ export const MaterialCampanha = () => {
                         { name: 'Colinha.png', label: 'Colinha Eleitoral' },
                         { name: 'Capa-Facebook.png', label: 'Capa Facebook' },
                         { name: 'Marque-5-Amigos_Feed.png', label: 'Marque 5 Amigos (Feed)' },
-                        { name: 'Marque-5-Amigos_Stories.png', label: 'Marque 5 Amigos (Stories)' }
+                        { name: 'Marque-5-Amigos_Stories.png', label: 'Marque 5 Amigos (Stories)' },
+                        { name: 'Santao-Rafael.jpg', label: 'Santão' }
                       ].map((file) => (
                         <div
                           key={file.name}

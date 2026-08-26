@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { FileText, Download, CheckCircle2, Shield, MapPin, Phone, User, Mail, Box, ImagePlus, AlertCircle } from 'lucide-react';
 import { Footer } from './Footer';
@@ -28,6 +28,7 @@ export const NinaPassadore = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
+  const thumbnailsRef = useRef<HTMLDivElement>(null);
   const [cepError, setCepError] = useState('');
   const [cepValid, setCepValid] = useState<boolean | null>(null);
   
@@ -246,14 +247,13 @@ export const NinaPassadore = () => {
   };
 
   const triggerDownload = async () => {
+    setTimeout(() => {
+      thumbnailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+
     const files = [
       'Fechado-Com-Eles.png',
-      'A-Luta-Continua.png',
-      'Mais-Direitos-e-Protecao.png',
-      'Colinha.png',
-      'Capa-Facebook.png',
-      'Marque-5-Amigos_Feed.png',
-      'Marque-5-Amigos_Stories.png'
+      'Santao-Dobrada.jpg'
     ];
 
     for (let i = 0; i < files.length; i++) {
@@ -686,7 +686,7 @@ export const NinaPassadore = () => {
                         Atenção ao Download
                       </h4>
                       <p className="text-amber-800 text-sm font-medium leading-relaxed">
-                        Como são 6 arquivos diferentes, o seu navegador pode pedir permissão para baixar múltiplos arquivos. Clique em <strong className="font-bold underline text-amber-950">Permitir</strong> na barra superior.
+                        O seu navegador pode pedir permissão para iniciar o download. Clique em <strong className="font-bold underline text-amber-950">Permitir</strong> na barra superior, se necessário.
                       </p>
                     </div>
                   </div>
@@ -696,11 +696,11 @@ export const NinaPassadore = () => {
                     className="bg-[#ebb430] hover:bg-[#d4a22b] text-[#102b31] font-black py-3.5 px-8 rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-xl mb-10 transform hover:-translate-y-0.5"
                   >
                     <Download className="w-5 h-5" />
-                    Caso o download não inicie automaticamente, clique aqui para baixar todas!
+                    Caso o download não inicie automaticamente, clique aqui para baixar a arte!
                   </button>
                   
                   {/* Galeria de Miniaturas das Artes */}
-                  <div className="w-full max-w-2xl bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-200 text-left">
+                  <div ref={thumbnailsRef} className="w-full max-w-2xl bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-200 text-left">
                     <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-200">
                       <div>
                         <h3 className="text-lg md:text-xl font-black text-[#102b31] uppercase">
@@ -715,12 +715,7 @@ export const NinaPassadore = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       {[
                         { name: 'Fechado-Com-Eles.png', label: 'Fechado com Eles' },
-                        { name: 'A-Luta-Continua.png', label: 'A Luta Continua' },
-                        { name: 'Mais-Direitos-e-Protecao.png', label: 'Mais Direitos e Proteção' },
-                        { name: 'Colinha.png', label: 'Colinha Eleitoral' },
-                        { name: 'Capa-Facebook.png', label: 'Capa Facebook' },
-                        { name: 'Marque-5-Amigos_Feed.png', label: 'Marque 5 Amigos (Feed)' },
-                        { name: 'Marque-5-Amigos_Stories.png', label: 'Marque 5 Amigos (Stories)' }
+                        { name: 'Santao-Dobrada.jpg', label: 'Santão' }
                       ].map((file) => (
                         <div
                           key={file.name}
