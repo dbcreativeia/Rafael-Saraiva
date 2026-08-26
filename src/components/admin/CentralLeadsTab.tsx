@@ -3459,8 +3459,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
 
         // Upgrade data with non-empty fields
-        if (fullName && fullName.length > existing.nome.length && !existing.nome.includes(fullName)) {
-          existing.nome = fullName;
+        const isPlaceholder = (name: string) => ['Apoiador Importado', 'Sem Nome', 'Anônimo'].includes(name.trim());
+        if (fullName && !isPlaceholder(fullName)) {
+          if (isPlaceholder(existing.nome) || (fullName.length > existing.nome.length && !existing.nome.includes(fullName))) {
+            existing.nome = fullName;
+          }
         }
         if (phone && !existing.whatsapp) existing.whatsapp = phone;
         if (email && !existing.email) existing.email = email;
