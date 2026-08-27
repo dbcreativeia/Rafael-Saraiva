@@ -57,6 +57,7 @@ export interface LeadAction {
     cep?: string;
     score?: number;
     usuario?: string;
+    extraData?: Record<string, string>;
   };
 }
 
@@ -78,6 +79,7 @@ export interface ConsolidatedLead {
   firstDate: string;
   lastDate: string;
   actions: LeadAction[];
+  extraData?: Record<string, string>;
 }
 
 interface CentralLeadsTabProps {
@@ -256,6 +258,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const numero = getMapVal(mapping, row, 'numero');
       const complemento = getMapVal(mapping, row, 'complemento');
       const bairro = getMapVal(mapping, row, 'bairro');
+      
+      const extraData: any = {};
+      const mappedHeaders = mapping.map((m: any) => m.originalHeader).filter(Boolean);
+      Object.keys(row).forEach(key => {
+        if (!mappedHeaders.includes(key) && row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+          extraData[key] = String(row[key]).trim();
+        }
+      });
 
       return {
         nome: finalName || 'Apoiador Importado',
@@ -267,7 +277,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         endereco,
         numero,
         complemento,
-        bairro
+        bairro,
+        extraData: Object.keys(extraData).length > 0 ? extraData : undefined
       };
     }).filter((item: any) => item.nome !== 'Apoiador Importado' || item.whatsapp || item.email);
     
@@ -3407,7 +3418,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           numero: item.numero,
           complemento: item.complemento,
           bairro: item.bairro,
-          cep: item.cep
+          cep: item.cep,
+          extraData: item.extraData ? (typeof item.extraData === 'string' ? (() => { try { return JSON.parse(item.extraData); } catch (e) { return {}; } })() : item.extraData) : undefined
         }
       });
     });
@@ -3418,6 +3430,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     const phoneToLeadIdx = new Map<string, number>();
     const emailToLeadIdx = new Map<string, number>();
     const nameCityToLeadIdx = new Map<string, number>();
+    const exactNameToLeadIdx = new Map<string, number>();
 
     rawActions.forEach(action => {
       const item = action.rawItem;
@@ -3437,7 +3450,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const normEmail = normalizeEmail(email);
       const normName = normalizeName(fullName);
       const normCity = normalizeName(cidade);
+      
       const nameCityKey = normName && normName.length > 5 ? `${normName}__${normCity}` : '';
+      const justNameKey = normName && normName.length > 8 && normName.includes(' ') ? normName : '';
 
       let targetIdx = -1;
 
@@ -3447,6 +3462,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         targetIdx = emailToLeadIdx.get(normEmail)!;
       } else if (nameCityKey && nameCityToLeadIdx.has(nameCityKey)) {
         targetIdx = nameCityToLeadIdx.get(nameCityKey)!;
+      } else if (justNameKey && exactNameToLeadIdx.has(justNameKey)) {
+        targetIdx = exactNameToLeadIdx.get(justNameKey)!;
       }
 
       if (targetIdx !== -1) {
@@ -3461,19 +3478,34 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         // Upgrade data with non-empty fields
         const isPlaceholder = (name: string) => ['Apoiador Importado', 'Sem Nome', 'Anônimo'].includes(name.trim());
         if (fullName && !isPlaceholder(fullName)) {
-          if (isPlaceholder(existing.nome) || (fullName.length > existing.nome.length && !existing.nome.includes(fullName))) {
+          const currentWords = existing.nome.trim().split(/\s+/);
+          const newWords = fullName.trim().split(/\s+/);
+          
+          if (isPlaceholder(existing.nome)) {
+            existing.nome = fullName;
+          } else if (currentWords.length < 2 && newWords.length >= 2 && newWords[0].toLowerCase() === currentWords[0].toLowerCase()) {
+            // Upgrading from just first name (e.g. "Diogo") to full name (e.g. "Diogo Santos")
             existing.nome = fullName;
           }
         }
-        if (phone && !existing.whatsapp) existing.whatsapp = phone;
-        if (email && !existing.email) existing.email = email;
+        
+        const existingDigits = existing.whatsapp ? existing.whatsapp.replace(/\D/g, '') : '';
+        const newDigits = phone ? phone.replace(/\D/g, '') : '';
+        if (phone && (!existing.whatsapp || (newDigits.length > existingDigits.length && existingDigits.length < 10))) {
+          existing.whatsapp = phone;
+        }
+        
+        if (email && (!existing.email || (!existing.email.includes('@') && email.includes('@')))) {
+          existing.email = email;
+        }
+        
         if (cidade && existing.cidade === 'São Paulo' && cidade !== 'São Paulo') existing.cidade = cidade;
         if (estado && !existing.estado) existing.estado = estado;
-        if (cep && !existing.cep) existing.cep = cep;
-        if (endereco && !existing.endereco) existing.endereco = endereco;
+        if (cep && (!existing.cep || existing.cep.replace(/\D/g, '').length < 8)) existing.cep = cep;
+        if (endereco && (!existing.endereco || existing.endereco.length < 5)) existing.endereco = endereco;
         if (numero && !existing.numero) existing.numero = numero;
         if (complemento && !existing.complemento) existing.complemento = complemento;
-        if (bairro && !existing.bairro) existing.bairro = bairro;
+        if (bairro && (!existing.bairro || existing.bairro.length < 3)) existing.bairro = bairro;
 
         // Update dates
         if (new Date(action.date).getTime() < new Date(existing.firstDate).getTime()) {
@@ -3481,6 +3513,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
         if (new Date(action.date).getTime() > new Date(existing.lastDate).getTime()) {
           existing.lastDate = action.date;
+        }
+        
+        // Merge Extra Data
+        if (action.details.extraData) {
+          existing.extraData = { ...(existing.extraData || {}), ...action.details.extraData };
         }
 
         // Distinct campaigns
@@ -3493,6 +3530,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         if (normPhone && normPhone.length >= 8) phoneToLeadIdx.set(normPhone, targetIdx);
         if (normEmail && normEmail.includes('@')) emailToLeadIdx.set(normEmail, targetIdx);
         if (nameCityKey) nameCityToLeadIdx.set(nameCityKey, targetIdx);
+        if (justNameKey) exactNameToLeadIdx.set(justNameKey, targetIdx);
       } else {
         // Create new lead record
         const newLeadIdx = leads.length;
@@ -3513,7 +3551,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           isMultiAction: false,
           firstDate: action.date,
           lastDate: action.date,
-          actions: [action]
+          actions: [action],
+          extraData: action.details.extraData || {}
         };
 
         leads.push(newLead);
@@ -3725,7 +3764,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     });
     
     return Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [rawData.materialCampaign, rawData.ninaCampaign]);
+  }, [rawData.materialCampaign, rawData.ninaCampaign, rawData.importedLeads]);
 
   const handleExportPhysicalMaterials = () => {
     if (!physicalMaterials || physicalMaterials.length === 0) return;
@@ -3869,12 +3908,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     const data = completeAddresses.map(lead => {
       return {
         'Nome Completo': lead.nome,
-        'WhatsApp / Telefone': lead.whatsapp || 'Não informado',
         'Endereço': lead.endereco ? `${lead.endereco}, ${lead.numero || 'S/N'} ${lead.complemento ? `(${lead.complemento})` : ''}`.trim() : '',
         'Bairro': lead.bairro || '',
         'Cidade': lead.cidade || 'São Paulo',
         'Estado': lead.estado || 'SP',
-        'CEP': lead.cep || ''
+        'CEP': lead.cep || '',
+        'WhatsApp / Telefone': lead.whatsapp || 'Não informado',
+        'E-mail': lead.email || 'Não informado'
       };
     });
 
@@ -3910,6 +3950,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         'Campanhas Preenchidas': allCampaigns,
         'Primeiro Preenchimento': formatDate(lead.firstDate),
         'Último Preenchimento': formatDate(lead.lastDate),
+        'Informações Adicionais (Extraídas)': lead.extraData && Object.keys(lead.extraData).length > 0 ? Object.entries(lead.extraData).map(([k, v]) => `${k}: ${v}`).join(' | ') : '',
         'Histórico Completo de Interações': actionsSummary
       };
     });
@@ -3933,6 +3974,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       { wch: 35 }, // Campanhas
       { wch: 20 }, // Primeira Data
       { wch: 20 }, // Ultima Data
+      { wch: 35 }, // Extra Data
       { wch: 45 }  // Historico
     ];
     worksheet['!cols'] = colWidths;

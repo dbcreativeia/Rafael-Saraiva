@@ -503,7 +503,8 @@ async function startServer() {
         estado: ((item.estado || item.uf || 'SP').toUpperCase()).trim().substring(0, 2),
         campanha: campaignName,
         origem: 'Importação CSV',
-        createdAt
+        createdAt,
+        extraData: item.extraData ? JSON.stringify(item.extraData) : null
       };
 
       if (!db) {
@@ -525,17 +526,19 @@ async function startServer() {
         record.estado,
         record.campanha,
         record.origem,
-        record.createdAt
+        record.createdAt,
+        record.extraData
       ]);
     }
 
     if (db && valuesArray.length > 0) {
       try {
+        await db.query(`ALTER TABLE imported_leads ADD COLUMN extraData TEXT`).catch(() => {});
         const CHUNK_SIZE = 1000;
         for (let i = 0; i < valuesArray.length; i += CHUNK_SIZE) {
           const chunk = valuesArray.slice(i, i + CHUNK_SIZE);
           await db.query(
-            `INSERT INTO imported_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, origem, createdAt) VALUES ?`,
+            `INSERT INTO imported_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, origem, createdAt, extraData) VALUES ?`,
             [chunk]
           );
         }
