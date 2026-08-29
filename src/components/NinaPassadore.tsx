@@ -253,7 +253,8 @@ export const NinaPassadore = () => {
 
     const files = [
       'Fechado-Com-Eles.png',
-      'Santao-Dobrada.jpg'
+      'Santao-Dobrada.jpg',
+      'Colinha_Dobrada.jpeg'
     ];
 
     for (let i = 0; i < files.length; i++) {
@@ -715,7 +716,8 @@ export const NinaPassadore = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       {[
                         { name: 'Fechado-Com-Eles.png', label: 'Fechado com Eles' },
-                        { name: 'Santao-Dobrada.jpg', label: 'Santão' }
+                        { name: 'Santao-Dobrada.jpg', label: 'Santão' },
+                        { name: 'Colinha_Dobrada.jpeg', label: 'Colinha Dobrada' }
                       ].map((file) => (
                         <div
                           key={file.name}
