@@ -20,15 +20,15 @@ export const PrivacyPolicy: React.FC = () => {
         <meta name="description" content="Conheça nossa Política de Privacidade e como o Rafael Saraiva 44077 protege seus dados de acordo com a LGPD." />
         <meta name="keywords" content="Política de Privacidade, LGPD, Proteção de Dados, Rafael Saraiva 44077, Rafael Saraiva" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://rafaelsaraiva.com.br/politica-de-privacidade" />
+        <meta property="og:url" content="https://rafaelsaraivasp.com.br/politica-de-privacidade" />
         <meta property="og:title" content="Política de Privacidade | Rafael Saraiva 44077" />
         <meta property="og:description" content="Conheça nossa Política de Privacidade e como o Rafael Saraiva 44077 protege seus dados de acordo com a LGPD." />
-        <meta property="og:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="og:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://rafaelsaraiva.com.br/politica-de-privacidade" />
+        <meta property="twitter:url" content="https://rafaelsaraivasp.com.br/politica-de-privacidade" />
         <meta property="twitter:title" content="Política de Privacidade | Rafael Saraiva 44077" />
         <meta property="twitter:description" content="Conheça nossa Política de Privacidade e como o Rafael Saraiva 44077 protege seus dados de acordo com a LGPD." />
-        <meta property="twitter:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="twitter:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
       </Helmet>
     <div className="min-h-screen bg-gradient-to-br from-dark via-secondary to-primary flex flex-col font-sans relative">
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none overflow-hidden mix-blend-overlay">

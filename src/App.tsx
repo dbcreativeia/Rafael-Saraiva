@@ -83,15 +83,15 @@ function LandingPage() {
         <meta name="description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo. Conheça as propostas e projetos." />
         <meta name="keywords" content="Rafael Saraiva 44077, Rafael Saraiva, Deputado Estadual SP, Causa Animal, Proteção Animal, Política São Paulo, Animais, São Paulo" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://rafaelsaraiva.com.br/" />
+        <meta property="og:url" content="https://rafaelsaraivasp.com.br/" />
         <meta property="og:title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />
         <meta property="og:description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo." />
-        <meta property="og:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="og:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://rafaelsaraiva.com.br/" />
+        <meta property="twitter:url" content="https://rafaelsaraivasp.com.br/" />
         <meta property="twitter:title" content="Deputado Rafael Saraiva 44077 | Defesa da Causa Animal em SP" />
         <meta property="twitter:description" content="Acompanhe o trabalho do Deputado Estadual Rafael Saraiva 44077 e suas ações em defesa da causa animal em todo o estado de São Paulo." />
-        <meta property="twitter:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="twitter:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
       </Helmet>
     <main className="overflow-x-hidden flex flex-col bg-gray-50 text-gray-900 w-full relative">
       <div className="min-h-screen bg-gradient-to-br from-dark via-secondary to-primary relative overflow-hidden flex flex-col selection:bg-accent selection:text-dark">

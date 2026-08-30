@@ -745,7 +745,7 @@ export const Jogo = () => {
             </button>
             
             <a
-              href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraiva.com.br/jogo')}`}
+              href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraivasp.com.br/jogo')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 transition-colors shadow-lg"
@@ -918,7 +918,7 @@ export const Jogo = () => {
 
                 <div className="flex flex-col gap-3">
                   <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`Fiz ${finalScore.toLocaleString()} pontos resgatando animais no jogo do Rafael Saraiva! Tente bater meu recorde! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraiva.com.br/jogo`)}`}
+                    href={`https://wa.me/?text=${encodeURIComponent(`Fiz ${finalScore.toLocaleString()} pontos resgatando animais no jogo do Rafael Saraiva! Tente bater meu recorde! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraivasp.com.br/jogo`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-base uppercase tracking-wider shadow-lg"
@@ -1166,7 +1166,7 @@ export const Jogo = () => {
 
             <div className="p-4 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-2">
               <a
-                href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraiva.com.br/jogo')}`}
+                href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraivasp.com.br/jogo')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm uppercase tracking-wider shadow-sm"

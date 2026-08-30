@@ -309,16 +309,16 @@ export const CodigoAnimal = () => {
         <meta name="keywords" content="Código Animal, Proteção Animal, Lei Animal, Rafael Saraiva 44077, Rafael Saraiva, Código Municipal de Proteção Animal" />
         
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://rafaelsaraiva.com.br/codigoanimal" />
+        <meta property="og:url" content="https://rafaelsaraivasp.com.br/codigoanimal" />
         <meta property="og:title" content="Código Animal Municipal | Rafael Saraiva 44077" />
         <meta property="og:description" content="Iniciativa para a implementação do Código Municipal de Proteção Animal nas cidades. Ajude a proteger os animais no seu município." />
-        <meta property="og:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="og:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
 
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://rafaelsaraiva.com.br/codigoanimal" />
+        <meta property="twitter:url" content="https://rafaelsaraivasp.com.br/codigoanimal" />
         <meta property="twitter:title" content="Código Animal Municipal | Rafael Saraiva 44077" />
         <meta property="twitter:description" content="Iniciativa para a implementação do Código Municipal de Proteção Animal nas cidades. Ajude a proteger os animais no seu município." />
-        <meta property="twitter:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="twitter:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
       </Helmet>
       <div className="flex-1 pt-28 md:pt-36 pb-10 md:pb-14">
         <div className="max-w-6xl mx-auto px-6">

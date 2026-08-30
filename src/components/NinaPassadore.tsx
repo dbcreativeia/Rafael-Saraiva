@@ -308,15 +308,15 @@ export const NinaPassadore = () => {
         <meta name="description" content="Crie sua Foto de Perfil personalizada para as redes sociais ou solicite o material de campanha oficial do Rafael Saraiva 44077. Ajude a espalhar a defesa da causa animal." />
         <meta name="keywords" content="Material de Campanha, Foto de Perfil, Rafael Saraiva 44077, Rafael Saraiva, Eleições, Deputado Estadual, São Paulo, Causa Animal, Panfletos, Adesivos" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://rafaelsaraiva.com.br/material" />
+        <meta property="og:url" content="https://rafaelsaraivasp.com.br/material" />
         <meta property="og:title" content="Material de Campanha | Rafael Saraiva 44077" />
         <meta property="og:description" content="Crie sua Foto de Perfil personalizada para as redes sociais ou solicite o material de campanha oficial do Rafael Saraiva 44077. Ajude a espalhar a defesa da causa animal." />
-        <meta property="og:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="og:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://rafaelsaraiva.com.br/material" />
+        <meta property="twitter:url" content="https://rafaelsaraivasp.com.br/material" />
         <meta property="twitter:title" content="Material de Campanha | Rafael Saraiva 44077" />
         <meta property="twitter:description" content="Crie sua Foto de Perfil personalizada para as redes sociais ou solicite o material de campanha oficial do Rafael Saraiva 44077." />
-        <meta property="twitter:image" content="https://rafaelsaraiva.com.br/Estou-fechado-com-ele.png" />
+        <meta property="twitter:image" content="https://rafaelsaraivasp.com.br/Estou-fechado-com-ele.png" />
       </Helmet>
     <div className="min-h-screen bg-[#102b31] relative overflow-x-hidden w-full max-w-[100vw] flex flex-col pt-28">
             <div className="absolute inset-0 opacity-[0.04] pointer-events-none overflow-hidden mix-blend-overlay">
