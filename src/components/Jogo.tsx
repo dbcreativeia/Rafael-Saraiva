@@ -1140,18 +1140,16 @@ export const Jogo = () => {
                           }`}>
                             {currentRank}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 w-full">
-                              <div className="font-black text-dark truncate text-lg">
-                                {(s.usuario || s.nome)?.includes('@') ? (s.usuario || s.nome).split('@')[0] : (s.usuario || s.nome)}
-                              </div>
-                              {s.score >= 44077 && (
-                                <span className="bg-[#ebb430] text-[#102b31] text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 flex items-center gap-1 font-bold">
-                                  👑 Apoiador 44077
-                                </span>
-                              )}
+                          <div className="flex-1 min-w-0 flex flex-col justify-center items-start">
+                            {s.score >= 44077 && (
+                              <span className="bg-[#ebb430] text-[#102b31] text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 flex items-center gap-1 font-bold mb-0.5 w-max">
+                                👑 Apoiador 44077
+                              </span>
+                            )}
+                            <div className="font-black text-dark truncate text-lg sm:text-xl w-full leading-tight">
+                              {(s.usuario || s.nome)?.includes('@') ? (s.usuario || s.nome).split('@')[0] : (s.usuario || s.nome)}
                             </div>
-                            <div className="text-sm font-medium text-gray-500 truncate">{s.cidade}</div>
+                            <div className="text-xs sm:text-sm font-bold text-gray-500 truncate w-full">{s.cidade}</div>
                           </div>
                           <div className="font-black text-primary font-display text-2xl shrink-0">
                             {s.score.toLocaleString()}
