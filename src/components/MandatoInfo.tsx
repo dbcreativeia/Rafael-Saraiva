@@ -1,3 +1,4 @@
+import { trackEvent } from '../analytics';
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";

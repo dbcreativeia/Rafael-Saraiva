@@ -1,3 +1,4 @@
+import { trackEvent } from '../analytics';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, FileSignature, CheckCircle2, AlertCircle, Lock, LayoutDashboard, Download, Trash2, Link as LinkIcon, Facebook, Twitter, MessageCircle, PawPrint } from 'lucide-react';

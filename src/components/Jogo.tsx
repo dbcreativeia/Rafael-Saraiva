@@ -1,3 +1,4 @@
+import { trackEvent } from '../analytics';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
@@ -28,6 +29,10 @@ export const Jogo = () => {
   const [loggedUser, setLoggedUser] = useState<any>(null);
   const [authForm, setAuthForm] = useState({ nomeCompleto: '', usuario: '', senha: '', email: '', whatsapp: '', cep: '', cidade: '', estado: '', lgpd: false });
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    trackEvent('PageView_Jogo');
+  }, []);
   const [authError, setAuthError] = useState('');
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -317,6 +322,7 @@ export const Jogo = () => {
   };
 
   const startGame = () => {
+    trackEvent('Game_Start');
     initAudio();
     setCurrentView('PLAYING');
   };
@@ -747,7 +753,7 @@ export const Jogo = () => {
             <a
               href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraivasp.com.br/jogo')}`}
               target="_blank"
-              rel="noopener noreferrer"
+              rel="noopener noreferrer" onClick={() => trackEvent('Game_Share_WhatsApp')}
               className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 transition-colors shadow-lg"
             >
               <Phone className="w-6 h-6" />
@@ -920,7 +926,7 @@ export const Jogo = () => {
                   <a
                     href={`https://wa.me/?text=${encodeURIComponent(`Fiz ${finalScore.toLocaleString()} pontos resgatando animais no jogo do Rafael Saraiva! Tente bater meu recorde! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraivasp.com.br/jogo`)}`}
                     target="_blank"
-                    rel="noopener noreferrer"
+                    rel="noopener noreferrer" onClick={() => trackEvent('Game_Share_WhatsApp')}
                     className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-base uppercase tracking-wider shadow-lg"
                   >
                     <Phone className="w-6 h-6" /> Desafiar Amigos
@@ -1166,7 +1172,7 @@ export const Jogo = () => {
               <a
                 href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraivasp.com.br/jogo')}`}
                 target="_blank"
-                rel="noopener noreferrer"
+                rel="noopener noreferrer" onClick={() => trackEvent('Game_Share_WhatsApp')}
                 className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm uppercase tracking-wider shadow-sm"
               >
                 <Phone className="w-5 h-5" /> Desafiar Amigos
