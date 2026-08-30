@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Trophy, ArrowLeft, Play, ArrowRight, RotateCcw, Eye, EyeOff, User, Lock, Mail, Phone, MapPin, Building } from 'lucide-react';
+import { Trophy, ArrowLeft, Play, ArrowRight, RotateCcw, Eye, EyeOff, User, Lock, Mail, Phone, MapPin, Building, Download } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 
 const MANDATE_FACTS = [
@@ -43,6 +43,8 @@ export const Jogo = () => {
     lives: 3,
     items: [] as any[],
     particles: [] as any[],
+    floatingTexts: [] as any[],
+    decorations: [] as any[],
     lastFact: '',
     factTimer: 0,
     speed: 5
@@ -296,6 +298,24 @@ export const Jogo = () => {
     setCurrentView('INSTRUCTIONS');
   };
 
+  
+  const downloadColinha = async () => {
+    try {
+      const response = await fetch('/Colinha_Dobrada.jpeg');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Colinha_Rafael_Saraiva_44077.jpeg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.warn('Erro ao baixar a colinha:', error);
+    }
+  };
+
   const startGame = () => {
     initAudio();
     setCurrentView('PLAYING');
@@ -325,6 +345,8 @@ export const Jogo = () => {
     state.lives = 5;
     state.items = [];
     state.particles = [];
+    state.floatingTexts = [];
+    state.decorations = [];
     state.factTimer = 180;
     state.lastFact = 'Deslize para resgatar os animais e desviar dos obstáculos!';
     state.speed = canvas.height * 0.008; // responsive speed
@@ -375,12 +397,20 @@ export const Jogo = () => {
       // Increase spawn rate slightly as speed increases
       const spawnChance = (window.innerWidth < 768 ? 0.02 : 0.03) + (state.speed * 0.002);
       if (Math.random() < spawnChance) {
-        const type = Math.random() > 0.4 ? 'animal' : 'obstacle';
+        let type = Math.random() > 0.4 ? 'animal' : 'obstacle';
+        
+        // 15% chance of spawning the special 44077 item instead
+        if (Math.random() < 0.15) type = 'powerup';
+        
         const collect = ['🐶', '🐱', '🐴', '🦜', '🐇', '⛓️', '🔒', '📦', '🏥', '📜'];
         const obstacles = ['🚧', '🕳️', '🗑️', '🚗', '⚠️'];
-        const emoji = type === 'animal' 
-          ? collect[Math.floor(Math.random() * collect.length)] 
-          : obstacles[Math.floor(Math.random() * obstacles.length)];
+        
+        let emoji = '🗳️'; // default for powerup
+        if (type === 'animal') {
+          emoji = collect[Math.floor(Math.random() * collect.length)];
+        } else if (type === 'obstacle') {
+          emoji = obstacles[Math.floor(Math.random() * obstacles.length)];
+        }
         
         state.items.push({
           type,
@@ -390,6 +420,8 @@ export const Jogo = () => {
           collected: false
         });
       }
+      
+
 
       // Update items
       state.items.forEach(item => {
@@ -398,7 +430,26 @@ export const Jogo = () => {
         // Collision (approximate radius 25)
         if (!item.collected && Math.abs(item.x - state.playerX) < 35 && Math.abs(item.y - (height - 80)) < 35) {
           item.collected = true;
-          if (item.type === 'animal') {
+          if (item.type === 'powerup') {
+            state.score += 4407;
+            playSound('collect', item.emoji);
+            state.floatingTexts.push({
+              x: width / 2,
+              y: height - 150,
+              text: "FECHADO COM 44077!",
+              life: 1
+            });
+            for(let i=0; i<15; i++) {
+              state.particles.push({
+                x: item.x, 
+                y: item.y, 
+                vx: (Math.random()-0.5)*15, 
+                vy: (Math.random()-0.5)*15, 
+                life: 1,
+                color: '#ebb430'
+              });
+            }
+          } else if (item.type === 'animal') {
             let pts = 100; // Bichos
             if (item.emoji === '📜') pts = 600; // Leis
             else if (item.emoji === '🏥') pts = 500; // Hospital
@@ -451,6 +502,15 @@ export const Jogo = () => {
         p.life -= 0.04;
       });
       state.particles = state.particles.filter(p => p.life > 0);
+      
+
+
+      // Update floating texts
+      state.floatingTexts.forEach(ft => {
+        ft.y -= 1;
+        ft.life -= 0.02;
+      });
+      state.floatingTexts = state.floatingTexts.filter(ft => ft.life > 0);
 
       // Draw Background
       ctx.fillStyle = '#4b5563'; // road
@@ -460,6 +520,8 @@ export const Jogo = () => {
       ctx.fillStyle = '#22c55e';
       ctx.fillRect(0, 0, 15, height);
       ctx.fillRect(width - 15, 0, 15, height);
+
+
       
       // Road lines
       ctx.strokeStyle = '#fcd34d';
@@ -481,6 +543,20 @@ export const Jogo = () => {
       ctx.fillText('RAFAEL', width/2, height/2 - 80);
       ctx.fillText('SARAIVA', width/2, height/2);
       ctx.fillText('44077', width/2, height/2 + 80);
+      
+      // Floating texts
+      state.floatingTexts.forEach(ft => {
+        ctx.save();
+        ctx.globalAlpha = ft.life;
+        ctx.fillStyle = '#ebb430';
+        ctx.font = '900 24px Poppins';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#102b31';
+        ctx.lineWidth = 4;
+        ctx.strokeText(ft.text, ft.x, ft.y);
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+      });
 
       // Draw items
       ctx.globalAlpha = 1;
@@ -589,6 +665,19 @@ export const Jogo = () => {
         <meta property="twitter:image" content="https://lh3.googleusercontent.com/d/1hEky7g-TlnhbIlDtqnQLTxtTIgEEkVrZ" />
       </Helmet>
     <div className={`min-h-screen bg-gray-900 flex flex-col items-center justify-center font-sans overflow-hidden relative ${currentView === 'PLAYING' ? 'p-0 h-[100dvh]' : 'p-4'}`}>
+      {/* Disclaimer Eleitoral Fixo na Grama Lateral */}
+      <div className="absolute inset-0 mx-auto w-full max-w-md pointer-events-none z-[100] flex justify-between overflow-hidden">
+        <div className="w-[15px] h-full bg-[#22c55e] flex items-center justify-center shrink-0">
+          <span 
+            className="text-[#0a3319] font-normal whitespace-nowrap -rotate-90 select-none tracking-widest uppercase"
+            style={{ fontSize: 'min(1.4vh, 9px)' }}
+          >
+            PROPAGANDA ELEITORAL - CNPJ DO CANDIDATO: Eleicao 2026 Rafael Saraiva Gaia Deputado Estadual 68.283.115/0001-74
+          </span>
+        </div>
+        <div className="w-[15px] h-full bg-[#22c55e] shrink-0"></div>
+      </div>
+
       {currentView !== 'PLAYING' && (
         <Link to="/" className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-xl transition-all font-bold text-sm z-50 shadow-sm">
           <ArrowLeft className="w-4 h-4" /> Voltar ao site
@@ -654,6 +743,16 @@ export const Jogo = () => {
               <Trophy className="w-6 h-6 text-accent" />
               Ver Ranking
             </button>
+            
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraiva.com.br/jogo')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 transition-colors shadow-lg"
+            >
+              <Phone className="w-6 h-6" />
+              Desafiar Amigos
+            </a>
           </motion.div>
         )}
 
@@ -669,6 +768,10 @@ export const Jogo = () => {
             <div className="flex flex-col gap-3 text-left w-full">
               <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex flex-col gap-2">
                 <h3 className="font-bold text-green-800 uppercase text-sm">Colete (Soma Pontos)</h3>
+                <div className="flex justify-between items-center text-sm font-bold text-[#ebb430] bg-[#102b31] p-2 rounded-lg border border-[#ebb430] mb-1">
+                  <span className="flex items-center gap-2"><span className="text-xl">🗳️</span> Urna 44077 (Super Bônus)</span>
+                  <span>4407 pts</span>
+                </div>
                 <div className="flex justify-between items-center text-sm font-bold text-green-900 bg-white/60 p-2 rounded-lg">
                   <span className="flex items-center gap-2"><span className="text-xl">🐶🐱🐴🦜🐇</span> Animais</span>
                   <span>100 pts</span>
@@ -698,6 +801,17 @@ export const Jogo = () => {
                 <h3 className="font-bold text-red-800 mb-2 uppercase text-sm">Desvie (Perde Vida)</h3>
                 <div className="text-3xl tracking-widest">🚧🕳️🗑️🚗⚠️</div>
                 <p className="text-xs text-red-700 mt-2 font-medium">Obstáculos e perigos da pista!</p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                <h3 className="font-black text-amber-900 mb-2 uppercase text-sm flex items-center gap-2">
+                  <Trophy className="w-4 h-4" /> Meta: Apoiador 44077
+                </h3>
+                <p className="text-xs text-amber-800 font-medium mb-2 leading-relaxed">
+                  Faça mais de <strong className="text-amber-900 text-sm font-black">44.077 pontos</strong> para conquistar o selo dourado <strong>👑 Apoiador 44077</strong> no Ranking Oficial!
+                </p>
+                <p className="text-[10px] text-amber-700/80 font-bold uppercase tracking-wider">
+                  Compartilhe seu recorde e baixe materiais exclusivos no final.
+                </p>
               </div>
             </div>
             <button
@@ -743,9 +857,16 @@ export const Jogo = () => {
                   >
                     <div className="text-sm font-black text-blue-600 mb-3 uppercase tracking-widest text-center">O Deputado Rafael Saraiva fez:</div>
                     <h4 className="font-black text-primary uppercase text-2xl mb-3 text-center">{endGameFact.title}</h4>
-                    <p className="text-base font-bold text-blue-900 leading-relaxed text-center">
+                    <p className="text-base font-bold text-blue-900 leading-relaxed text-center mb-4">
                       {endGameFact.content}
                     </p>
+                    <div className="bg-[#102b31] border-2 border-[#ebb430] rounded-xl p-4 mt-2">
+                      <p className="text-white text-center font-black text-sm uppercase leading-snug">
+                        Vote <span className="text-[#ebb430]">Rafael Saraiva</span> para Deputado Estadual!
+                        <br />
+                        <span className="text-2xl mt-1 block tracking-widest">44077</span>
+                      </p>
+                    </div>
                   </motion.div>
                 )}
                 {factPreviewState.canSkip && (
@@ -781,25 +902,49 @@ export const Jogo = () => {
                     <div className="text-left bg-blue-50 p-4 rounded-xl border border-blue-100 mt-2">
                       <div className="text-xs font-bold text-blue-600 mb-2 uppercase tracking-wider">O Deputado Rafael Saraiva fez:</div>
                       <h4 className="font-black text-primary uppercase text-sm mb-1">{endGameFact.title}</h4>
-                      <p className="text-xs font-medium text-blue-900 leading-relaxed">
+                      <p className="text-xs font-medium text-blue-900 leading-relaxed mb-3">
                         {endGameFact.content}
                       </p>
+                      <div className="bg-[#102b31] border border-[#ebb430] rounded-lg p-2 text-center">
+                        <p className="text-white font-black text-[10px] uppercase leading-tight">
+                          Vote <span className="text-[#ebb430]">Rafael Saraiva</span> para Deputado Estadual!
+                          <br />
+                          <span className="text-lg block mt-0.5 tracking-widest">44077</span>
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
 
                 <div className="flex flex-col gap-3">
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`Fiz ${finalScore.toLocaleString()} pontos resgatando animais no jogo do Rafael Saraiva! Tente bater meu recorde! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraiva.com.br/jogo`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-base uppercase tracking-wider shadow-lg"
+                  >
+                    <Phone className="w-6 h-6" /> Desafiar Amigos
+                  </a>
+                  
+                  <button
+                    onClick={downloadColinha}
+                    className="w-full bg-[#ebb430] hover:bg-[#d4a22b] text-[#102b31] font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-base uppercase tracking-wider shadow-lg"
+                  >
+                    <Download className="w-6 h-6" /> Baixar Colinha 44077
+                  </button>
+
                   <button
                     onClick={startGame}
-                    className="w-full bg-primary hover:bg-secondary text-white font-black py-5 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-lg uppercase tracking-wider shadow-lg"
+                    className="w-full bg-primary hover:bg-secondary text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-base uppercase tracking-wider shadow-lg mt-2"
                   >
                     <RotateCcw className="w-6 h-6" /> Tentar Novamente
                   </button>
+                  
                   <button
                     onClick={() => setCurrentView('LEADERBOARD')}
-                    className="w-full bg-white text-dark font-bold py-4 rounded-2xl"
+                    className="w-full bg-white hover:bg-gray-50 text-dark border-2 border-gray-200 font-black py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors uppercase tracking-wider"
                   >
-                    Ver Ranking
+                    <Trophy className="w-5 h-5" /> Ver Ranking
                   </button>
                 </div>
               </>
@@ -996,8 +1141,15 @@ export const Jogo = () => {
                             {currentRank}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-black text-dark truncate text-lg">
-                              {(s.usuario || s.nome)?.includes('@') ? (s.usuario || s.nome).split('@')[0] : (s.usuario || s.nome)}
+                            <div className="flex items-center gap-2 w-full">
+                              <div className="font-black text-dark truncate text-lg">
+                                {(s.usuario || s.nome)?.includes('@') ? (s.usuario || s.nome).split('@')[0] : (s.usuario || s.nome)}
+                              </div>
+                              {s.score >= 44077 && (
+                                <span className="bg-[#ebb430] text-[#102b31] text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 flex items-center gap-1 font-bold">
+                                  👑 Apoiador 44077
+                                </span>
+                              )}
                             </div>
                             <div className="text-sm font-medium text-gray-500 truncate">{s.cidade}</div>
                           </div>
@@ -1012,10 +1164,18 @@ export const Jogo = () => {
               )}
             </div>
 
-            <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+            <div className="p-4 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-2">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent('Resgate animais no jogo do Rafael Saraiva! No dia da eleição, eu voto 44077 para Deputado Estadual e 4407 Nina Passadore para Federal! Jogue aqui: https://rafaelsaraiva.com.br/jogo')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-[#25D366] hover:bg-[#20b858] text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm uppercase tracking-wider shadow-sm"
+              >
+                <Phone className="w-5 h-5" /> Desafiar Amigos
+              </a>
               <button
                 onClick={showInstructions}
-                className="w-full bg-primary hover:bg-secondary text-white font-black py-4 rounded-xl transition-transform active:scale-95 uppercase tracking-wider"
+                className="w-full bg-primary hover:bg-secondary text-white font-black py-4 rounded-xl transition-transform active:scale-95 uppercase tracking-wider mt-1"
               >
                 Jogar Agora
               </button>
