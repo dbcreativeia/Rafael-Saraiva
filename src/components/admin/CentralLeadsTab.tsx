@@ -1,3 +1,4 @@
+import { CityDistributionMap } from '../CityDistributionMap';
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   Search, 
@@ -98,11 +99,14 @@ const SYSTEM_FIELDS = [
   { id: 'numero', label: 'Número', aliases: ['numero', 'número', 'num', 'number'] },
   { id: 'complemento', label: 'Complemento', aliases: ['complemento', 'comp', 'complement'] },
   { id: 'bairro', label: 'Bairro', aliases: ['bairro', 'neighborhood', 'distrito'] },
+  { id: 'adesivos', label: 'Adesivos (Qtd)', aliases: ['adesivos', 'adesivo', 'qtd adesivos', 'quantidade adesivos'] },
+  { id: 'adesivo_perfurado', label: 'Adesivo Perfurado', aliases: ['adesivo perfurado', 'perfurado', 'perfurade', 'adesivo carro'] },
 ];
 
 export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState<'LIST' | 'HEATMAP' | 'MATERIAL'>('LIST');
+  const [materialFilterAdesivo, setMaterialFilterAdesivo] = useState<'ALL' | 'YES' | 'NO'>('ALL');
 
   // Raw data from sources
   const [rawData, setRawData] = useState<{
@@ -258,6 +262,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const numero = getMapVal(mapping, row, 'numero');
       const complemento = getMapVal(mapping, row, 'complemento');
       const bairro = getMapVal(mapping, row, 'bairro');
+      const adesivos = getMapVal(mapping, row, 'adesivos');
+      const adesivo_perfurado = getMapVal(mapping, row, 'adesivo_perfurado');
       
       const extraData: any = {};
       const mappedHeaders = mapping.map((m: any) => m.originalHeader).filter(Boolean);
@@ -278,6 +284,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         numero,
         complemento,
         bairro,
+        adesivos,
+        adesivoPerfurado: adesivo_perfurado ? (adesivo_perfurado.toLowerCase() === 'sim' || adesivo_perfurado.toLowerCase() === 's' || adesivo_perfurado.toLowerCase() === 'true' || adesivo_perfurado === '1' || adesivo_perfurado.toLowerCase() === 'x' || adesivo_perfurado.toLowerCase() === 'ok' || adesivo_perfurado.toLowerCase() === 'marcado' || adesivo_perfurado === 'true' || adesivo_perfurado === true) : false,
         extraData: Object.keys(extraData).length > 0 ? extraData : undefined
       };
     }).filter((item: any) => item.nome !== 'Apoiador Importado' || item.whatsapp || item.email);
@@ -3756,20 +3764,40 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     // Process imported leads that indicate physical materials
     (rawData.importedLeads || []).forEach(item => {
       const campName = (item.campanha || '').toLowerCase();
-      if (campName.includes('material') || campName.includes('impresso') || campName.includes('físico') || campName.includes('fisico') || campName.includes('adesivo')) {
+      let hasAdesivo = false;
+      let isPerfurado = false;
+      
+      let extra = null;
+      if (item.extraData) {
+        try {
+          extra = typeof item.extraData === 'string' ? JSON.parse(item.extraData) : item.extraData;
+          if (extra.adesivoPerfurado) isPerfurado = true;
+          if (extra.adesivos) hasAdesivo = true;
+        } catch(e) {}
+      }
+
+      if (campName.includes('material') || campName.includes('impresso') || campName.includes('físico') || campName.includes('fisico') || campName.includes('adesivo') || hasAdesivo || isPerfurado) {
         let originName = item.campanha || 'Importação (Material)';
         if (originName.length > 25) originName = originName.substring(0, 25) + '...';
-        processItem(item, originName, false);
+        processItem({ ...item, adesivoPerfurado: isPerfurado }, originName, false);
       }
     });
     
     return Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [rawData.materialCampaign, rawData.ninaCampaign, rawData.importedLeads]);
 
-  const handleExportPhysicalMaterials = () => {
-    if (!physicalMaterials || physicalMaterials.length === 0) return;
+  const filteredPhysicalMaterials = useMemo(() => {
+    return physicalMaterials.filter(item => {
+      if (materialFilterAdesivo === 'YES') return item.adesivoPerfurado;
+      if (materialFilterAdesivo === 'NO') return !item.adesivoPerfurado;
+      return true;
+    });
+  }, [physicalMaterials, materialFilterAdesivo]);
 
-    const dataToExport = physicalMaterials.map(m => ({
+  const handleExportPhysicalMaterials = () => {
+    if (!physicalMaterials || filteredPhysicalMaterials.length === 0) return;
+
+    const dataToExport = filteredPhysicalMaterials.map(m => ({
       'Data Solicitação': new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       'Origem': m.source,
       'Nome': m.nome,
@@ -4352,10 +4380,22 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   Lista unificada de apoiadores que solicitaram material impresso (Oficial ou Dobrada Nina).
                 </p>
               </div>
+              <div className="w-full mt-4 flex items-center gap-4">
+                <label className="text-sm font-bold text-gray-700">Adesivo Perfurado:</label>
+                <select 
+                  value={materialFilterAdesivo} 
+                  onChange={(e) => setMaterialFilterAdesivo(e.target.value as any)}
+                  className="p-2 border border-gray-300 rounded-lg text-sm bg-white outline-none"
+                >
+                  <option value="ALL">Todos</option>
+                  <option value="YES">Com Adesivo Perfurado</option>
+                  <option value="NO">Sem Adesivo Perfurado</option>
+                </select>
+              </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleExportPhysicalMaterials}
-                  disabled={physicalMaterials.length === 0}
+                  disabled={filteredPhysicalMaterials.length === 0}
                   className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
@@ -4363,9 +4403,19 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 </button>
                 <div className="flex items-center gap-2 text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl border border-indigo-100">
                   <span>Total Solicitado:</span>
-                  <span className="text-base">{physicalMaterials.length}</span>
+                  <span className="text-base">{filteredPhysicalMaterials.length}</span>
                 </div>
               </div>
+            </div>
+
+                        <div className="mb-8">
+              <CityDistributionMap 
+                items={filteredPhysicalMaterials} 
+                title="Geolocalização de Entregas (Materiais Físicos)" 
+                subtitle="Mapa de calor das solicitações de material e adesivos." 
+                itemLabel="solicitações"
+                accentColor="indigo"
+              />
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -4380,14 +4430,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {physicalMaterials.length === 0 ? (
+                  {filteredPhysicalMaterials.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-gray-400 font-medium">
                         Nenhuma solicitação de material impresso encontrada.
                       </td>
                     </tr>
                   ) : (
-                    physicalMaterials.map((item, i) => (
+                    filteredPhysicalMaterials.map((item, i) => (
                       <tr key={i} className="hover:bg-gray-50 transition-colors">
                         <td className="p-3 text-xs text-gray-500">
                           {new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -4433,6 +4483,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 </tbody>
               </table>
             </div>
+            
+
           </div>
         </div>
       )}
