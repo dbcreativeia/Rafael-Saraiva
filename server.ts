@@ -504,7 +504,7 @@ async function startServer() {
         campanha: campaignName,
         origem: 'Importação CSV',
         createdAt,
-        extraData: item.extraData ? JSON.stringify(item.extraData) : null
+        extraData: JSON.stringify({ ...(item.extraData || {}), adesivos: item.adesivos, adesivoPerfurado: item.adesivoPerfurado })
       };
 
       if (!db) {
