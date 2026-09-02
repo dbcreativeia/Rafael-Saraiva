@@ -381,51 +381,58 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
     setIsUploading(true);
     setUploadError('');
-    setUploadSuccessMessage('');
+    setUploadSuccessMessage('Iniciando importação...');
 
     try {
-      const res = await fetch('/api/imported-leads/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leads: parsedCsvLeads,
-          campanha: campaignInput.trim()
-        })
-      });
+      const CHUNK_SIZE = 5000;
+      const totalLeads = parsedCsvLeads.length;
+      let importedCount = 0;
 
-      let data;
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        console.error('Resposta do servidor não é JSON:', text.substring(0, 200));
-        throw new Error('Servidor retornou um formato inesperado. O arquivo pode ser muito grande.');
+      for (let i = 0; i < totalLeads; i += CHUNK_SIZE) {
+        const chunk = parsedCsvLeads.slice(i, i + CHUNK_SIZE);
+        setUploadSuccessMessage(`Importando lote ${Math.floor(i / CHUNK_SIZE) + 1} de ${Math.ceil(totalLeads / CHUNK_SIZE)}... (${importedCount} de ${totalLeads})`);
+        
+        const res = await fetch('/api/imported-leads/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leads: chunk,
+            campanha: campaignInput.trim()
+          })
+        });
+
+        let data;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          data = await res.json();
+        } else {
+          throw new Error('Servidor retornou um formato inesperado. O arquivo pode ser muito grande.');
+        }
+
+        if (res.ok && data.success) {
+          importedCount += data.count;
+        } else {
+          throw new Error(data.error || 'Erro ao processar importação no servidor.');
+        }
       }
 
-      if (res.ok && data.success) {
-        setUploadSuccessMessage(`Sucesso! ${data.count} leads importados para a campanha "${campaignInput.trim()}".`);
-        // Atualiza a listagem consolidada imediatamente
-        await fetchAllLeads();
-        setTimeout(() => {
-          setIsUploadModalOpen(false);
-          setUploadSuccessMessage('');
-          setParsedCsvLeads([]);
-                    setCsvMappedHeaders([]);
-          setCsvFile(null);
-          setCsvFileName('');
-          setCsvRawRows([]);
-          setCsvHeaders([]);
-          setCampaignInput('');
-        }, 1800);
-      } else {
-        setUploadError(data.error || 'Erro ao processar importação no servidor.');
-      }
-    } catch (err) {
+      setUploadSuccessMessage(`Sucesso! ${importedCount} leads importados para a campanha "${campaignInput.trim()}".`);
+      await fetchAllLeads();
+      setTimeout(() => {
+        setIsUploadModalOpen(false);
+        setUploadSuccessMessage('');
+        setParsedCsvLeads([]);
+        setCsvMappedHeaders([]);
+        setCsvFile(null);
+        setCsvFileName('');
+        setCsvRawRows([]);
+        setCsvHeaders([]);
+        setCampaignInput('');
+      }, 1800);
+    } catch (err: any) {
       console.error('Erro ao enviar leads importados:', err);
-      setUploadError('Erro de conexão ao enviar os leads para o servidor.');
-    } finally {
-      setIsUploading(false);
+      setUploadError(err.message || 'Erro de conexão ao enviar os leads para o servidor.');
+    } finally {    setIsUploading(false);
     }
   };
 
@@ -480,25 +487,35 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     return email.trim().toLowerCase();
   };
 
+  const nameCache = new Map();
   const normalizeName = (name?: string) => {
     if (!name) return '';
-    return name
+    if (nameCache.has(name)) return nameCache.get(name);
+    const res = name
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
+    nameCache.set(name, res);
+    return res;
   };
 
 
 
 
+  const stateCache = new Map();
   const normalizeState = (stateStr, deducedState) => {
     const defaultState = deducedState || 'SP';
     if (!stateStr) return defaultState;
+    const cacheKey = stateStr + '_' + deducedState;
+    if (stateCache.has(cacheKey)) return stateCache.get(cacheKey);
     let s = stateStr.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
-    if (s === 'SAO PAULO' || s.startsWith('SAO') || s.startsWith('SÃ') || s === 'S.P' || s === 'SP.' || s === 'S/' || s === 'SA' || s === 'S') return 'SP';
+    if (s === 'SAO PAULO' || s.startsWith('SAO') || s.startsWith('SÃ') || s === 'S.P' || s === 'SP.' || s === 'S/' || s === 'SA' || s === 'S') {
+      stateCache.set(cacheKey, 'SP');
+      return 'SP';
+    }
     
     const stateMap = {
       'SAO PAULO': 'SP', 'RIO DE JANEIRO': 'RJ', 'MINAS GERAIS': 'MG', 'ESPIRITO SANTO': 'ES',
@@ -508,7 +525,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       'TOCANTINS': 'TO', 'GOIAS': 'GO', 'DISTRITO FEDERAL': 'DF', 'MATO GROSSO': 'MT', 'MATO GROSSO DO SUL': 'MS',
       'RONDONIA': 'RO', 'ACRE': 'AC', 'AMAZONAS': 'AM', 'RORAIMA': 'RR', 'AMAPA': 'AP', 'PARA': 'PA',
     };
-    if (stateMap[s]) return stateMap[s];
+    if (stateMap[s]) {
+      stateCache.set(cacheKey, stateMap[s]);
+      return stateMap[s];
+    }
     
     const officialStates = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
     
@@ -3165,14 +3185,19 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   };
 
   const cityCache = new Map();
+  const fastCityCache = new Map();
 
   const getIbgeCityName = (cityStr, stateStr, cepStr) => {
+    const fastKey = `${cityStr}_${stateStr}_${cepStr}`;
+    if (fastCityCache.has(fastKey)) return fastCityCache.get(fastKey);
+
     let deducedState = getStateFromCep(cepStr);
     let finalState = normalizeState(stateStr, deducedState);
 
     if (!cityStr) {
-      if (finalState === 'SP') return 'São Paulo';
-      return 'Não Informada';
+      const res = finalState === 'SP' ? 'São Paulo' : 'Não Informada';
+      fastCityCache.set(fastKey, res);
+      return res;
     }
     
     // Convert to lowercase, remove accents
@@ -3259,6 +3284,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     }
     
     cityCache.set(cacheKey, result);
+    fastCityCache.set(fastKey, result);
     return result;
   };
 
