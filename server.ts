@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { getDbConnection } from "./db.js";
@@ -7,6 +8,7 @@ const PIXEL_ID = "909578061696893";
 
 async function startServer() {
   const app = express();
+  app.use(compression());
   const PORT = process.env.PORT || 3000;
 
   // Middleware para parsear JSON no body
