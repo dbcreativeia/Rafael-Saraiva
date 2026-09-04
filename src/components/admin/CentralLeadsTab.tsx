@@ -1,4 +1,5 @@
 import { CityDistributionMap } from '../CityDistributionMap';
+import { spCitiesList, spCitiesCleanMap, spCitiesNormMap, fixMojibake, isSpCity, knownNonSpCities } from '../../data/spCities';
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   Search, 
@@ -77,6 +78,7 @@ export interface ConsolidatedLead {
   totalActions: number;
   distinctCampaigns: string[];
   isMultiAction: boolean;
+  isSuperSupporter?: boolean;
   firstDate: string;
   lastDate: string;
   actions: LeadAction[];
@@ -108,27 +110,33 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [activeView, setActiveView] = useState<'LIST' | 'HEATMAP' | 'MATERIAL'>('LIST');
   const [materialFilterAdesivo, setMaterialFilterAdesivo] = useState<'ALL' | 'YES' | 'NO'>('ALL');
 
-  // Global Cache to prevent recalculating on tab switch
-  // Placed outside the component lifecycle conceptually (using a ref or module scope wouldn't trigger renders, but we want to avoid useMemo re-running)
-  const [rawData, setRawData] = useState<{
-    popupApoio: any[];
-    materialCampaign: any[];
-    ninaCampaign: any[];
-    citizens: any[];
-    petitions: any[];
-    contraMausTratos: any[];
-    jogoUsers: any[];
-    importedLeads: any[];
-  }>((window as any).__RAW_DATA_CACHE__ || {
-    popupApoio: [],
-    materialCampaign: [],
-    ninaCampaign: [],
-    citizens: [],
-    petitions: [],
-    contraMausTratos: [],
-    jogoUsers: [],
-    importedLeads: []
+  // Server-side consolidated state
+  const [summary, setSummary] = useState<{
+    totalUniqueLeads: number;
+    totalSubmissions: number;
+    multiActionLeadsCount: number;
+    superSupportersCount: number;
+    spLeadsCount: number;
+    stateOptions: string[];
+    cityOptions: { name: string; count: number }[];
+    campaignOptions: string[];
+    spHeatmapPoints: any[];
+  }>({
+    totalUniqueLeads: 0,
+    totalSubmissions: 0,
+    multiActionLeadsCount: 0,
+    superSupportersCount: 0,
+    spLeadsCount: 0,
+    stateOptions: [],
+    cityOptions: [],
+    campaignOptions: [],
+    spHeatmapPoints: []
   });
+
+  const [serverLeads, setServerLeads] = useState<ConsolidatedLead[]>([]);
+  const [totalFiltered, setTotalFiltered] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [physicalMaterials, setPhysicalMaterials] = useState<any[]>([]);
 
   // Filters & State
   const [search, setSearch] = useState('');
@@ -178,74 +186,68 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       .catch(e => console.warn('Erro ao carregar municipios.json:', e));
   }, []);
 
-  const fetchAllLeads = async (force = false) => {
-    // If we have cached data and aren't forcing a refresh, skip fetching
-    if (!force && (window as any).__RAW_DATA_CACHE__ && (window as any).__RAW_DATA_CACHE__.popupApoio.length > 0) {
-      setRawData((window as any).__RAW_DATA_CACHE__);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
+  const fetchSummary = async () => {
     try {
-      const t = Date.now();
-      const res = await fetch(`/api/leads/consolidated?_t=${t}`, {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' }
-      });
+      const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
       if (res.ok) {
-        const json = await res.json();
-        const newData = {
-          popupApoio: Array.isArray(json.popupApoio) ? json.popupApoio : [],
-          materialCampaign: Array.isArray(json.materialCampaign) ? json.materialCampaign : [],
-          ninaCampaign: Array.isArray(json.ninaCampaign) ? json.ninaCampaign : [],
-          citizens: Array.isArray(json.citizens) ? json.citizens : [],
-          petitions: Array.isArray(json.petitions) ? json.petitions : [],
-          contraMausTratos: Array.isArray(json.contraMausTratos) ? json.contraMausTratos : [],
-          jogoUsers: Array.isArray(json.jogoUsers) ? json.jogoUsers : [],
-          importedLeads: Array.isArray(json.importedLeads) ? json.importedLeads : []
-        };
-        (window as any).__RAW_DATA_CACHE__ = newData;
-        (window as any).__CONSOLIDATED_LEADS_CACHE__ = null; // Invalidate processed cache
-        setRawData(newData);
-      } else {
-        // Fallback: fetch individual endpoints
-        const [
-          apoioRes,
-          matRes,
-          ninaRes,
-          citRes,
-          petRes,
-          contraRes,
-          jogoRes,
-          impRes
-        ] = await Promise.all([
-          fetch(`/api/popup-apoio?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/material?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/ninapassadore?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/citizens?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/petitions?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/contra-maus-tratos?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/jogo/users?_t=${t}`).then(r => r.json()).catch(() => []),
-          fetch(`/api/imported-leads?_t=${t}`).then(r => r.json()).catch(() => [])
-        ]);
-
-        const fallbackData = {
-          popupApoio: Array.isArray(apoioRes) ? apoioRes : [],
-          materialCampaign: Array.isArray(matRes) ? matRes : [],
-          ninaCampaign: Array.isArray(ninaRes) ? ninaRes : [],
-          citizens: Array.isArray(citRes) ? citRes : [],
-          petitions: Array.isArray(petRes) ? petRes : [],
-          contraMausTratos: Array.isArray(contraRes) ? contraRes : [],
-          jogoUsers: Array.isArray(jogoRes) ? jogoRes : [],
-          importedLeads: Array.isArray(impRes) ? impRes : []
-        };
-        (window as any).__RAW_DATA_CACHE__ = fallbackData;
-        (window as any).__CONSOLIDATED_LEADS_CACHE__ = null; // Invalidate processed cache
-        setRawData(fallbackData);
+        const data = await res.json();
+        setSummary(data);
       }
     } catch (err) {
-      console.warn("Erro ao buscar dados consolidados:", err);
+      console.warn("Erro ao buscar resumo de leads:", err);
+    }
+  };
+
+  const fetchLeadsPage = async (page = currentPage) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(itemsPerPage),
+        search: deferredSearch.trim(),
+        estado: estadoFilter,
+        cidade: cidadeFilter,
+        campaign: campaignFilter,
+        multiAction: multiActionFilter,
+        sortField: sortField,
+        sortOrder: sortOrder
+      });
+      const res = await fetch(`/api/leads/paginated?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setServerLeads(data.leads || []);
+        setTotalFiltered(data.totalFiltered || 0);
+        setTotalPages(data.totalPages || 1);
+        if (data.summary && (!summary.totalUniqueLeads || summary.totalUniqueLeads === 0)) {
+          setSummary(data.summary);
+        }
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar leads paginados:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPhysicalMaterials = async () => {
+    try {
+      const res = await fetch(`/api/leads/physical-materials?adesivoFilter=${materialFilterAdesivo}&_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPhysicalMaterials(data.materials || []);
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar materiais físicos:", err);
+    }
+  };
+
+  const fetchAllLeads = async (force = false) => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchSummary(),
+        fetchLeadsPage(1)
+      ]);
     } finally {
       setLoading(false);
     }
@@ -262,19 +264,22 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     };
 
     const list = rows.map((row) => {
-      let nome = getMapVal(mapping, row, 'nome');
-      const sobrenome = getMapVal(mapping, row, 'sobrenome');
+      let nome = fixMojibake(getMapVal(mapping, row, 'nome'));
+      const sobrenome = fixMojibake(getMapVal(mapping, row, 'sobrenome'));
 
       let whatsapp = getMapVal(mapping, row, 'whatsapp');
       let email = getMapVal(mapping, row, 'email');
+      const rawCity = fixMojibake(getMapVal(mapping, row, 'cidade'));
+      const cleanNormCity = rawCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const forcedState = knownNonSpCities[cleanNormCity] || null;
       const cep = getMapVal(mapping, row, 'cep') || '';
       const deducedState = getStateFromCep(cep);
-      const estado = normalizeState(getMapVal(mapping, row, 'estado'), deducedState);
-      const cidade = getIbgeCityName(getMapVal(mapping, row, 'cidade'), estado, cep);
-      const endereco = getMapVal(mapping, row, 'endereco');
+      const estado = forcedState || normalizeState(getMapVal(mapping, row, 'estado'), deducedState);
+      const cidade = getIbgeCityName(rawCity, estado, cep);
+      const endereco = fixMojibake(getMapVal(mapping, row, 'endereco'));
       const numero = getMapVal(mapping, row, 'numero');
-      const complemento = getMapVal(mapping, row, 'complemento');
-      const bairro = getMapVal(mapping, row, 'bairro');
+      const complemento = fixMojibake(getMapVal(mapping, row, 'complemento'));
+      const bairro = fixMojibake(getMapVal(mapping, row, 'bairro'));
       const adesivos = getMapVal(mapping, row, 'adesivos');
       const adesivo_perfurado = getMapVal(mapping, row, 'adesivo_perfurado');
       
@@ -465,7 +470,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       }
 
       setUploadSuccessMessage(`Sucesso! ${importedCount} leads importados para a campanha "${campaignInput.trim()}".`);
-      await fetchAllLeads();
+      try {
+        await fetch('/api/leads/refresh-cache', { method: 'POST' });
+      } catch (e) {}
+      await fetchAllLeads(true);
       setTimeout(() => {
         setIsUploadModalOpen(false);
         setUploadSuccessMessage('');
@@ -532,7 +540,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   const formatDisplayTitleName = (n?: string) => {
     if (!n) return 'Sem Nome';
-    let cleaned = n.replace(/[0-9_!@#$%^&*()+=\[\]{};':"\\|,.<>\/?~]/g, '');
+    const fixed = fixMojibake(n);
+    let cleaned = fixed.replace(/[0-9_!@#$%^&*()+=\[\]{};':"\\|<>\/?]/g, '');
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
     if (!cleaned) return 'Sem Nome';
     return cleaned.toLowerCase().split(' ').map(word => {
@@ -638,2588 +647,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
 
 
-  const spCitiesList = [
-  {
-    "norm": "adamantina",
-    "official": "Adamantina"
-  },
-  {
-    "norm": "adolfo",
-    "official": "Adolfo"
-  },
-  {
-    "norm": "aguai",
-    "official": "Aguaí"
-  },
-  {
-    "norm": "aguas da prata",
-    "official": "Águas da Prata"
-  },
-  {
-    "norm": "aguas de lindoia",
-    "official": "Águas de Lindóia"
-  },
-  {
-    "norm": "aguas de santa barbara",
-    "official": "Águas de Santa Bárbara"
-  },
-  {
-    "norm": "aguas de sao pedro",
-    "official": "Águas de São Pedro"
-  },
-  {
-    "norm": "agudos",
-    "official": "Agudos"
-  },
-  {
-    "norm": "alambari",
-    "official": "Alambari"
-  },
-  {
-    "norm": "alfredo marcondes",
-    "official": "Alfredo Marcondes"
-  },
-  {
-    "norm": "altair",
-    "official": "Altair"
-  },
-  {
-    "norm": "altinopolis",
-    "official": "Altinópolis"
-  },
-  {
-    "norm": "alto alegre",
-    "official": "Alto Alegre"
-  },
-  {
-    "norm": "aluminio",
-    "official": "Alumínio"
-  },
-  {
-    "norm": "alvares florence",
-    "official": "Álvares Florence"
-  },
-  {
-    "norm": "alvares machado",
-    "official": "Álvares Machado"
-  },
-  {
-    "norm": "alvaro de carvalho",
-    "official": "Álvaro de Carvalho"
-  },
-  {
-    "norm": "alvinlandia",
-    "official": "Alvinlândia"
-  },
-  {
-    "norm": "americana",
-    "official": "Americana"
-  },
-  {
-    "norm": "americo brasiliense",
-    "official": "Américo Brasiliense"
-  },
-  {
-    "norm": "americo de campos",
-    "official": "Américo de Campos"
-  },
-  {
-    "norm": "amparo",
-    "official": "Amparo"
-  },
-  {
-    "norm": "analandia",
-    "official": "Analândia"
-  },
-  {
-    "norm": "andradina",
-    "official": "Andradina"
-  },
-  {
-    "norm": "angatuba",
-    "official": "Angatuba"
-  },
-  {
-    "norm": "anhembi",
-    "official": "Anhembi"
-  },
-  {
-    "norm": "anhumas",
-    "official": "Anhumas"
-  },
-  {
-    "norm": "aparecida",
-    "official": "Aparecida"
-  },
-  {
-    "norm": "aparecida doeste",
-    "official": "Aparecida d'Oeste"
-  },
-  {
-    "norm": "apiai",
-    "official": "Apiaí"
-  },
-  {
-    "norm": "aracariguama",
-    "official": "Araçariguama"
-  },
-  {
-    "norm": "aracatuba",
-    "official": "Araçatuba"
-  },
-  {
-    "norm": "aracoiaba da serra",
-    "official": "Araçoiaba da Serra"
-  },
-  {
-    "norm": "aramina",
-    "official": "Aramina"
-  },
-  {
-    "norm": "arandu",
-    "official": "Arandu"
-  },
-  {
-    "norm": "arapei",
-    "official": "Arapeí"
-  },
-  {
-    "norm": "araraquara",
-    "official": "Araraquara"
-  },
-  {
-    "norm": "araras",
-    "official": "Araras"
-  },
-  {
-    "norm": "arcoiris",
-    "official": "Arco-Íris"
-  },
-  {
-    "norm": "arealva",
-    "official": "Arealva"
-  },
-  {
-    "norm": "areias",
-    "official": "Areias"
-  },
-  {
-    "norm": "areiopolis",
-    "official": "Areiópolis"
-  },
-  {
-    "norm": "ariranha",
-    "official": "Ariranha"
-  },
-  {
-    "norm": "artur nogueira",
-    "official": "Artur Nogueira"
-  },
-  {
-    "norm": "aruja",
-    "official": "Arujá"
-  },
-  {
-    "norm": "aspasia",
-    "official": "Aspásia"
-  },
-  {
-    "norm": "assis",
-    "official": "Assis"
-  },
-  {
-    "norm": "atibaia",
-    "official": "Atibaia"
-  },
-  {
-    "norm": "auriflama",
-    "official": "Auriflama"
-  },
-  {
-    "norm": "avai",
-    "official": "Avaí"
-  },
-  {
-    "norm": "avanhandava",
-    "official": "Avanhandava"
-  },
-  {
-    "norm": "avare",
-    "official": "Avaré"
-  },
-  {
-    "norm": "bady bassitt",
-    "official": "Bady Bassitt"
-  },
-  {
-    "norm": "balbinos",
-    "official": "Balbinos"
-  },
-  {
-    "norm": "balsamo",
-    "official": "Bálsamo"
-  },
-  {
-    "norm": "bananal",
-    "official": "Bananal"
-  },
-  {
-    "norm": "barao de antonina",
-    "official": "Barão de Antonina"
-  },
-  {
-    "norm": "barbosa",
-    "official": "Barbosa"
-  },
-  {
-    "norm": "bariri",
-    "official": "Bariri"
-  },
-  {
-    "norm": "barra bonita",
-    "official": "Barra Bonita"
-  },
-  {
-    "norm": "barra do chapeu",
-    "official": "Barra do Chapéu"
-  },
-  {
-    "norm": "barra do turvo",
-    "official": "Barra do Turvo"
-  },
-  {
-    "norm": "barretos",
-    "official": "Barretos"
-  },
-  {
-    "norm": "barrinha",
-    "official": "Barrinha"
-  },
-  {
-    "norm": "barueri",
-    "official": "Barueri"
-  },
-  {
-    "norm": "bastos",
-    "official": "Bastos"
-  },
-  {
-    "norm": "batatais",
-    "official": "Batatais"
-  },
-  {
-    "norm": "bauru",
-    "official": "Bauru"
-  },
-  {
-    "norm": "bebedouro",
-    "official": "Bebedouro"
-  },
-  {
-    "norm": "bento de abreu",
-    "official": "Bento de Abreu"
-  },
-  {
-    "norm": "bernardino de campos",
-    "official": "Bernardino de Campos"
-  },
-  {
-    "norm": "bertioga",
-    "official": "Bertioga"
-  },
-  {
-    "norm": "bilac",
-    "official": "Bilac"
-  },
-  {
-    "norm": "birigui",
-    "official": "Birigui"
-  },
-  {
-    "norm": "biritiba mirim",
-    "official": "Biritiba Mirim"
-  },
-  {
-    "norm": "boa esperanca do sul",
-    "official": "Boa Esperança do Sul"
-  },
-  {
-    "norm": "bocaina",
-    "official": "Bocaina"
-  },
-  {
-    "norm": "bofete",
-    "official": "Bofete"
-  },
-  {
-    "norm": "boituva",
-    "official": "Boituva"
-  },
-  {
-    "norm": "bom jesus dos perdoes",
-    "official": "Bom Jesus dos Perdões"
-  },
-  {
-    "norm": "bom sucesso de itarare",
-    "official": "Bom Sucesso de Itararé"
-  },
-  {
-    "norm": "bora",
-    "official": "Borá"
-  },
-  {
-    "norm": "boraceia",
-    "official": "Boraceia"
-  },
-  {
-    "norm": "borborema",
-    "official": "Borborema"
-  },
-  {
-    "norm": "borebi",
-    "official": "Borebi"
-  },
-  {
-    "norm": "botucatu",
-    "official": "Botucatu"
-  },
-  {
-    "norm": "braganca paulista",
-    "official": "Bragança Paulista"
-  },
-  {
-    "norm": "brauna",
-    "official": "Braúna"
-  },
-  {
-    "norm": "brejo alegre",
-    "official": "Brejo Alegre"
-  },
-  {
-    "norm": "brodowski",
-    "official": "Brodowski"
-  },
-  {
-    "norm": "brotas",
-    "official": "Brotas"
-  },
-  {
-    "norm": "buri",
-    "official": "Buri"
-  },
-  {
-    "norm": "buritama",
-    "official": "Buritama"
-  },
-  {
-    "norm": "buritizal",
-    "official": "Buritizal"
-  },
-  {
-    "norm": "cabralia paulista",
-    "official": "Cabrália Paulista"
-  },
-  {
-    "norm": "cabreuva",
-    "official": "Cabreúva"
-  },
-  {
-    "norm": "cacapava",
-    "official": "Caçapava"
-  },
-  {
-    "norm": "cachoeira paulista",
-    "official": "Cachoeira Paulista"
-  },
-  {
-    "norm": "caconde",
-    "official": "Caconde"
-  },
-  {
-    "norm": "cafelandia",
-    "official": "Cafelândia"
-  },
-  {
-    "norm": "caiabu",
-    "official": "Caiabu"
-  },
-  {
-    "norm": "caieiras",
-    "official": "Caieiras"
-  },
-  {
-    "norm": "caiua",
-    "official": "Caiuá"
-  },
-  {
-    "norm": "cajamar",
-    "official": "Cajamar"
-  },
-  {
-    "norm": "cajati",
-    "official": "Cajati"
-  },
-  {
-    "norm": "cajobi",
-    "official": "Cajobi"
-  },
-  {
-    "norm": "cajuru",
-    "official": "Cajuru"
-  },
-  {
-    "norm": "campina do monte alegre",
-    "official": "Campina do Monte Alegre"
-  },
-  {
-    "norm": "campinas",
-    "official": "Campinas"
-  },
-  {
-    "norm": "campo limpo paulista",
-    "official": "Campo Limpo Paulista"
-  },
-  {
-    "norm": "campos do jordao",
-    "official": "Campos do Jordão"
-  },
-  {
-    "norm": "campos novos paulista",
-    "official": "Campos Novos Paulista"
-  },
-  {
-    "norm": "cananeia",
-    "official": "Cananéia"
-  },
-  {
-    "norm": "canas",
-    "official": "Canas"
-  },
-  {
-    "norm": "candido mota",
-    "official": "Cândido Mota"
-  },
-  {
-    "norm": "candido rodrigues",
-    "official": "Cândido Rodrigues"
-  },
-  {
-    "norm": "canitar",
-    "official": "Canitar"
-  },
-  {
-    "norm": "capao bonito",
-    "official": "Capão Bonito"
-  },
-  {
-    "norm": "capela do alto",
-    "official": "Capela do Alto"
-  },
-  {
-    "norm": "capivari",
-    "official": "Capivari"
-  },
-  {
-    "norm": "caraguatatuba",
-    "official": "Caraguatatuba"
-  },
-  {
-    "norm": "carapicuiba",
-    "official": "Carapicuíba"
-  },
-  {
-    "norm": "cardoso",
-    "official": "Cardoso"
-  },
-  {
-    "norm": "casa branca",
-    "official": "Casa Branca"
-  },
-  {
-    "norm": "cassia dos coqueiros",
-    "official": "Cássia dos Coqueiros"
-  },
-  {
-    "norm": "castilho",
-    "official": "Castilho"
-  },
-  {
-    "norm": "catanduva",
-    "official": "Catanduva"
-  },
-  {
-    "norm": "catigua",
-    "official": "Catiguá"
-  },
-  {
-    "norm": "cedral",
-    "official": "Cedral"
-  },
-  {
-    "norm": "cerqueira cesar",
-    "official": "Cerqueira César"
-  },
-  {
-    "norm": "cerquilho",
-    "official": "Cerquilho"
-  },
-  {
-    "norm": "cesario lange",
-    "official": "Cesário Lange"
-  },
-  {
-    "norm": "charqueada",
-    "official": "Charqueada"
-  },
-  {
-    "norm": "chavantes",
-    "official": "Chavantes"
-  },
-  {
-    "norm": "clementina",
-    "official": "Clementina"
-  },
-  {
-    "norm": "colina",
-    "official": "Colina"
-  },
-  {
-    "norm": "colombia",
-    "official": "Colômbia"
-  },
-  {
-    "norm": "conchal",
-    "official": "Conchal"
-  },
-  {
-    "norm": "conchas",
-    "official": "Conchas"
-  },
-  {
-    "norm": "cordeiropolis",
-    "official": "Cordeirópolis"
-  },
-  {
-    "norm": "coroados",
-    "official": "Coroados"
-  },
-  {
-    "norm": "coronel macedo",
-    "official": "Coronel Macedo"
-  },
-  {
-    "norm": "corumbatai",
-    "official": "Corumbataí"
-  },
-  {
-    "norm": "cosmopolis",
-    "official": "Cosmópolis"
-  },
-  {
-    "norm": "cosmorama",
-    "official": "Cosmorama"
-  },
-  {
-    "norm": "cotia",
-    "official": "Cotia"
-  },
-  {
-    "norm": "cravinhos",
-    "official": "Cravinhos"
-  },
-  {
-    "norm": "cristais paulista",
-    "official": "Cristais Paulista"
-  },
-  {
-    "norm": "cruzalia",
-    "official": "Cruzália"
-  },
-  {
-    "norm": "cruzeiro",
-    "official": "Cruzeiro"
-  },
-  {
-    "norm": "cubatao",
-    "official": "Cubatão"
-  },
-  {
-    "norm": "cunha",
-    "official": "Cunha"
-  },
-  {
-    "norm": "descalvado",
-    "official": "Descalvado"
-  },
-  {
-    "norm": "diadema",
-    "official": "Diadema"
-  },
-  {
-    "norm": "dirce reis",
-    "official": "Dirce Reis"
-  },
-  {
-    "norm": "divinolandia",
-    "official": "Divinolândia"
-  },
-  {
-    "norm": "dobrada",
-    "official": "Dobrada"
-  },
-  {
-    "norm": "dois corregos",
-    "official": "Dois Córregos"
-  },
-  {
-    "norm": "dolcinopolis",
-    "official": "Dolcinópolis"
-  },
-  {
-    "norm": "dourado",
-    "official": "Dourado"
-  },
-  {
-    "norm": "dracena",
-    "official": "Dracena"
-  },
-  {
-    "norm": "duartina",
-    "official": "Duartina"
-  },
-  {
-    "norm": "dumont",
-    "official": "Dumont"
-  },
-  {
-    "norm": "echapora",
-    "official": "Echaporã"
-  },
-  {
-    "norm": "eldorado",
-    "official": "Eldorado"
-  },
-  {
-    "norm": "elias fausto",
-    "official": "Elias Fausto"
-  },
-  {
-    "norm": "elisiario",
-    "official": "Elisiário"
-  },
-  {
-    "norm": "embauba",
-    "official": "Embaúba"
-  },
-  {
-    "norm": "embu das artes",
-    "official": "Embu das Artes"
-  },
-  {
-    "norm": "embuguacu",
-    "official": "Embu-Guaçu"
-  },
-  {
-    "norm": "emilianopolis",
-    "official": "Emilianópolis"
-  },
-  {
-    "norm": "engenheiro coelho",
-    "official": "Engenheiro Coelho"
-  },
-  {
-    "norm": "espirito santo do pinhal",
-    "official": "Espírito Santo do Pinhal"
-  },
-  {
-    "norm": "espirito santo do turvo",
-    "official": "Espírito Santo do Turvo"
-  },
-  {
-    "norm": "estiva gerbi",
-    "official": "Estiva Gerbi"
-  },
-  {
-    "norm": "estrela do norte",
-    "official": "Estrela do Norte"
-  },
-  {
-    "norm": "estrela doeste",
-    "official": "Estrela d'Oeste"
-  },
-  {
-    "norm": "euclides da cunha paulista",
-    "official": "Euclides da Cunha Paulista"
-  },
-  {
-    "norm": "fartura",
-    "official": "Fartura"
-  },
-  {
-    "norm": "fernando prestes",
-    "official": "Fernando Prestes"
-  },
-  {
-    "norm": "fernandopolis",
-    "official": "Fernandópolis"
-  },
-  {
-    "norm": "fernao",
-    "official": "Fernão"
-  },
-  {
-    "norm": "ferraz de vasconcelos",
-    "official": "Ferraz de Vasconcelos"
-  },
-  {
-    "norm": "flora rica",
-    "official": "Flora Rica"
-  },
-  {
-    "norm": "floreal",
-    "official": "Floreal"
-  },
-  {
-    "norm": "florida paulista",
-    "official": "Flórida Paulista"
-  },
-  {
-    "norm": "florinea",
-    "official": "Florínea"
-  },
-  {
-    "norm": "franca",
-    "official": "Franca"
-  },
-  {
-    "norm": "francisco morato",
-    "official": "Francisco Morato"
-  },
-  {
-    "norm": "franco da rocha",
-    "official": "Franco da Rocha"
-  },
-  {
-    "norm": "gabriel monteiro",
-    "official": "Gabriel Monteiro"
-  },
-  {
-    "norm": "galia",
-    "official": "Gália"
-  },
-  {
-    "norm": "garca",
-    "official": "Garça"
-  },
-  {
-    "norm": "gastao vidigal",
-    "official": "Gastão Vidigal"
-  },
-  {
-    "norm": "gaviao peixoto",
-    "official": "Gavião Peixoto"
-  },
-  {
-    "norm": "general salgado",
-    "official": "General Salgado"
-  },
-  {
-    "norm": "getulina",
-    "official": "Getulina"
-  },
-  {
-    "norm": "glicerio",
-    "official": "Glicério"
-  },
-  {
-    "norm": "guaicara",
-    "official": "Guaiçara"
-  },
-  {
-    "norm": "guaimbe",
-    "official": "Guaimbê"
-  },
-  {
-    "norm": "guaira",
-    "official": "Guaíra"
-  },
-  {
-    "norm": "guapiacu",
-    "official": "Guapiaçu"
-  },
-  {
-    "norm": "guapiara",
-    "official": "Guapiara"
-  },
-  {
-    "norm": "guara",
-    "official": "Guará"
-  },
-  {
-    "norm": "guaracai",
-    "official": "Guaraçaí"
-  },
-  {
-    "norm": "guaraci",
-    "official": "Guaraci"
-  },
-  {
-    "norm": "guarani doeste",
-    "official": "Guarani d'Oeste"
-  },
-  {
-    "norm": "guaranta",
-    "official": "Guarantã"
-  },
-  {
-    "norm": "guararapes",
-    "official": "Guararapes"
-  },
-  {
-    "norm": "guararema",
-    "official": "Guararema"
-  },
-  {
-    "norm": "guaratingueta",
-    "official": "Guaratinguetá"
-  },
-  {
-    "norm": "guarei",
-    "official": "Guareí"
-  },
-  {
-    "norm": "guariba",
-    "official": "Guariba"
-  },
-  {
-    "norm": "guaruja",
-    "official": "Guarujá"
-  },
-  {
-    "norm": "guarulhos",
-    "official": "Guarulhos"
-  },
-  {
-    "norm": "guatapara",
-    "official": "Guatapará"
-  },
-  {
-    "norm": "guzolandia",
-    "official": "Guzolândia"
-  },
-  {
-    "norm": "herculandia",
-    "official": "Herculândia"
-  },
-  {
-    "norm": "holambra",
-    "official": "Holambra"
-  },
-  {
-    "norm": "hortolandia",
-    "official": "Hortolândia"
-  },
-  {
-    "norm": "iacanga",
-    "official": "Iacanga"
-  },
-  {
-    "norm": "iacri",
-    "official": "Iacri"
-  },
-  {
-    "norm": "iaras",
-    "official": "Iaras"
-  },
-  {
-    "norm": "ibate",
-    "official": "Ibaté"
-  },
-  {
-    "norm": "ibira",
-    "official": "Ibirá"
-  },
-  {
-    "norm": "ibirarema",
-    "official": "Ibirarema"
-  },
-  {
-    "norm": "ibitinga",
-    "official": "Ibitinga"
-  },
-  {
-    "norm": "ibiuna",
-    "official": "Ibiúna"
-  },
-  {
-    "norm": "icem",
-    "official": "Icém"
-  },
-  {
-    "norm": "iepe",
-    "official": "Iepê"
-  },
-  {
-    "norm": "igaracu do tiete",
-    "official": "Igaraçu do Tietê"
-  },
-  {
-    "norm": "igarapava",
-    "official": "Igarapava"
-  },
-  {
-    "norm": "igarata",
-    "official": "Igaratá"
-  },
-  {
-    "norm": "iguape",
-    "official": "Iguape"
-  },
-  {
-    "norm": "ilha comprida",
-    "official": "Ilha Comprida"
-  },
-  {
-    "norm": "ilha solteira",
-    "official": "Ilha Solteira"
-  },
-  {
-    "norm": "ilhabela",
-    "official": "Ilhabela"
-  },
-  {
-    "norm": "indaiatuba",
-    "official": "Indaiatuba"
-  },
-  {
-    "norm": "indiana",
-    "official": "Indiana"
-  },
-  {
-    "norm": "indiapora",
-    "official": "Indiaporã"
-  },
-  {
-    "norm": "inubia paulista",
-    "official": "Inúbia Paulista"
-  },
-  {
-    "norm": "ipaussu",
-    "official": "Ipaussu"
-  },
-  {
-    "norm": "ipero",
-    "official": "Iperó"
-  },
-  {
-    "norm": "ipeuna",
-    "official": "Ipeúna"
-  },
-  {
-    "norm": "ipigua",
-    "official": "Ipiguá"
-  },
-  {
-    "norm": "iporanga",
-    "official": "Iporanga"
-  },
-  {
-    "norm": "ipua",
-    "official": "Ipuã"
-  },
-  {
-    "norm": "iracemapolis",
-    "official": "Iracemápolis"
-  },
-  {
-    "norm": "irapua",
-    "official": "Irapuã"
-  },
-  {
-    "norm": "irapuru",
-    "official": "Irapuru"
-  },
-  {
-    "norm": "itabera",
-    "official": "Itaberá"
-  },
-  {
-    "norm": "itai",
-    "official": "Itaí"
-  },
-  {
-    "norm": "itajobi",
-    "official": "Itajobi"
-  },
-  {
-    "norm": "itaju",
-    "official": "Itaju"
-  },
-  {
-    "norm": "itanhaem",
-    "official": "Itanhaém"
-  },
-  {
-    "norm": "itaoca",
-    "official": "Itaoca"
-  },
-  {
-    "norm": "itapecerica da serra",
-    "official": "Itapecerica da Serra"
-  },
-  {
-    "norm": "itapetininga",
-    "official": "Itapetininga"
-  },
-  {
-    "norm": "itapeva",
-    "official": "Itapeva"
-  },
-  {
-    "norm": "itapevi",
-    "official": "Itapevi"
-  },
-  {
-    "norm": "itapira",
-    "official": "Itapira"
-  },
-  {
-    "norm": "itapirapua paulista",
-    "official": "Itapirapuã Paulista"
-  },
-  {
-    "norm": "itapolis",
-    "official": "Itápolis"
-  },
-  {
-    "norm": "itaporanga",
-    "official": "Itaporanga"
-  },
-  {
-    "norm": "itapui",
-    "official": "Itapuí"
-  },
-  {
-    "norm": "itapura",
-    "official": "Itapura"
-  },
-  {
-    "norm": "itaquaquecetuba",
-    "official": "Itaquaquecetuba"
-  },
-  {
-    "norm": "itarare",
-    "official": "Itararé"
-  },
-  {
-    "norm": "itariri",
-    "official": "Itariri"
-  },
-  {
-    "norm": "itatiba",
-    "official": "Itatiba"
-  },
-  {
-    "norm": "itatinga",
-    "official": "Itatinga"
-  },
-  {
-    "norm": "itirapina",
-    "official": "Itirapina"
-  },
-  {
-    "norm": "itirapua",
-    "official": "Itirapuã"
-  },
-  {
-    "norm": "itobi",
-    "official": "Itobi"
-  },
-  {
-    "norm": "itu",
-    "official": "Itu"
-  },
-  {
-    "norm": "itupeva",
-    "official": "Itupeva"
-  },
-  {
-    "norm": "ituverava",
-    "official": "Ituverava"
-  },
-  {
-    "norm": "jaborandi",
-    "official": "Jaborandi"
-  },
-  {
-    "norm": "jaboticabal",
-    "official": "Jaboticabal"
-  },
-  {
-    "norm": "jacarei",
-    "official": "Jacareí"
-  },
-  {
-    "norm": "jaci",
-    "official": "Jaci"
-  },
-  {
-    "norm": "jacupiranga",
-    "official": "Jacupiranga"
-  },
-  {
-    "norm": "jaguariuna",
-    "official": "Jaguariúna"
-  },
-  {
-    "norm": "jales",
-    "official": "Jales"
-  },
-  {
-    "norm": "jambeiro",
-    "official": "Jambeiro"
-  },
-  {
-    "norm": "jandira",
-    "official": "Jandira"
-  },
-  {
-    "norm": "jardinopolis",
-    "official": "Jardinópolis"
-  },
-  {
-    "norm": "jarinu",
-    "official": "Jarinu"
-  },
-  {
-    "norm": "jau",
-    "official": "Jaú"
-  },
-  {
-    "norm": "jeriquara",
-    "official": "Jeriquara"
-  },
-  {
-    "norm": "joanopolis",
-    "official": "Joanópolis"
-  },
-  {
-    "norm": "joao ramalho",
-    "official": "João Ramalho"
-  },
-  {
-    "norm": "jose bonifacio",
-    "official": "José Bonifácio"
-  },
-  {
-    "norm": "julio mesquita",
-    "official": "Júlio Mesquita"
-  },
-  {
-    "norm": "jumirim",
-    "official": "Jumirim"
-  },
-  {
-    "norm": "jundiai",
-    "official": "Jundiaí"
-  },
-  {
-    "norm": "junqueiropolis",
-    "official": "Junqueirópolis"
-  },
-  {
-    "norm": "juquia",
-    "official": "Juquiá"
-  },
-  {
-    "norm": "juquitiba",
-    "official": "Juquitiba"
-  },
-  {
-    "norm": "lagoinha",
-    "official": "Lagoinha"
-  },
-  {
-    "norm": "laranjal paulista",
-    "official": "Laranjal Paulista"
-  },
-  {
-    "norm": "lavinia",
-    "official": "Lavínia"
-  },
-  {
-    "norm": "lavrinhas",
-    "official": "Lavrinhas"
-  },
-  {
-    "norm": "leme",
-    "official": "Leme"
-  },
-  {
-    "norm": "lencois paulista",
-    "official": "Lençóis Paulista"
-  },
-  {
-    "norm": "limeira",
-    "official": "Limeira"
-  },
-  {
-    "norm": "lindoia",
-    "official": "Lindoia"
-  },
-  {
-    "norm": "lins",
-    "official": "Lins"
-  },
-  {
-    "norm": "lorena",
-    "official": "Lorena"
-  },
-  {
-    "norm": "lourdes",
-    "official": "Lourdes"
-  },
-  {
-    "norm": "louveira",
-    "official": "Louveira"
-  },
-  {
-    "norm": "lucelia",
-    "official": "Lucélia"
-  },
-  {
-    "norm": "lucianopolis",
-    "official": "Lucianópolis"
-  },
-  {
-    "norm": "luiz antonio",
-    "official": "Luiz Antônio"
-  },
-  {
-    "norm": "luiziania",
-    "official": "Luiziânia"
-  },
-  {
-    "norm": "lupercio",
-    "official": "Lupércio"
-  },
-  {
-    "norm": "lutecia",
-    "official": "Lutécia"
-  },
-  {
-    "norm": "macatuba",
-    "official": "Macatuba"
-  },
-  {
-    "norm": "macaubal",
-    "official": "Macaubal"
-  },
-  {
-    "norm": "macedonia",
-    "official": "Macedônia"
-  },
-  {
-    "norm": "magda",
-    "official": "Magda"
-  },
-  {
-    "norm": "mairinque",
-    "official": "Mairinque"
-  },
-  {
-    "norm": "mairipora",
-    "official": "Mairiporã"
-  },
-  {
-    "norm": "manduri",
-    "official": "Manduri"
-  },
-  {
-    "norm": "maraba paulista",
-    "official": "Marabá Paulista"
-  },
-  {
-    "norm": "maracai",
-    "official": "Maracaí"
-  },
-  {
-    "norm": "marapoama",
-    "official": "Marapoama"
-  },
-  {
-    "norm": "mariapolis",
-    "official": "Mariápolis"
-  },
-  {
-    "norm": "marilia",
-    "official": "Marília"
-  },
-  {
-    "norm": "marinopolis",
-    "official": "Marinópolis"
-  },
-  {
-    "norm": "martinopolis",
-    "official": "Martinópolis"
-  },
-  {
-    "norm": "matao",
-    "official": "Matão"
-  },
-  {
-    "norm": "maua",
-    "official": "Mauá"
-  },
-  {
-    "norm": "mendonca",
-    "official": "Mendonça"
-  },
-  {
-    "norm": "meridiano",
-    "official": "Meridiano"
-  },
-  {
-    "norm": "mesopolis",
-    "official": "Mesópolis"
-  },
-  {
-    "norm": "miguelopolis",
-    "official": "Miguelópolis"
-  },
-  {
-    "norm": "mineiros do tiete",
-    "official": "Mineiros do Tietê"
-  },
-  {
-    "norm": "mira estrela",
-    "official": "Mira Estrela"
-  },
-  {
-    "norm": "miracatu",
-    "official": "Miracatu"
-  },
-  {
-    "norm": "mirandopolis",
-    "official": "Mirandópolis"
-  },
-  {
-    "norm": "mirante do paranapanema",
-    "official": "Mirante do Paranapanema"
-  },
-  {
-    "norm": "mirassol",
-    "official": "Mirassol"
-  },
-  {
-    "norm": "mirassolandia",
-    "official": "Mirassolândia"
-  },
-  {
-    "norm": "mococa",
-    "official": "Mococa"
-  },
-  {
-    "norm": "mogi das cruzes",
-    "official": "Mogi das Cruzes"
-  },
-  {
-    "norm": "mogi guacu",
-    "official": "Mogi Guaçu"
-  },
-  {
-    "norm": "mogi mirim",
-    "official": "Mogi Mirim"
-  },
-  {
-    "norm": "mombuca",
-    "official": "Mombuca"
-  },
-  {
-    "norm": "moncoes",
-    "official": "Monções"
-  },
-  {
-    "norm": "mongagua",
-    "official": "Mongaguá"
-  },
-  {
-    "norm": "monte alegre do sul",
-    "official": "Monte Alegre do Sul"
-  },
-  {
-    "norm": "monte alto",
-    "official": "Monte Alto"
-  },
-  {
-    "norm": "monte aprazivel",
-    "official": "Monte Aprazível"
-  },
-  {
-    "norm": "monte azul paulista",
-    "official": "Monte Azul Paulista"
-  },
-  {
-    "norm": "monte castelo",
-    "official": "Monte Castelo"
-  },
-  {
-    "norm": "monte mor",
-    "official": "Monte Mor"
-  },
-  {
-    "norm": "monteiro lobato",
-    "official": "Monteiro Lobato"
-  },
-  {
-    "norm": "morro agudo",
-    "official": "Morro Agudo"
-  },
-  {
-    "norm": "morungaba",
-    "official": "Morungaba"
-  },
-  {
-    "norm": "motuca",
-    "official": "Motuca"
-  },
-  {
-    "norm": "murutinga do sul",
-    "official": "Murutinga do Sul"
-  },
-  {
-    "norm": "nantes",
-    "official": "Nantes"
-  },
-  {
-    "norm": "narandiba",
-    "official": "Narandiba"
-  },
-  {
-    "norm": "natividade da serra",
-    "official": "Natividade da Serra"
-  },
-  {
-    "norm": "nazare paulista",
-    "official": "Nazaré Paulista"
-  },
-  {
-    "norm": "neves paulista",
-    "official": "Neves Paulista"
-  },
-  {
-    "norm": "nhandeara",
-    "official": "Nhandeara"
-  },
-  {
-    "norm": "nipoa",
-    "official": "Nipoã"
-  },
-  {
-    "norm": "nova alianca",
-    "official": "Nova Aliança"
-  },
-  {
-    "norm": "nova campina",
-    "official": "Nova Campina"
-  },
-  {
-    "norm": "nova canaa paulista",
-    "official": "Nova Canaã Paulista"
-  },
-  {
-    "norm": "nova castilho",
-    "official": "Nova Castilho"
-  },
-  {
-    "norm": "nova europa",
-    "official": "Nova Europa"
-  },
-  {
-    "norm": "nova granada",
-    "official": "Nova Granada"
-  },
-  {
-    "norm": "nova guataporanga",
-    "official": "Nova Guataporanga"
-  },
-  {
-    "norm": "nova independencia",
-    "official": "Nova Independência"
-  },
-  {
-    "norm": "nova luzitania",
-    "official": "Nova Luzitânia"
-  },
-  {
-    "norm": "nova odessa",
-    "official": "Nova Odessa"
-  },
-  {
-    "norm": "novais",
-    "official": "Novais"
-  },
-  {
-    "norm": "novo horizonte",
-    "official": "Novo Horizonte"
-  },
-  {
-    "norm": "nuporanga",
-    "official": "Nuporanga"
-  },
-  {
-    "norm": "ocaucu",
-    "official": "Ocauçu"
-  },
-  {
-    "norm": "oleo",
-    "official": "Óleo"
-  },
-  {
-    "norm": "olimpia",
-    "official": "Olímpia"
-  },
-  {
-    "norm": "onda verde",
-    "official": "Onda Verde"
-  },
-  {
-    "norm": "oriente",
-    "official": "Oriente"
-  },
-  {
-    "norm": "orindiuva",
-    "official": "Orindiúva"
-  },
-  {
-    "norm": "orlandia",
-    "official": "Orlândia"
-  },
-  {
-    "norm": "osasco",
-    "official": "Osasco"
-  },
-  {
-    "norm": "oscar bressane",
-    "official": "Oscar Bressane"
-  },
-  {
-    "norm": "osvaldo cruz",
-    "official": "Osvaldo Cruz"
-  },
-  {
-    "norm": "ourinhos",
-    "official": "Ourinhos"
-  },
-  {
-    "norm": "ouro verde",
-    "official": "Ouro Verde"
-  },
-  {
-    "norm": "ouroeste",
-    "official": "Ouroeste"
-  },
-  {
-    "norm": "pacaembu",
-    "official": "Pacaembu"
-  },
-  {
-    "norm": "palestina",
-    "official": "Palestina"
-  },
-  {
-    "norm": "palmares paulista",
-    "official": "Palmares Paulista"
-  },
-  {
-    "norm": "palmeira doeste",
-    "official": "Palmeira d'Oeste"
-  },
-  {
-    "norm": "palmital",
-    "official": "Palmital"
-  },
-  {
-    "norm": "panorama",
-    "official": "Panorama"
-  },
-  {
-    "norm": "paraguacu paulista",
-    "official": "Paraguaçu Paulista"
-  },
-  {
-    "norm": "paraibuna",
-    "official": "Paraibuna"
-  },
-  {
-    "norm": "paraiso",
-    "official": "Paraíso"
-  },
-  {
-    "norm": "paranapanema",
-    "official": "Paranapanema"
-  },
-  {
-    "norm": "paranapua",
-    "official": "Paranapuã"
-  },
-  {
-    "norm": "parapua",
-    "official": "Parapuã"
-  },
-  {
-    "norm": "pardinho",
-    "official": "Pardinho"
-  },
-  {
-    "norm": "pariqueraacu",
-    "official": "Pariquera-Açu"
-  },
-  {
-    "norm": "parisi",
-    "official": "Parisi"
-  },
-  {
-    "norm": "patrocinio paulista",
-    "official": "Patrocínio Paulista"
-  },
-  {
-    "norm": "pauliceia",
-    "official": "Paulicéia"
-  },
-  {
-    "norm": "paulinia",
-    "official": "Paulínia"
-  },
-  {
-    "norm": "paulistania",
-    "official": "Paulistânia"
-  },
-  {
-    "norm": "paulo de faria",
-    "official": "Paulo de Faria"
-  },
-  {
-    "norm": "pederneiras",
-    "official": "Pederneiras"
-  },
-  {
-    "norm": "pedra bela",
-    "official": "Pedra Bela"
-  },
-  {
-    "norm": "pedranopolis",
-    "official": "Pedranópolis"
-  },
-  {
-    "norm": "pedregulho",
-    "official": "Pedregulho"
-  },
-  {
-    "norm": "pedreira",
-    "official": "Pedreira"
-  },
-  {
-    "norm": "pedrinhas paulista",
-    "official": "Pedrinhas Paulista"
-  },
-  {
-    "norm": "pedro de toledo",
-    "official": "Pedro de Toledo"
-  },
-  {
-    "norm": "penapolis",
-    "official": "Penápolis"
-  },
-  {
-    "norm": "pereira barreto",
-    "official": "Pereira Barreto"
-  },
-  {
-    "norm": "pereiras",
-    "official": "Pereiras"
-  },
-  {
-    "norm": "peruibe",
-    "official": "Peruíbe"
-  },
-  {
-    "norm": "piacatu",
-    "official": "Piacatu"
-  },
-  {
-    "norm": "piedade",
-    "official": "Piedade"
-  },
-  {
-    "norm": "pilar do sul",
-    "official": "Pilar do Sul"
-  },
-  {
-    "norm": "pindamonhangaba",
-    "official": "Pindamonhangaba"
-  },
-  {
-    "norm": "pindorama",
-    "official": "Pindorama"
-  },
-  {
-    "norm": "pinhalzinho",
-    "official": "Pinhalzinho"
-  },
-  {
-    "norm": "piquerobi",
-    "official": "Piquerobi"
-  },
-  {
-    "norm": "piquete",
-    "official": "Piquete"
-  },
-  {
-    "norm": "piracaia",
-    "official": "Piracaia"
-  },
-  {
-    "norm": "piracicaba",
-    "official": "Piracicaba"
-  },
-  {
-    "norm": "piraju",
-    "official": "Piraju"
-  },
-  {
-    "norm": "pirajui",
-    "official": "Pirajuí"
-  },
-  {
-    "norm": "pirangi",
-    "official": "Pirangi"
-  },
-  {
-    "norm": "pirapora do bom jesus",
-    "official": "Pirapora do Bom Jesus"
-  },
-  {
-    "norm": "pirapozinho",
-    "official": "Pirapozinho"
-  },
-  {
-    "norm": "pirassununga",
-    "official": "Pirassununga"
-  },
-  {
-    "norm": "piratininga",
-    "official": "Piratininga"
-  },
-  {
-    "norm": "pitangueiras",
-    "official": "Pitangueiras"
-  },
-  {
-    "norm": "planalto",
-    "official": "Planalto"
-  },
-  {
-    "norm": "platina",
-    "official": "Platina"
-  },
-  {
-    "norm": "poa",
-    "official": "Poá"
-  },
-  {
-    "norm": "poloni",
-    "official": "Poloni"
-  },
-  {
-    "norm": "pompeia",
-    "official": "Pompeia"
-  },
-  {
-    "norm": "pongai",
-    "official": "Pongaí"
-  },
-  {
-    "norm": "pontal",
-    "official": "Pontal"
-  },
-  {
-    "norm": "pontalinda",
-    "official": "Pontalinda"
-  },
-  {
-    "norm": "pontes gestal",
-    "official": "Pontes Gestal"
-  },
-  {
-    "norm": "populina",
-    "official": "Populina"
-  },
-  {
-    "norm": "porangaba",
-    "official": "Porangaba"
-  },
-  {
-    "norm": "porto feliz",
-    "official": "Porto Feliz"
-  },
-  {
-    "norm": "porto ferreira",
-    "official": "Porto Ferreira"
-  },
-  {
-    "norm": "potim",
-    "official": "Potim"
-  },
-  {
-    "norm": "potirendaba",
-    "official": "Potirendaba"
-  },
-  {
-    "norm": "pracinha",
-    "official": "Pracinha"
-  },
-  {
-    "norm": "pradopolis",
-    "official": "Pradópolis"
-  },
-  {
-    "norm": "praia grande",
-    "official": "Praia Grande"
-  },
-  {
-    "norm": "pratania",
-    "official": "Pratânia"
-  },
-  {
-    "norm": "presidente alves",
-    "official": "Presidente Alves"
-  },
-  {
-    "norm": "presidente bernardes",
-    "official": "Presidente Bernardes"
-  },
-  {
-    "norm": "presidente epitacio",
-    "official": "Presidente Epitácio"
-  },
-  {
-    "norm": "presidente prudente",
-    "official": "Presidente Prudente"
-  },
-  {
-    "norm": "presidente venceslau",
-    "official": "Presidente Venceslau"
-  },
-  {
-    "norm": "promissao",
-    "official": "Promissão"
-  },
-  {
-    "norm": "quadra",
-    "official": "Quadra"
-  },
-  {
-    "norm": "quata",
-    "official": "Quatá"
-  },
-  {
-    "norm": "queiroz",
-    "official": "Queiroz"
-  },
-  {
-    "norm": "queluz",
-    "official": "Queluz"
-  },
-  {
-    "norm": "quintana",
-    "official": "Quintana"
-  },
-  {
-    "norm": "rafard",
-    "official": "Rafard"
-  },
-  {
-    "norm": "rancharia",
-    "official": "Rancharia"
-  },
-  {
-    "norm": "redencao da serra",
-    "official": "Redenção da Serra"
-  },
-  {
-    "norm": "regente feijo",
-    "official": "Regente Feijó"
-  },
-  {
-    "norm": "reginopolis",
-    "official": "Reginópolis"
-  },
-  {
-    "norm": "registro",
-    "official": "Registro"
-  },
-  {
-    "norm": "restinga",
-    "official": "Restinga"
-  },
-  {
-    "norm": "ribeira",
-    "official": "Ribeira"
-  },
-  {
-    "norm": "ribeirao bonito",
-    "official": "Ribeirão Bonito"
-  },
-  {
-    "norm": "ribeirao branco",
-    "official": "Ribeirão Branco"
-  },
-  {
-    "norm": "ribeirao corrente",
-    "official": "Ribeirão Corrente"
-  },
-  {
-    "norm": "ribeirao do sul",
-    "official": "Ribeirão do Sul"
-  },
-  {
-    "norm": "ribeirao dos indios",
-    "official": "Ribeirão dos Índios"
-  },
-  {
-    "norm": "ribeirao grande",
-    "official": "Ribeirão Grande"
-  },
-  {
-    "norm": "ribeirao pires",
-    "official": "Ribeirão Pires"
-  },
-  {
-    "norm": "ribeirao preto",
-    "official": "Ribeirão Preto"
-  },
-  {
-    "norm": "rifaina",
-    "official": "Rifaina"
-  },
-  {
-    "norm": "rincao",
-    "official": "Rincão"
-  },
-  {
-    "norm": "rinopolis",
-    "official": "Rinópolis"
-  },
-  {
-    "norm": "rio claro",
-    "official": "Rio Claro"
-  },
-  {
-    "norm": "rio das pedras",
-    "official": "Rio das Pedras"
-  },
-  {
-    "norm": "rio grande da serra",
-    "official": "Rio Grande da Serra"
-  },
-  {
-    "norm": "riolandia",
-    "official": "Riolândia"
-  },
-  {
-    "norm": "riversul",
-    "official": "Riversul"
-  },
-  {
-    "norm": "rosana",
-    "official": "Rosana"
-  },
-  {
-    "norm": "roseira",
-    "official": "Roseira"
-  },
-  {
-    "norm": "rubiacea",
-    "official": "Rubiácea"
-  },
-  {
-    "norm": "rubineia",
-    "official": "Rubineia"
-  },
-  {
-    "norm": "sabino",
-    "official": "Sabino"
-  },
-  {
-    "norm": "sagres",
-    "official": "Sagres"
-  },
-  {
-    "norm": "sales",
-    "official": "Sales"
-  },
-  {
-    "norm": "sales oliveira",
-    "official": "Sales Oliveira"
-  },
-  {
-    "norm": "salesopolis",
-    "official": "Salesópolis"
-  },
-  {
-    "norm": "salmourao",
-    "official": "Salmourão"
-  },
-  {
-    "norm": "saltinho",
-    "official": "Saltinho"
-  },
-  {
-    "norm": "salto",
-    "official": "Salto"
-  },
-  {
-    "norm": "salto de pirapora",
-    "official": "Salto de Pirapora"
-  },
-  {
-    "norm": "salto grande",
-    "official": "Salto Grande"
-  },
-  {
-    "norm": "sandovalina",
-    "official": "Sandovalina"
-  },
-  {
-    "norm": "santa adelia",
-    "official": "Santa Adélia"
-  },
-  {
-    "norm": "santa albertina",
-    "official": "Santa Albertina"
-  },
-  {
-    "norm": "santa barbara doeste",
-    "official": "Santa Bárbara d'Oeste"
-  },
-  {
-    "norm": "santa branca",
-    "official": "Santa Branca"
-  },
-  {
-    "norm": "santa clara doeste",
-    "official": "Santa Clara d'Oeste"
-  },
-  {
-    "norm": "santa cruz da conceicao",
-    "official": "Santa Cruz da Conceição"
-  },
-  {
-    "norm": "santa cruz da esperanca",
-    "official": "Santa Cruz da Esperança"
-  },
-  {
-    "norm": "santa cruz das palmeiras",
-    "official": "Santa Cruz das Palmeiras"
-  },
-  {
-    "norm": "santa cruz do rio pardo",
-    "official": "Santa Cruz do Rio Pardo"
-  },
-  {
-    "norm": "santa ernestina",
-    "official": "Santa Ernestina"
-  },
-  {
-    "norm": "santa fe do sul",
-    "official": "Santa Fé do Sul"
-  },
-  {
-    "norm": "santa gertrudes",
-    "official": "Santa Gertrudes"
-  },
-  {
-    "norm": "santa isabel",
-    "official": "Santa Isabel"
-  },
-  {
-    "norm": "santa lucia",
-    "official": "Santa Lúcia"
-  },
-  {
-    "norm": "santa maria da serra",
-    "official": "Santa Maria da Serra"
-  },
-  {
-    "norm": "santa mercedes",
-    "official": "Santa Mercedes"
-  },
-  {
-    "norm": "santa rita do passa quatro",
-    "official": "Santa Rita do Passa Quatro"
-  },
-  {
-    "norm": "santa rita doeste",
-    "official": "Santa Rita d'Oeste"
-  },
-  {
-    "norm": "santa rosa de viterbo",
-    "official": "Santa Rosa de Viterbo"
-  },
-  {
-    "norm": "santa salete",
-    "official": "Santa Salete"
-  },
-  {
-    "norm": "santana da ponte pensa",
-    "official": "Santana da Ponte Pensa"
-  },
-  {
-    "norm": "santana de parnaiba",
-    "official": "Santana de Parnaíba"
-  },
-  {
-    "norm": "santo anastacio",
-    "official": "Santo Anastácio"
-  },
-  {
-    "norm": "santo andre",
-    "official": "Santo André"
-  },
-  {
-    "norm": "santo antonio da alegria",
-    "official": "Santo Antônio da Alegria"
-  },
-  {
-    "norm": "santo antonio de posse",
-    "official": "Santo Antônio de Posse"
-  },
-  {
-    "norm": "santo antonio do aracangua",
-    "official": "Santo Antônio do Aracanguá"
-  },
-  {
-    "norm": "santo antonio do jardim",
-    "official": "Santo Antônio do Jardim"
-  },
-  {
-    "norm": "santo antonio do pinhal",
-    "official": "Santo Antônio do Pinhal"
-  },
-  {
-    "norm": "santo expedito",
-    "official": "Santo Expedito"
-  },
-  {
-    "norm": "santopolis do aguapei",
-    "official": "Santópolis do Aguapeí"
-  },
-  {
-    "norm": "santos",
-    "official": "Santos"
-  },
-  {
-    "norm": "sao bento do sapucai",
-    "official": "São Bento do Sapucaí"
-  },
-  {
-    "norm": "sao bernardo do campo",
-    "official": "São Bernardo do Campo"
-  },
-  {
-    "norm": "sao caetano do sul",
-    "official": "São Caetano do Sul"
-  },
-  {
-    "norm": "sao carlos",
-    "official": "São Carlos"
-  },
-  {
-    "norm": "sao francisco",
-    "official": "São Francisco"
-  },
-  {
-    "norm": "sao joao da boa vista",
-    "official": "São João da Boa Vista"
-  },
-  {
-    "norm": "sao joao das duas pontes",
-    "official": "São João das Duas Pontes"
-  },
-  {
-    "norm": "sao joao de iracema",
-    "official": "São João de Iracema"
-  },
-  {
-    "norm": "sao joao do paudalho",
-    "official": "São João do Pau-d'Alho"
-  },
-  {
-    "norm": "sao joaquim da barra",
-    "official": "São Joaquim da Barra"
-  },
-  {
-    "norm": "sao jose da bela vista",
-    "official": "São José da Bela Vista"
-  },
-  {
-    "norm": "sao jose do barreiro",
-    "official": "São José do Barreiro"
-  },
-  {
-    "norm": "sao jose do rio pardo",
-    "official": "São José do Rio Pardo"
-  },
-  {
-    "norm": "sao jose do rio preto",
-    "official": "São José do Rio Preto"
-  },
-  {
-    "norm": "sao jose dos campos",
-    "official": "São José dos Campos"
-  },
-  {
-    "norm": "sao lourenco da serra",
-    "official": "São Lourenço da Serra"
-  },
-  {
-    "norm": "sao luiz do paraitinga",
-    "official": "São Luiz do Paraitinga"
-  },
-  {
-    "norm": "sao manuel",
-    "official": "São Manuel"
-  },
-  {
-    "norm": "sao miguel arcanjo",
-    "official": "São Miguel Arcanjo"
-  },
-  {
-    "norm": "sao paulo",
-    "official": "São Paulo"
-  },
-  {
-    "norm": "sao pedro",
-    "official": "São Pedro"
-  },
-  {
-    "norm": "sao pedro do turvo",
-    "official": "São Pedro do Turvo"
-  },
-  {
-    "norm": "sao roque",
-    "official": "São Roque"
-  },
-  {
-    "norm": "sao sebastiao",
-    "official": "São Sebastião"
-  },
-  {
-    "norm": "sao sebastiao da grama",
-    "official": "São Sebastião da Grama"
-  },
-  {
-    "norm": "sao simao",
-    "official": "São Simão"
-  },
-  {
-    "norm": "sao vicente",
-    "official": "São Vicente"
-  },
-  {
-    "norm": "sarapui",
-    "official": "Sarapuí"
-  },
-  {
-    "norm": "sarutaia",
-    "official": "Sarutaiá"
-  },
-  {
-    "norm": "sebastianopolis do sul",
-    "official": "Sebastianópolis do Sul"
-  },
-  {
-    "norm": "serra azul",
-    "official": "Serra Azul"
-  },
-  {
-    "norm": "serra negra",
-    "official": "Serra Negra"
-  },
-  {
-    "norm": "serrana",
-    "official": "Serrana"
-  },
-  {
-    "norm": "sertaozinho",
-    "official": "Sertãozinho"
-  },
-  {
-    "norm": "sete barras",
-    "official": "Sete Barras"
-  },
-  {
-    "norm": "severinia",
-    "official": "Severínia"
-  },
-  {
-    "norm": "silveiras",
-    "official": "Silveiras"
-  },
-  {
-    "norm": "socorro",
-    "official": "Socorro"
-  },
-  {
-    "norm": "sorocaba",
-    "official": "Sorocaba"
-  },
-  {
-    "norm": "sud mennucci",
-    "official": "Sud Mennucci"
-  },
-  {
-    "norm": "sumare",
-    "official": "Sumaré"
-  },
-  {
-    "norm": "suzanapolis",
-    "official": "Suzanápolis"
-  },
-  {
-    "norm": "suzano",
-    "official": "Suzano"
-  },
-  {
-    "norm": "tabapua",
-    "official": "Tabapuã"
-  },
-  {
-    "norm": "tabatinga",
-    "official": "Tabatinga"
-  },
-  {
-    "norm": "taboao da serra",
-    "official": "Taboão da Serra"
-  },
-  {
-    "norm": "taciba",
-    "official": "Taciba"
-  },
-  {
-    "norm": "taguai",
-    "official": "Taguaí"
-  },
-  {
-    "norm": "taiacu",
-    "official": "Taiaçu"
-  },
-  {
-    "norm": "taiuva",
-    "official": "Taiúva"
-  },
-  {
-    "norm": "tambau",
-    "official": "Tambaú"
-  },
-  {
-    "norm": "tanabi",
-    "official": "Tanabi"
-  },
-  {
-    "norm": "tapirai",
-    "official": "Tapiraí"
-  },
-  {
-    "norm": "tapiratiba",
-    "official": "Tapiratiba"
-  },
-  {
-    "norm": "taquaral",
-    "official": "Taquaral"
-  },
-  {
-    "norm": "taquaritinga",
-    "official": "Taquaritinga"
-  },
-  {
-    "norm": "taquarituba",
-    "official": "Taquarituba"
-  },
-  {
-    "norm": "taquarivai",
-    "official": "Taquarivaí"
-  },
-  {
-    "norm": "tarabai",
-    "official": "Tarabai"
-  },
-  {
-    "norm": "taruma",
-    "official": "Tarumã"
-  },
-  {
-    "norm": "tatui",
-    "official": "Tatuí"
-  },
-  {
-    "norm": "taubate",
-    "official": "Taubaté"
-  },
-  {
-    "norm": "tejupa",
-    "official": "Tejupá"
-  },
-  {
-    "norm": "teodoro sampaio",
-    "official": "Teodoro Sampaio"
-  },
-  {
-    "norm": "terra roxa",
-    "official": "Terra Roxa"
-  },
-  {
-    "norm": "tiete",
-    "official": "Tietê"
-  },
-  {
-    "norm": "timburi",
-    "official": "Timburi"
-  },
-  {
-    "norm": "torre de pedra",
-    "official": "Torre de Pedra"
-  },
-  {
-    "norm": "torrinha",
-    "official": "Torrinha"
-  },
-  {
-    "norm": "trabiju",
-    "official": "Trabiju"
-  },
-  {
-    "norm": "tremembe",
-    "official": "Tremembé"
-  },
-  {
-    "norm": "tres fronteiras",
-    "official": "Três Fronteiras"
-  },
-  {
-    "norm": "tuiuti",
-    "official": "Tuiuti"
-  },
-  {
-    "norm": "tupa",
-    "official": "Tupã"
-  },
-  {
-    "norm": "tupi paulista",
-    "official": "Tupi Paulista"
-  },
-  {
-    "norm": "turiuba",
-    "official": "Turiúba"
-  },
-  {
-    "norm": "turmalina",
-    "official": "Turmalina"
-  },
-  {
-    "norm": "ubarana",
-    "official": "Ubarana"
-  },
-  {
-    "norm": "ubatuba",
-    "official": "Ubatuba"
-  },
-  {
-    "norm": "ubirajara",
-    "official": "Ubirajara"
-  },
-  {
-    "norm": "uchoa",
-    "official": "Uchoa"
-  },
-  {
-    "norm": "uniao paulista",
-    "official": "União Paulista"
-  },
-  {
-    "norm": "urania",
-    "official": "Urânia"
-  },
-  {
-    "norm": "uru",
-    "official": "Uru"
-  },
-  {
-    "norm": "urupes",
-    "official": "Urupês"
-  },
-  {
-    "norm": "valentim gentil",
-    "official": "Valentim Gentil"
-  },
-  {
-    "norm": "valinhos",
-    "official": "Valinhos"
-  },
-  {
-    "norm": "valparaiso",
-    "official": "Valparaíso"
-  },
-  {
-    "norm": "vargem",
-    "official": "Vargem"
-  },
-  {
-    "norm": "vargem grande do sul",
-    "official": "Vargem Grande do Sul"
-  },
-  {
-    "norm": "vargem grande paulista",
-    "official": "Vargem Grande Paulista"
-  },
-  {
-    "norm": "varzea paulista",
-    "official": "Várzea Paulista"
-  },
-  {
-    "norm": "vera cruz",
-    "official": "Vera Cruz"
-  },
-  {
-    "norm": "vinhedo",
-    "official": "Vinhedo"
-  },
-  {
-    "norm": "viradouro",
-    "official": "Viradouro"
-  },
-  {
-    "norm": "vista alegre do alto",
-    "official": "Vista Alegre do Alto"
-  },
-  {
-    "norm": "vitoria brasil",
-    "official": "Vitória Brasil"
-  },
-  {
-    "norm": "votorantim",
-    "official": "Votorantim"
-  },
-  {
-    "norm": "votuporanga",
-    "official": "Votuporanga"
-  },
-  {
-    "norm": "zacarias",
-    "official": "Zacarias"
-  }
-];
+  // spCitiesList, spCitiesCleanMap, spCitiesNormMap are imported from ../../data/spCities (Official IBGE 645 SP cities)
+
   
   const levenshtein = (a, b) => {
     if (a.length === 0) return b.length;
@@ -3246,37 +675,47 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const cityCache = new Map();
   const fastCityCache = new Map();
 
-  const getIbgeCityName = (cityStr, stateStr, cepStr) => {
-    const fastKey = `${cityStr}_${stateStr}_${cepStr}`;
+  const getIbgeCityName = (cityStr?: string | null, stateStr?: string | null, cepStr?: string | null) => {
+    const rawCity = fixMojibake(cityStr);
+    const rawState = fixMojibake(stateStr);
+    const fastKey = `${rawCity}_${rawState}_${cepStr}`;
     if (fastCityCache.has(fastKey)) return fastCityCache.get(fastKey);
 
     let deducedState = getStateFromCep(cepStr);
-    let finalState = normalizeState(stateStr, deducedState);
+    let finalState = normalizeState(rawState, deducedState);
 
-    if (!cityStr) {
+    if (!rawCity) {
       const res = finalState === 'SP' ? 'São Paulo' : 'Não Informada';
       fastCityCache.set(fastKey, res);
       return res;
     }
     
     // Convert to lowercase, remove accents
-    let norm = cityStr.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let norm = rawCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
     // Remove state abbreviations at the end
-    norm = norm.replace(/[-\/,\s]+sp$/, '').trim();
-    norm = norm.replace(/[-\/,\s]+rj$/, '').trim();
-    norm = norm.replace(/[-\/,\s]+mg$/, '').trim();
+    norm = norm.replace(/[-\/,\s]+(sp|rj|mg|es|pr|sc|rs|ba|pe|ce|df|go|ma|pb|pe|rn|al|se|pi|to|ro|ac|ap|am|rr|pa|mt|ms)$/i, '').trim();
     
-    // Aggressive cleaning to handle mojibake like Sã£o Paulo -> sa£o paulo -> sao paulo
-    norm = norm.replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
+    // Clean to alphanumeric and spaces
+    norm = norm.replace(/[^a-z0-9\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+    const cleanK = norm.replace(/\s+/g, '');
+
+    // 1. If it is a known municipality outside SP (e.g. Teresópolis, Aldeias Altas, Curitiba, etc.)
+    if (knownNonSpCities[cleanK]) {
+      const res = formatDisplayTitleName(rawCity);
+      fastCityCache.set(fastKey, res);
+      return res;
+    }
     
     const cacheKey = `${norm}_${finalState}`;
     if (cityCache.has(cacheKey)) {
-      return cityCache.get(cacheKey);
+      const cached = cityCache.get(cacheKey);
+      fastCityCache.set(fastKey, cached);
+      return cached;
     }
     
-    // Very aggressive common mappings for edge cases that Levenshtein might miss
-    const cityMap = {
+    // Explicit mappings for abbreviations, variants, and common alternate spellings in SP
+    const cityMap: Record<string, string> = {
       'sao paulo': 'São Paulo', 'sp': 'São Paulo', 'capital': 'São Paulo', 'sampa': 'São Paulo',
       'sbc': 'São Bernardo do Campo', 'sao bernardo': 'São Bernardo do Campo', 'sao bernardo do campo': 'São Bernardo do Campo',
       'scs': 'São Caetano do Sul', 'sao caetano': 'São Caetano do Sul', 'sao caetano do sul': 'São Caetano do Sul',
@@ -3295,51 +734,72 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       'poa': 'Poá', 'itapecerica': 'Itapecerica da Serra', 'itapecerica da serra': 'Itapecerica da Serra',
       'embu': 'Embu das Artes', 'embu das artes': 'Embu das Artes',
       's b do campo': 'São Bernardo do Campo',
-      's andre': 'Santo André', 'sta barbara': "Santa Bárbara d'Oeste", 'santa barbara': "Santa Bárbara d'Oeste",
-      'santa barbara d oeste': "Santa Bárbara d'Oeste", 'sta barbara d oeste': "Santa Bárbara d'Oeste"
+      's andre': 'Santo André',
+      'sta barbara': "Santa Bárbara d'Oeste", 'santa barbara': "Santa Bárbara d'Oeste",
+      'santa barbara d oeste': "Santa Bárbara d'Oeste", 'sta barbara d oeste': "Santa Bárbara d'Oeste",
+      // IBGE official corrections and variants
+      'florinea': 'Florínia',
+      'florinia': 'Florínia',
+      'luiz antonio': 'Luís Antônio',
+      'luis antonio': 'Luís Antônio',
+      'biritiba mirim': 'Biritiba-Mirim',
+      'biritiba-mirim': 'Biritiba-Mirim',
+      'sao joao do pau dalho': "São João do Pau d'Alho",
+      'sao joao do pau d alho': "São João do Pau d'Alho",
+      'pompeia': 'Pompéia',
+      'boraceia': 'Boracéia',
+      'rubineia': 'Rubinéia',
+      'lindoia': 'Lindóia',
+      'itaoca': 'Itaóca',
+      'embu guacu': 'Embu-Guaçu',
+      'embu-guacu': 'Embu-Guaçu',
+      'pariquera acu': 'Pariquera-Açu',
+      'pariquera-acu': 'Pariquera-Açu',
+      'arco iris': 'Arco-Íris',
+      'arco-iris': 'Arco-Íris',
+      'aparecida doeste': "Aparecida d'Oeste",
+      'aparecida d oeste': "Aparecida d'Oeste",
+      'estrela doeste': "Estrela d'Oeste",
+      'estrela d oeste': "Estrela d'Oeste",
+      'guarani doeste': "Guarani d'Oeste",
+      'guarani d oeste': "Guarani d'Oeste",
+      'palmeira doeste': "Palmeira d'Oeste",
+      'palmeira d oeste': "Palmeira d'Oeste",
+      'santa clara doeste': "Santa Clara d'Oeste",
+      'santa clara d oeste': "Santa Clara d'Oeste",
+      'santa rita doeste': "Santa Rita d'Oeste",
+      'santa rita d oeste': "Santa Rita d'Oeste"
     };
 
-    let result;
-    if (cityMap[norm]) {
-      result = cityMap[norm];
+    let result: string;
+    if (cityMap[norm] || cityMap[cleanK]) {
+      result = cityMap[norm] || cityMap[cleanK];
+    } else if (spCitiesCleanMap.has(cleanK)) {
+      result = spCitiesCleanMap.get(cleanK)!;
+    } else if (spCitiesNormMap.has(norm)) {
+      result = spCitiesNormMap.get(norm)!;
     } else if (finalState === 'SP') {
-      // For SP, ALWAYS snap to the closest of the 645 cities
+      // Direct instant match or typo fallback via Levenshtein against official 645 IBGE SP municipalities
       let bestMatch = 'São Paulo';
       let bestDist = Infinity;
       
       for (const item of spCitiesList) {
-        if (item.norm === norm) {
-          bestMatch = item.official;
-          bestDist = 0;
-          break; // exact match
-        }
-        
-        // Find closest
         const dist = levenshtein(norm, item.norm);
         if (dist < bestDist) {
           bestDist = dist;
           bestMatch = item.official;
+          if (bestDist === 1) break;
         }
       }
       
-      // Only accept if distance is reasonable
-      if (bestDist <= Math.max(3, Math.floor(norm.length * 0.5))) {
+      if (bestDist <= Math.max(3, Math.floor(norm.length * 0.4))) {
         result = bestMatch;
       } else {
-        result = 'São Paulo'; // Fallback for pure garbage strings in SP
+        result = 'São Paulo';
       }
     } else {
       // Capitalize properly for non-SP
-      result = cityStr
-        .trim()
-        .toLowerCase()
-        .replace(/[-\/,\s]+(sp|rj|mg|es|pr|sc|rs|ba|pe|ce|df|go)$/i, '')
-        .split(/\s+/)
-        .map(word => {
-          if (['de', 'da', 'do', 'das', 'dos', 'e'].includes(word)) return word;
-          return word.charAt(0).toUpperCase() + word.slice(1);
-        })
-        .join(' ');
+      result = formatDisplayTitleName(rawCity);
     }
     
     cityCache.set(cacheKey, result);
@@ -3347,593 +807,37 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     return result;
   };
 
-  // Consolidate all actions into unique lead profiles
-  const consolidatedLeads = useMemo(() => {
-    // Use cache if rawData hasn't changed
-    if ((window as any).__CONSOLIDATED_LEADS_CACHE__ && (window as any).__LAST_RAW_DATA_REF__ === rawData) {
-      return (window as any).__CONSOLIDATED_LEADS_CACHE__;
-    }
+  // Synchronized variables connected directly to server state
+  const totalUniqueLeads = summary.totalUniqueLeads;
+  const totalSubmissions = summary.totalSubmissions;
+  const multiActionLeadsCount = summary.multiActionLeadsCount;
+  const superSupportersCount = summary.superSupportersCount;
+  const spLeadsCount = summary.spLeadsCount;
+  const stateOptions = summary.stateOptions || [];
+  const cityOptions = summary.cityOptions || [];
+  const campaignOptions = summary.campaignOptions || [];
+  const spHeatmapPoints = summary.spHeatmapPoints || [];
+  const paginatedLeads = serverLeads;
+  const filteredPhysicalMaterials = physicalMaterials;
+  const filteredLeads = serverLeads;
+  const consolidatedLeads = serverLeads;
 
-    const rawActions: LeadAction[] = [];
-
-    // 1. Popup Apoio Capital
-    rawData.popupApoio.forEach(item => {
-      rawActions.push({
-        id: `apoio_${item.id || Math.random()}`,
-        sourceKey: 'APOIO',
-        sourceName: 'Apoio Capital / SP',
-        sourceCategory: 'Apoio Capital',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          bairro: item.bairro,
-          cep: item.cep
-        }
-      });
-    });
-
-    // 2. Material Oficial
-    rawData.materialCampaign.forEach(item => {
-      const isImpresso = item.tipoMaterial === 'impresso';
-      rawActions.push({
-        id: `material_${item.id || Math.random()}`,
-        sourceKey: 'MATERIAL',
-        sourceName: `Material Campanha (${isImpresso ? 'Impresso' : 'Digital'})`,
-        sourceCategory: 'Material Oficial',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          tipoMaterial: item.tipoMaterial,
-          adesivoPerfurado: !!item.adesivoPerfurado,
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          numero: item.numero,
-          bairro: item.bairro,
-          cep: item.cep
-        }
-      });
-    });
-
-    // 3. Material Dobrada Nina Passadore
-    rawData.ninaCampaign.forEach(item => {
-      const isImpresso = item.tipoMaterial === 'impresso';
-      rawActions.push({
-        id: `nina_${item.id || Math.random()}`,
-        sourceKey: 'NINA',
-        sourceName: `Material Dobrada Nina (${isImpresso ? 'Impresso' : 'Digital'})`,
-        sourceCategory: 'Material Dobrada',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          tipoMaterial: item.tipoMaterial,
-          adesivoPerfurado: !!item.adesivoPerfurado,
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          numero: item.numero,
-          bairro: item.bairro,
-          cep: item.cep
-        }
-      });
-    });
-
-    // 4. Citizens / Minuta Código Animal (PL)
-    rawData.citizens.forEach(item => {
-      rawActions.push({
-        id: `citizens_${item.id || Math.random()}`,
-        sourceKey: 'CITIZENS',
-        sourceName: 'Minuta Código Animal (PL)',
-        sourceCategory: 'Projeto de Lei',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          numero: item.numero,
-          bairro: item.bairro,
-          cep: item.cep
-        }
-      });
-    });
-
-    // 5. Petitions / Abaixo-Assinado Oficial
-    rawData.petitions.forEach(item => {
-      rawActions.push({
-        id: `petitions_${item.id || Math.random()}`,
-        sourceKey: 'PETITIONS',
-        sourceName: 'Abaixo-Assinado Código Animal',
-        sourceCategory: 'Abaixo-Assinado',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          numero: item.numero,
-          bairro: item.bairro,
-          cep: item.cep
-        }
-      });
-    });
-
-    // 6. Contra Maus-Tratos
-    rawData.contraMausTratos.forEach(item => {
-      rawActions.push({
-        id: `contra_${item.id || Math.random()}`,
-        sourceKey: 'CONTRA_MAUS_TRATOS',
-        sourceName: 'Assinatura Contra Maus-Tratos',
-        sourceCategory: 'Maus-Tratos',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          numero: item.numero,
-          bairro: item.bairro,
-          cep: item.cep
-        }
-      });
-    });
-
-    // 7. Jogo Missão Resgate
-    rawData.jogoUsers.forEach(item => {
-      rawActions.push({
-        id: `jogo_${item.id || Math.random()}`,
-        sourceKey: 'JOGO',
-        sourceName: 'Jogador Missão Resgate',
-        sourceCategory: 'Jogo Resgate',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          cep: item.cep,
-          usuario: item.usuario,
-          score: item.maxScore || 0
-        }
-      });
-    });
-
-    // 8. Base Externa Importada (CSV)
-    (rawData.importedLeads || []).forEach(item => {
-      rawActions.push({
-        id: `imported_${item.id || Math.random()}`,
-        sourceKey: 'IMPORTED',
-        sourceName: `Base Externa: ${item.campanha || 'Importação CSV'}`,
-        sourceCategory: item.campanha || 'Base Externa',
-        date: item.createdAt || new Date().toISOString(),
-        rawItem: item,
-        details: {
-          cidade: getIbgeCityName(item.cidade, item.estado, item.cep),
-          estado: item.estado || 'SP',
-          endereco: item.endereco,
-          numero: item.numero,
-          complemento: item.complemento,
-          bairro: item.bairro,
-          cep: item.cep,
-          extraData: item.extraData ? (typeof item.extraData === 'string' ? (() => { try { return JSON.parse(item.extraData); } catch (e) { return {}; } })() : item.extraData) : undefined
-        }
-      });
-    });
-
-    // Grouping Map
-    // Key indexing: phone -> index, email -> index, name_city -> index
-    const leads: ConsolidatedLead[] = [];
-    const phoneToLeadIdx = new Map<string, number>();
-    const emailToLeadIdx = new Map<string, number>();
-    const nameCityToLeadIdx = new Map<string, number>();
-    
-
-    rawActions.forEach(action => {
-      const item = action.rawItem;
-      const fullName = formatDisplayTitleName(item.nomeCompleto || item.name || (item.sobrenome ? `${item.nome} ${item.sobrenome}`.trim() : item.nome) || 'Anônimo');
-      const phone = item.whatsapp || item.telefone || item.celular || '';
-      const email = item.email || '';
-      const cep = (item.cep || '').trim();
-      const deducedState = getStateFromCep(cep);
-      const estado = normalizeState(item.estado, deducedState);
-      const cidade = getIbgeCityName(item.cidade, estado, cep);
-      const endereco = item.endereco || '';
-      const numero = item.numero || '';
-      const complemento = item.complemento || '';
-      const bairro = item.bairro || '';
-
-      const normPhone = normalizePhone(phone);
-      const normEmail = normalizeEmail(email);
-      const normName = normalizeName(fullName);
-      const normCity = normalizeName(cidade);
-      
-      const nameCityKey = normName && normName.length > 5 ? `${normName}__${normCity}` : '';
-      
-
-      // Gather all possible phones/emails from the raw item and extraData to maximize deduplication chances
-      const allPossiblePhones = new Set<string>();
-      if (normPhone && normPhone.length >= 8) allPossiblePhones.add(normPhone);
-      
-      const allPossibleEmails = new Set<string>();
-      if (normEmail && normEmail.includes('@')) allPossibleEmails.add(normEmail);
-
-      const ed = action.details.extraData;
-      if (ed) {
-        Object.keys(ed).forEach(k => {
-          const v = String(ed[k] || '');
-          const kl = k.toLowerCase();
-          
-          if (kl.includes('tel') || kl.includes('cel') || kl.includes('whats') || kl.includes('fone') || kl.includes('contato')) {
-            const p = normalizePhone(v);
-            if (p && p.length >= 8) allPossiblePhones.add(p);
-          } else if (kl.includes('email') || kl.includes('e-mail') || kl.includes('mail') || v.includes('@')) {
-            const em = normalizeEmail(v);
-            if (em && em.includes('@')) allPossibleEmails.add(em);
-          }
-        });
-      }
-
-      let targetIdx = -1;
-      
-      // Try to find a match by ANY of the known phones for this person
-      for (const p of allPossiblePhones) {
-        if (phoneToLeadIdx.has(p)) {
-          targetIdx = phoneToLeadIdx.get(p)!;
-          break;
-        }
-      }
-
-      // If no phone match, try ANY email
-      if (targetIdx === -1) {
-        for (const e of allPossibleEmails) {
-          if (emailToLeadIdx.has(e)) {
-            targetIdx = emailToLeadIdx.get(e)!;
-            break;
-          }
-        }
-      }
-
-      // Finally, try name + city
-      if (targetIdx === -1 && nameCityKey && nameCityToLeadIdx.has(nameCityKey)) {
-        targetIdx = nameCityToLeadIdx.get(nameCityKey)!;
-      }
-
-      if (targetIdx !== -1) {
-        // Merge into existing lead
-        const existing = leads[targetIdx];
-        const isDuplicate = existing.actions.some(a => a.sourceCategory === action.sourceCategory);
-        if (!isDuplicate) {
-          existing.actions.push(action);
-          existing.totalActions = existing.actions.length;
-        }
-
-        // Upgrade data with non-empty fields
-        const isPlaceholder = (name: string) => ['Apoiador Importado', 'Sem Nome', 'Anônimo'].includes(name.trim());
-        if (fullName && !isPlaceholder(fullName)) {
-          const currentWords = existing.nome.trim().split(/\s+/);
-          const newWords = fullName.trim().split(/\s+/);
-          
-          if (isPlaceholder(existing.nome)) {
-            existing.nome = fullName;
-          } else if (currentWords.length < 2 && newWords.length >= 2 && newWords[0].toLowerCase() === currentWords[0].toLowerCase()) {
-            // Upgrading from just first name (e.g. "Diogo") to full name (e.g. "Diogo Santos")
-            existing.nome = fullName;
-          }
-        }
-        
-        const existingDigits = existing.whatsapp ? existing.whatsapp.replace(/\D/g, '') : '';
-        const newDigits = phone ? phone.replace(/\D/g, '') : '';
-        if (phone && (!existing.whatsapp || (newDigits.length > existingDigits.length && existingDigits.length < 10))) {
-          existing.whatsapp = phone;
-        }
-        
-        if (email && (!existing.email || (!existing.email.includes('@') && email.includes('@')))) {
-          existing.email = email;
-        }
-        
-        if (cidade && existing.cidade === 'São Paulo' && cidade !== 'São Paulo') existing.cidade = cidade;
-        if (estado && !existing.estado) existing.estado = estado;
-        if (cep && (!existing.cep || existing.cep.replace(/\D/g, '').length < 8)) existing.cep = cep;
-        if (endereco && (!existing.endereco || existing.endereco.length < 5)) existing.endereco = endereco;
-        if (numero && !existing.numero) existing.numero = numero;
-        if (complemento && !existing.complemento) existing.complemento = complemento;
-        if (bairro && (!existing.bairro || existing.bairro.length < 3)) existing.bairro = bairro;
-
-        // Update dates
-        if (new Date(action.date).getTime() < new Date(existing.firstDate).getTime()) {
-          existing.firstDate = action.date;
-        }
-        if (new Date(action.date).getTime() > new Date(existing.lastDate).getTime()) {
-          existing.lastDate = action.date;
-        }
-        
-        // Merge Extra Data
-        if (action.details.extraData) {
-          existing.extraData = { ...(existing.extraData || {}), ...action.details.extraData };
-        }
-
-        // Distinct campaigns
-        if (!existing.distinctCampaigns.includes(action.sourceCategory)) {
-          existing.distinctCampaigns.push(action.sourceCategory);
-        }
-        existing.isMultiAction = existing.actions.length > 1;
-
-        // Register ALL discovered keys for this lead to catch future variations
-        allPossiblePhones.forEach(p => phoneToLeadIdx.set(p, targetIdx));
-        allPossibleEmails.forEach(e => emailToLeadIdx.set(e, targetIdx));
-        if (nameCityKey) nameCityToLeadIdx.set(nameCityKey, targetIdx);
-        
-      } else {
-        // Create new lead record
-        const newLeadIdx = leads.length;
-        const newLead: ConsolidatedLead = {
-          id: `lead_${Date.now()}_${newLeadIdx}_${Math.random().toString(36).substring(2, 7)}`,
-          nome: fullName,
-          whatsapp: phone,
-          email: email,
-          cidade: cidade,
-          estado: estado,
-          cep: cep,
-          endereco: endereco,
-          numero: numero,
-          complemento: complemento,
-          bairro: bairro,
-          totalActions: 1,
-          distinctCampaigns: [action.sourceCategory],
-          isMultiAction: false,
-          firstDate: action.date,
-          lastDate: action.date,
-          actions: [action],
-          extraData: action.details.extraData || {}
-        };
-
-        leads.push(newLead);
-
-        allPossiblePhones.forEach(p => phoneToLeadIdx.set(p, newLeadIdx));
-        allPossibleEmails.forEach(e => emailToLeadIdx.set(e, newLeadIdx));
-        if (nameCityKey) nameCityToLeadIdx.set(nameCityKey, newLeadIdx);
-      }
-    });
-
-    // Sort actions of each lead newest first
-    leads.forEach(lead => {
-      lead.actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    });
-
-    // Save to global cache
-    (window as any).__CONSOLIDATED_LEADS_CACHE__ = leads;
-    (window as any).__LAST_RAW_DATA_REF__ = rawData;
-
-    return leads;
-  }, [rawData]);
-
-  // City & State Lists for Dropdowns
-  const stateOptions = useMemo(() => {
-    const states = new Set<string>();
-    consolidatedLeads.forEach(l => {
-      if (l.estado) states.add(l.estado.toUpperCase());
-    });
-    return Array.from(states).sort();
-  }, [consolidatedLeads]);
-
-  const cityOptions = useMemo(() => {
-    const map = new Map<string, number>();
-    consolidatedLeads.forEach(l => {
-      if (estadoFilter && l.estado?.toUpperCase() !== estadoFilter.toUpperCase()) return;
-      const c = l.cidade || 'São Paulo';
-      map.set(c, (map.get(c) || 0) + 1);
-    });
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [consolidatedLeads, estadoFilter]);
-
-  const campaignOptions = useMemo(() => {
-    const list: string[] = [
-      'Apoio Capital',
-      'Material Oficial',
-      'Material Dobrada',
-      'Projeto de Lei',
-      'Abaixo-Assinado',
-      'Maus-Tratos',
-      'Jogo Resgate'
-    ];
-    const set = new Set<string>(list);
-    consolidatedLeads.forEach(l => {
-      l.distinctCampaigns.forEach(c => {
-        if (c && !set.has(c)) {
-          set.add(c);
-          list.push(c);
-        }
-      });
-    });
-    return list;
-  }, [consolidatedLeads]);
-
-  // Filtered & Sorted Leads
-  const filteredLeads = useMemo(() => {
-    const q = deferredSearch.toLowerCase().trim();
-
-    return consolidatedLeads.filter(lead => {
-      // 1. Search filter (Name, WhatsApp, Email, City, Address, CEP)
-      if (q) {
-        const matchNome = lead.nome.toLowerCase().includes(q);
-        const matchPhone = lead.whatsapp.toLowerCase().includes(q);
-        const matchEmail = lead.email.toLowerCase().includes(q);
-        const matchCidade = (lead.cidade || '').toLowerCase().includes(q);
-        const matchBairro = (lead.bairro || '').toLowerCase().includes(q);
-        const matchCep = (lead.cep || '').toLowerCase().includes(q);
-        const matchCampaign = lead.distinctCampaigns.some(c => c.toLowerCase().includes(q));
-        if (!matchNome && !matchPhone && !matchEmail && !matchCidade && !matchBairro && !matchCep && !matchCampaign) {
-          return false;
-        }
-      }
-
-      // 2. Estado filter
-      if (estadoFilter && lead.estado?.toUpperCase() !== estadoFilter.toUpperCase()) {
-        return false;
-      }
-
-      // 3. Cidade filter
-      if (cidadeFilter && lead.cidade?.toLowerCase() !== cidadeFilter.toLowerCase()) {
-        return false;
-      }
-
-      // 4. Multi-action filter
-      if (multiActionFilter === 'multi' && lead.totalActions <= 1) {
-        return false;
-      }
-      if (multiActionFilter === 'super' && lead.distinctCampaigns.length < 3) {
-        return false;
-      }
-      if (multiActionFilter === 'single' && lead.totalActions > 1) {
-        return false;
-      }
-
-      // 5. Campaign filter
-      if (campaignFilter !== 'all') {
-        if (!lead.distinctCampaigns.includes(campaignFilter)) {
-          return false;
-        }
-      }
-
-      return true;
-    }).sort((a, b) => {
-      let valA: any = a[sortField];
-      let valB: any = b[sortField];
-
-      if (sortField === 'lastDate' || sortField === 'firstDate') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      } else if (typeof valA === 'string') {
-        valA = valA.toLowerCase();
-        valB = (valB || '').toLowerCase();
-      }
-
-      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [consolidatedLeads, deferredSearch, estadoFilter, cidadeFilter, multiActionFilter, campaignFilter, sortField, sortOrder]);
+  useEffect(() => {
+    fetchLeadsPage(currentPage);
+  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilter, multiActionFilter, sortField, sortOrder, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, estadoFilter, cidadeFilter, multiActionFilter, campaignFilter, sortField, sortOrder]);
+  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilter, multiActionFilter, sortField, sortOrder]);
 
-  // Paginated Leads
-  const paginatedLeads = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredLeads.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredLeads, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
-
-
-  const physicalMaterials = useMemo(() => {
-    const materialsMap = new Map();
-
-    const normalizePhone = (p) => {
-      if (!p) return '';
-      let digits = p.replace(/\D/g, '');
-      if (digits.length === 0) return '';
-      if (digits.startsWith('0') && digits.length > 10) digits = digits.substring(1);
-      if (digits.startsWith('55') && digits.length >= 12) return digits;
-      if (digits.length >= 10 && digits.length <= 11) return '55' + digits;
-      return digits;
-    };
-    const normalizeEmail = (e) => e ? e.toLowerCase().trim() : '';
-    const normalizeNameCity = (n, c) => {
-       const nn = n ? n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
-       const cc = c ? c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
-       return nn && nn.length > 5 ? `${nn}__${cc}` : '';
-    };
-    
-    const processItem = (item, sourceName, requireImpressoField = true) => {
-      if (requireImpressoField && item.tipoMaterial !== 'impresso') return;
-      
-      const phone = normalizePhone(item.whatsapp);
-      const email = normalizeEmail(item.email);
-      const nameCity = normalizeNameCity(item.nome + ' ' + (item.sobrenome || ''), item.cidade);
-      
-      let key = null;
-      if (phone && phone.length >= 8) key = phone;
-      else if (email && email.includes('@')) key = email;
-      else if (nameCity) key = nameCity;
-      else key = `fallback_${Math.random()}`;
-
-      if (materialsMap.has(key)) {
-        const existing = materialsMap.get(key);
-        
-        // Merge sources if different
-        if (existing.source !== sourceName && !existing.source.includes('Ambos')) {
-          if ((existing.source === 'Oficial Rafael' && sourceName === 'Dobrada Nina') || 
-              (existing.source === 'Dobrada Nina' && sourceName === 'Oficial Rafael')) {
-            existing.source = 'Ambos (Rafael + Nina)';
-          } else if (!existing.source.includes(sourceName)) {
-            existing.source = existing.source + ' + ' + sourceName;
-          }
-        }
-        
-        // Merge adesivo perfurado
-        if (item.adesivoPerfurado || (item.campanha && typeof item.campanha === 'string' && item.campanha.toLowerCase().includes('perfurado'))) {
-          existing.adesivoPerfurado = true;
-        }
-        
-        // Merge date (keep most recent)
-        if (new Date(item.createdAt).getTime() > new Date(existing.date).getTime()) {
-          existing.date = item.createdAt;
-        }
-
-      } else {
-        materialsMap.set(key, {
-          ...item,
-          source: sourceName,
-          date: item.createdAt,
-          adesivoPerfurado: !!item.adesivoPerfurado || (item.campanha && typeof item.campanha === 'string' && item.campanha.toLowerCase().includes('perfurado'))
-        });
-      }
-    };
-
-    (rawData.materialCampaign || []).forEach(item => processItem(item, 'Oficial Rafael'));
-    (rawData.ninaCampaign || []).forEach(item => processItem(item, 'Dobrada Nina'));
-    
-    // Process imported leads that indicate physical materials
-    (rawData.importedLeads || []).forEach(item => {
-      const campName = (item.campanha || '').toLowerCase();
-      let hasAdesivo = false;
-      let isPerfurado = false;
-      
-      let extra = null;
-      if (item.extraData) {
-        try {
-          extra = typeof item.extraData === 'string' ? JSON.parse(item.extraData) : item.extraData;
-          if (extra.adesivoPerfurado) isPerfurado = true;
-          if (extra.adesivos) hasAdesivo = true;
-        } catch(e) {}
-      }
-
-      if (campName.includes('material') || campName.includes('impresso') || campName.includes('físico') || campName.includes('fisico') || campName.includes('adesivo') || hasAdesivo || isPerfurado) {
-        let originName = item.campanha || 'Importação (Material)';
-        if (originName.length > 25) originName = originName.substring(0, 25) + '...';
-        processItem({ ...item, adesivoPerfurado: isPerfurado }, originName, false);
-      }
-    });
-    
-    return Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [rawData.materialCampaign, rawData.ninaCampaign, rawData.importedLeads]);
-
-  const filteredPhysicalMaterials = useMemo(() => {
-    return physicalMaterials.filter(item => {
-      if (materialFilterAdesivo === 'YES') return item.adesivoPerfurado;
-      if (materialFilterAdesivo === 'NO') return !item.adesivoPerfurado;
-      return true;
-    });
-  }, [physicalMaterials, materialFilterAdesivo]);
+  useEffect(() => {
+    if (activeView === 'MATERIAL') {
+      fetchPhysicalMaterials();
+    }
+  }, [activeView, materialFilterAdesivo]);
 
   const handleExportPhysicalMaterials = () => {
-    if (!physicalMaterials || filteredPhysicalMaterials.length === 0) return;
+    if (!filteredPhysicalMaterials || filteredPhysicalMaterials.length === 0) return;
 
     const dataToExport = filteredPhysicalMaterials.map(m => ({
       'Data Solicitação': new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
@@ -3959,195 +863,36 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     XLSX.writeFile(workbook, `exportacao_materiais_fisicos_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-
-  // Global KPIs
-  const totalUniqueLeads = consolidatedLeads.length;
-  const totalSubmissions = useMemo(() => {
-    return consolidatedLeads.reduce((acc, curr) => acc + curr.totalActions, 0);
-  }, [consolidatedLeads]);
-  const multiActionLeadsCount = useMemo(() => {
-    return consolidatedLeads.filter(l => l.isMultiAction).length;
-  }, [consolidatedLeads]);
-  const superSupportersCount = useMemo(() => {
-    return consolidatedLeads.filter(l => l.distinctCampaigns.length >= 3).length;
-  }, [consolidatedLeads]);
-  const spLeadsCount = useMemo(() => {
-    return consolidatedLeads.filter(l => l.estado?.toUpperCase() === 'SP' || !l.estado).length;
-  }, [consolidatedLeads]);
-
-  // SP Heatmap Points Calculation
-  const spHeatmapPoints = useMemo(() => {
-    if (!municipiosData.length || !consolidatedLeads.length) return [];
-
-    // Group leads by normalized city name in SP
-    const cityMap: Record<string, { count: number; totalActions: number; multiCount: number; displayName: string }> = {};
-
-    consolidatedLeads.forEach(lead => {
-      if (lead.estado && lead.estado.toUpperCase() !== 'SP') return;
-      const rawCity = lead.cidade || 'São Paulo';
-      const normKey = rawCity.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-      if (!cityMap[normKey]) {
-        cityMap[normKey] = {
-          count: 0,
-          totalActions: 0,
-          multiCount: 0,
-          displayName: rawCity
-        };
-      }
-      cityMap[normKey].count += 1;
-      cityMap[normKey].totalActions += lead.totalActions;
-      if (lead.isMultiAction) {
-        cityMap[normKey].multiCount += 1;
-      }
-    });
-
-    const points: {
-      lat: number;
-      lng: number;
-      name: string;
-      count: number;
-      totalActions: number;
-      multiCount: number;
-      densityColor: string;
-      radius: number;
-    }[] = [];
-
-    municipiosData.forEach(mun => {
-      if (mun.codigo_uf !== 35) return; // SP state code
-      const munNorm = (mun.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-      const cityData = cityMap[munNorm];
-
-      if (cityData && cityData.count > 0) {
-        // Escala de cor hiper-segmentada baseada na distribuição real do Estado de SP
-        let densityColor = '#3B82F6'; // Azul (Cidades muito pequenas: 1 a 14)
-        if (cityData.count >= 5000) {
-          densityColor = '#450A0A'; // Vinho Escuro (Exclusivo para a Capital / Anomalias massivas)
-        } else if (cityData.count >= 800) {
-          densityColor = '#7F1D1D'; // Vermelho Escuro (Mega-Cidades ex: Guarulhos, Campinas)
-        } else if (cityData.count >= 400) {
-          densityColor = '#DC2626'; // Vermelho (Polos Regionais ex: Sorocaba, SJC, Ribeirão Preto, ABC)
-        } else if (cityData.count >= 150) {
-          densityColor = '#EA580C'; // Laranja (Cidades Médias-Grandes)
-        } else if (cityData.count >= 50) {
-          densityColor = '#F59E0B'; // Amarelo (Cidades Médias)
-        } else if (cityData.count >= 15) {
-          densityColor = '#8B5CF6'; // Roxo (Cidades Pequenas-Médias)
-        }
-
-        // Crescimento logarítmico calibrado (Raio máximo ligeiramente menor para evitar sobreposição na Grande SP)
-        const radius = Math.min(38, Math.max(5, Math.log10(cityData.count + 1) * 10));
-
-        points.push({
-          lat: mun.latitude,
-          lng: mun.longitude,
-          name: mun.nome,
-          count: cityData.count,
-          totalActions: cityData.totalActions,
-          multiCount: cityData.multiCount,
-          densityColor,
-          radius
-        });
-      }
-    });
-
-    return points.sort((a, b) => b.count - a.count);
-  }, [consolidatedLeads, municipiosData]);
-
   const exportMailMergeExcel = () => {
-    const listToExport = filteredLeads;
-    
-    // Filtra apenas leads que tem endereço consideravelmente completo
-    const completeAddresses = listToExport.filter(lead => {
-      return lead.endereco && lead.endereco.trim().length > 3 && 
-             lead.numero && lead.numero.trim().length > 0 &&
-             lead.cidade && lead.cidade.trim().length > 2 &&
-             lead.estado && lead.estado.trim().length > 1 &&
-             lead.cep && lead.cep.trim().length >= 8;
+    const params = new URLSearchParams({
+      search: search.trim(),
+      estado: estadoFilter,
+      cidade: cidadeFilter,
+      campaign: campaignFilter,
+      multiAction: multiActionFilter,
+      sortField: sortField,
+      sortOrder: sortOrder,
+      addressOnly: 'true',
+      format: 'csv'
     });
-    
-    if (completeAddresses.length === 0) {
-      alert("Nenhum lead com endereço completo encontrado.");
-      return;
-    }
-
-    const data = completeAddresses.map(lead => {
-      return {
-        'Nome Completo': lead.nome,
-        'Endereço': lead.endereco ? `${lead.endereco}, ${lead.numero || 'S/N'} ${lead.complemento ? `(${lead.complemento})` : ''}`.trim() : '',
-        'Bairro': lead.bairro || '',
-        'Cidade': lead.cidade || 'São Paulo',
-        'Estado': lead.estado || 'SP',
-        'CEP': lead.cep || '',
-        'WhatsApp / Telefone': lead.whatsapp || 'Não informado',
-        'E-mail': lead.email || 'Não informado'
-      };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Endereços Postais');
-    
-    const count = completeAddresses.length;
-    XLSX.writeFile(workbook, `Enderecos_Correios_N${count}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    window.location.href = `/api/leads/export?${params.toString()}`;
   };
 
-  // Export Unified List to Excel (.xlsx)
+  // Export Unified List to Excel (.xlsx) using high-speed server stream
   const exportConsolidatedExcel = () => {
-    const listToExport = filteredLeads;
-
-    const data = listToExport.map(lead => {
-      const allCampaigns = lead.distinctCampaigns.join(' | ');
-      const actionsSummary = lead.actions
-        .map(a => `[${formatDate(a.date)}] ${a.sourceName}`)
-        .join('; ');
-
-      return {
-        'Nome Completo': lead.nome,
-        'WhatsApp / Telefone': lead.whatsapp || 'Não informado',
-        'E-mail': lead.email || 'Não informado',
-        'Cidade': lead.cidade || 'São Paulo',
-        'Estado': lead.estado || 'SP',
-        'CEP': lead.cep || '',
-        'Endereço': lead.endereco ? `${lead.endereco}, ${lead.numero || 'S/N'} ${lead.complemento ? `(${lead.complemento})` : ''}`.trim() : '',
-        'Bairro': lead.bairro || '',
-        'Total de Ações / Formulários': lead.totalActions,
-        'Preencheu Mais de 1 Campanha?': lead.isMultiAction ? 'SIM' : 'NÃO',
-        'Campanhas Preenchidas': allCampaigns,
-        'Primeiro Preenchimento': formatDate(lead.firstDate),
-        'Último Preenchimento': formatDate(lead.lastDate),
-        'Informações Adicionais (Extraídas)': lead.extraData && Object.keys(lead.extraData).length > 0 ? Object.entries(lead.extraData).map(([k, v]) => `${k}: ${v}`).join(' | ') : '',
-        'Histórico Completo de Interações': actionsSummary
-      };
+    const params = new URLSearchParams({
+      search: search.trim(),
+      estado: estadoFilter,
+      cidade: cidadeFilter,
+      campaign: campaignFilter,
+      multiAction: multiActionFilter,
+      sortField: sortField,
+      sortOrder: sortOrder,
+      format: 'csv'
     });
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Central de Leads');
-
-    // Auto column widths
-    const colWidths = [
-      { wch: 28 }, // Nome
-      { wch: 18 }, // WhatsApp
-      { wch: 26 }, // Email
-      { wch: 18 }, // Cidade
-      { wch: 8 },  // Estado
-      { wch: 12 }, // CEP
-      { wch: 32 }, // Endereco
-      { wch: 18 }, // Bairro
-      { wch: 15 }, // Total Acoes
-      { wch: 16 }, // Multi-Acao
-      { wch: 35 }, // Campanhas
-      { wch: 20 }, // Primeira Data
-      { wch: 20 }, // Ultima Data
-      { wch: 35 }, // Extra Data
-      { wch: 45 }  // Historico
-    ];
-    worksheet['!cols'] = colWidths;
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(workbook, `Central_Leads_Consolidada_RafaelSaraiva_${todayStr}.xlsx`);
+    window.location.href = `/api/leads/export?${params.toString()}`;
   };
+
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -4270,7 +1015,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               className="bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-emerald-900/30 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer"
             >
               <Download className="w-4 h-4" />
-              <span>Exportar Lista Única (.xlsx)</span>
+              <span>Exportar Lista Única (.csv)</span>
             </button>
           </div>
         </div>
@@ -4337,7 +1082,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             }`}
           >
             <ListFilter className="w-4 h-4" />
-            <span>Lista de Leads ({filteredLeads.length})</span>
+            <span>Lista de Leads ({totalFiltered.toLocaleString('pt-BR')})</span>
           </button>
 
           <button
@@ -4367,7 +1112,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
         <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 font-medium pr-2">
           <MapPin className="w-3.5 h-3.5 text-blue-600" />
-          <span>Base em SP: <strong className="text-gray-800">{spLeadsCount}</strong> leads</span>
+          <span>Base em SP: <strong className="text-gray-800">{spLeadsCount.toLocaleString('pt-BR')}</strong> leads</span>
         </div>
       </div>
 
@@ -4690,7 +1435,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   }}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
-                  <option value="">Todos os Estados ({consolidatedLeads.length})</option>
+                  <option value="">Todos os Estados ({stateOptions.length})</option>
                   {stateOptions.map(st => (
                     <option key={st} value={st}>
                       {st === 'SP' ? 'São Paulo (SP) ⭐️' : st}
@@ -4709,7 +1454,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   onChange={(e) => setCidadeFilter(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
-                  <option value="">Todas as Cidades ({cityOptions.length})</option>
+                  <option value="">Todas as Cidades</option>
                   {cityOptions.map(c => (
                     <option key={c.name} value={c.name}>
                       {c.name} ({c.count})
@@ -4766,7 +1511,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Todos ({consolidatedLeads.length})
+                Todos ({totalUniqueLeads.toLocaleString('pt-BR')})
               </button>
 
               <button
@@ -4778,7 +1523,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 }`}
               >
                 <Flame className="w-3.5 h-3.5" />
-                <span>Multi-Campanhas ({multiActionLeadsCount})</span>
+                <span>Multi-Campanhas ({multiActionLeadsCount.toLocaleString('pt-BR')})</span>
               </button>
 
               <button
@@ -4790,7 +1535,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Super Apoiadores 3+ ({superSupportersCount})</span>
+                <span>Super Apoiadores 3+ ({superSupportersCount.toLocaleString('pt-BR')})</span>
               </button>
 
               <button
@@ -4822,7 +1567,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   Listagem Consolidada de Leads
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-100 text-blue-800">
-                  {filteredLeads.length} {filteredLeads.length === 1 ? 'lead único' : 'leads únicos'}
+                  {totalFiltered.toLocaleString('pt-BR')} {totalFiltered === 1 ? 'lead único' : 'leads únicos'}
                 </span>
               </div>
 
@@ -4857,7 +1602,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-3" />
                 <p className="font-bold text-sm">Carregando e consolidando leads de todos os formulários...</p>
               </div>
-            ) : filteredLeads.length === 0 ? (
+            ) : totalFiltered === 0 ? (
               <div className="p-16 text-center text-gray-500">
                 <Users className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                 <h3 className="font-black text-gray-700 text-base uppercase">Nenhum Lead Encontrado</h3>
@@ -4896,7 +1641,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                               {lead.nome}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                              {lead.distinctCampaigns.length >= 3 ? (
+                              {lead.isSuperSupporter ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
                                   <Sparkles className="w-3 h-3 text-purple-600" />
                                   Super Apoiador ({lead.totalActions})
@@ -4975,7 +1720,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                           {/* Coluna 5: Total de Ações */}
                           <td className="py-3.5 px-4 text-center">
                             <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-black ${
-                              lead.distinctCampaigns.length >= 3 ? 'bg-purple-600 text-white shadow-xs'
+                              lead.isSuperSupporter ? 'bg-purple-600 text-white shadow-xs'
                                 : lead.isMultiAction
                                 ? 'bg-amber-500 text-white shadow-xs'
                                 : 'bg-gray-100 text-gray-700'
@@ -5047,11 +1792,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
             <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 font-medium gap-2">
               <div>
-                Exibindo <strong className="text-gray-900">{filteredLeads.length}</strong> de <strong className="text-gray-900">{consolidatedLeads.length}</strong> leads consolidados
+                Exibindo <strong className="text-gray-900">{serverLeads.length}</strong> nesta página (de <strong className="text-gray-900">{totalFiltered.toLocaleString('pt-BR')}</strong> leads filtrados / {totalUniqueLeads.toLocaleString('pt-BR')} total)
               </div>
               <div className="flex items-center gap-4">
-                <span>🔥 Multi-Campanhas: <strong className="text-amber-700">{multiActionLeadsCount}</strong></span>
-                <span>⭐ Super Apoiadores: <strong className="text-purple-700">{superSupportersCount}</strong></span>
+                <span>🔥 Multi-Campanhas: <strong className="text-amber-700">{multiActionLeadsCount.toLocaleString('pt-BR')}</strong></span>
+                <span>⭐ Super Apoiadores: <strong className="text-purple-700">{superSupportersCount.toLocaleString('pt-BR')}</strong></span>
               </div>
             </div>
 
@@ -5090,7 +1835,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </h2>
 
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                {selectedLead.distinctCampaigns.length >= 3 ? (
+                {selectedLead.isSuperSupporter ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase bg-purple-500 text-white shadow-sm">
                     <Sparkles className="w-3.5 h-3.5" />
                     Super Apoiador ({selectedLead.totalActions} ações no site)
