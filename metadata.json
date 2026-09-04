@@ -1,5 +1,6 @@
 {
   "name": "Remix Deputado Estadual Rafael Saraiva 44077",
-  "description": "",
-  "requestFramePermissions": []
+  "description": "Plataforma oficial de mobilização, materiais e consolidação de apoiadores e leads do Deputado Estadual Rafael Saraiva.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

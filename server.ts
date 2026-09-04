@@ -3,6 +3,7 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { getDbConnection } from "./db.js";
+import { leadsConsolidator } from "./leadsConsolidation.js";
 
 const PIXEL_ID = "909578061696893";
 
@@ -462,17 +463,53 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  function fixMojibake(str?: string | null): string {
+    if (!str) return '';
+    return str
+      .replace(/Ã£|ã£/g, 'ã')
+      .replace(/Ã§|ã§/g, 'ç')
+      .replace(/Ã¡|ã¡/g, 'á')
+      .replace(/Ã©|ã©/g, 'é')
+      .replace(/Ã­|ã­/g, 'í')
+      .replace(/Ã³/g, 'ó')
+      .replace(/ã³/g, 'ó')
+      .replace(/Ãº|ãº/g, 'ú')
+      .replace(/Ã¢|ã¢/g, 'â')
+      .replace(/Ãª|ãª/g, 'ê')
+      .replace(/Ã´|ã´/g, 'ô')
+      .replace(/Ãµ|ãµ/g, 'õ')
+      .replace(/Ã€|ã€/g, 'À')
+      .replace(/Ã\x81/g, 'Á')
+      .replace(/Ã/g, 'Á')
+      .replace(/â€™/g, "'")
+      .replace(/â€“/g, "-")
+      .replace(/â€œ/g, '"')
+      .replace(/â€/g, '"');
+  }
+
+  function sanitizeLeadFields(r: any) {
+    if (!r) return r;
+    return {
+      ...r,
+      nome: fixMojibake(r.nome),
+      cidade: fixMojibake(r.cidade),
+      bairro: fixMojibake(r.bairro),
+      endereco: fixMojibake(r.endereco),
+      complemento: fixMojibake(r.complemento)
+    };
+  }
+
   // API routing for imported-leads (Uploads de bases CSV)
   app.get('/api/imported-leads', async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM imported_leads ORDER BY createdAt DESC');
-        return res.json(rows);
+        return res.json((rows as any[]).map(sanitizeLeadFields));
       } catch (err) {
         return res.status(500).json({ error: "DB erro" });
       }
     }
-    res.json(importedLeadsData);
+    res.json(importedLeadsData.map(sanitizeLeadFields));
   });
 
   app.post('/api/imported-leads/bulk', async (req, res) => {
@@ -551,6 +588,11 @@ async function startServer() {
       saveImportedLeadsToDisk();
     }
 
+    // Trigger background cache update in leads consolidator
+    setTimeout(() => {
+      leadsConsolidator.refresh().catch(err => console.error("Erro ao atualizar consolidador após importação:", err));
+    }, 500);
+
     return res.json({
       success: true,
       count: insertedRecords.length,
@@ -594,6 +636,7 @@ async function startServer() {
     if (db) {
       try {
         await db.query('DELETE FROM imported_leads WHERE campanha = ?', [campaignName]);
+        leadsConsolidator.removeCampaign(campaignName);
         return res.json({ success: true });
       } catch (err) {
         return res.status(500).json({ error: "DB erro" });
@@ -606,6 +649,7 @@ async function startServer() {
     importedLeadsData.length = 0;
     importedLeadsData.push(...filtered);
     saveImportedLeadsToDisk();
+    leadsConsolidator.removeCampaign(campaignName);
     
     res.json({ success: true, deleted: initialLength - importedLeadsData.length });
   });
@@ -628,51 +672,112 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // Consolidated Leads Endpoint
-  app.get('/api/leads/consolidated', async (req, res) => {
+  // High-performance Consolidated Leads Endpoints
+  app.get('/api/leads/summary', (req, res) => {
     try {
-      if (db) {
-        const [
-          [popupApoio],
-          [materialCampaign],
-          [ninaCampaign],
-          [citizens],
-          [petitions],
-          [contraMausTratos],
-          [jogoUsers],
-          [importedLeads]
-        ] = await Promise.all([
-          db.query('SELECT * FROM popup_apoio ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM material_campaign ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM ninapassadore_campaign ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM citizens ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM petitions ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM contra_maus_tratos ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM jogo_users ORDER BY createdAt DESC').catch(() => [[]]),
-          db.query('SELECT * FROM imported_leads ORDER BY createdAt DESC').catch(() => [[]])
-        ]);
+      const summary = leadsConsolidator.getSummary();
+      return res.json(summary);
+    } catch (err) {
+      console.error("Error in /api/leads/summary:", err);
+      return res.status(500).json({ error: "Erro ao obter resumo de leads" });
+    }
+  });
 
-        return res.json({
-          popupApoio,
-          materialCampaign,
-          ninaCampaign,
-          citizens,
-          petitions,
-          contraMausTratos,
-          jogoUsers,
-          importedLeads
-        });
+  app.get('/api/leads/paginated', (req, res) => {
+    try {
+      const result = leadsConsolidator.getPaginatedLeads(req.query as any);
+      return res.json(result);
+    } catch (err) {
+      console.error("Error in /api/leads/paginated:", err);
+      return res.status(500).json({ error: "Erro ao paginar leads" });
+    }
+  });
+
+  app.get('/api/leads/physical-materials', (req, res) => {
+    try {
+      const result = leadsConsolidator.getPhysicalMaterials((req.query.adesivoFilter as any) || 'ALL');
+      return res.json(result);
+    } catch (err) {
+      console.error("Error in /api/leads/physical-materials:", err);
+      return res.status(500).json({ error: "Erro ao buscar materiais físicos" });
+    }
+  });
+
+  app.get('/api/leads/export', (req, res) => {
+    try {
+      const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
+      const filename = `leads_consolidados_${new Date().toISOString().slice(0, 10)}.${format}`;
+      
+      if (format === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.flushHeaders(); // Envia os cabeçalhos imediatamente para evitar timeout
+        
+        const params = req.query as any;
+        const resData = leadsConsolidator.getPaginatedLeads({ ...params, page: 1, pageSize: 1000000 });
+        
+        const headers = ['Nome', 'WhatsApp', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato'];
+        res.write('\uFEFF' + headers.join(',') + '\n');
+        
+        for (const l of resData.leads) {
+          const row = [
+            `"${(l.nome || '').replace(/"/g, '""')}"`,
+            `"${(l.whatsapp || '').replace(/"/g, '""')}"`,
+            `"${(l.email || '').replace(/"/g, '""')}"`,
+            `"${(l.cidade || '').replace(/"/g, '""')}"`,
+            `"${(l.estado || '').replace(/"/g, '""')}"`,
+            `"${(l.cep || '').replace(/"/g, '""')}"`,
+            `"${(l.endereco || '').replace(/"/g, '""')}"`,
+            `"${(l.numero || '').replace(/"/g, '""')}"`,
+            `"${(l.complemento || '').replace(/"/g, '""')}"`,
+            `"${(l.bairro || '').replace(/"/g, '""')}"`,
+            l.totalActions,
+            l.isMultiAction ? 'SIM' : 'NÃO',
+            l.isSuperSupporter ? 'SIM' : 'NÃO',
+            `"${l.distinctCampaigns.join(' | ').replace(/"/g, '""')}"`,
+            `"${l.firstDate ? new Date(l.firstDate).toLocaleDateString('pt-BR') : ''}"`,
+            `"${l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''}"`
+          ];
+          res.write(row.join(',') + '\n');
+        }
+        res.end();
+        return;
       }
 
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      const buffer = leadsConsolidator.exportLeads(req.query as any, format);
+      return res.send(buffer);
+    } catch (err) {
+      console.error("Error in /api/leads/export:", err);
+      if (!res.headersSent) {
+        return res.status(500).json({ error: "Erro ao exportar leads" });
+      } else {
+        res.end();
+      }
+    }
+  });
+
+  app.post('/api/leads/refresh-cache', async (req, res) => {
+    try {
+      // Run in background without blocking
+      leadsConsolidator.refreshFromDatabase().catch(console.error);
+      return res.json({ success: true, message: "Atualização de leads iniciada em segundo plano." });
+    } catch (err) {
+      return res.status(500).json({ error: "Erro ao disparar atualização de leads" });
+    }
+  });
+
+  // Legacy Consolidated Leads Endpoint (optimizado)
+  app.get('/api/leads/consolidated', async (req, res) => {
+    try {
+      // Returns high-performance summary & page 1 to prevent client crashes
+      const summary = leadsConsolidator.getSummary();
+      const page1 = leadsConsolidator.getPaginatedLeads({ page: 1, pageSize: 100 });
       return res.json({
-        popupApoio: popupApoioData,
-        materialCampaign: materialData,
-        ninaCampaign: ninapassadoreData,
-        citizens: citizensData,
-        petitions: petitionsData,
-        contraMausTratos: contraMausTratosData,
-        jogoUsers: [],
-        importedLeads: importedLeadsData
+        summary,
+        leads: page1.leads,
+        total: page1.totalFiltered
       });
     } catch (err) {
       console.error("Error in /api/leads/consolidated:", err);
