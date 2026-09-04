@@ -108,7 +108,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [activeView, setActiveView] = useState<'LIST' | 'HEATMAP' | 'MATERIAL'>('LIST');
   const [materialFilterAdesivo, setMaterialFilterAdesivo] = useState<'ALL' | 'YES' | 'NO'>('ALL');
 
-  // Raw data from sources
+  // Global Cache to prevent recalculating on tab switch
+  // Placed outside the component lifecycle conceptually (using a ref or module scope wouldn't trigger renders, but we want to avoid useMemo re-running)
   const [rawData, setRawData] = useState<{
     popupApoio: any[];
     materialCampaign: any[];
@@ -118,7 +119,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     contraMausTratos: any[];
     jogoUsers: any[];
     importedLeads: any[];
-  }>({
+  }>((window as any).__RAW_DATA_CACHE__ || {
     popupApoio: [],
     materialCampaign: [],
     ninaCampaign: [],
@@ -177,7 +178,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       .catch(e => console.warn('Erro ao carregar municipios.json:', e));
   }, []);
 
-  const fetchAllLeads = async () => {
+  const fetchAllLeads = async (force = false) => {
+    // If we have cached data and aren't forcing a refresh, skip fetching
+    if (!force && (window as any).__RAW_DATA_CACHE__ && (window as any).__RAW_DATA_CACHE__.popupApoio.length > 0) {
+      setRawData((window as any).__RAW_DATA_CACHE__);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const t = Date.now();
@@ -187,7 +195,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       });
       if (res.ok) {
         const json = await res.json();
-        setRawData({
+        const newData = {
           popupApoio: Array.isArray(json.popupApoio) ? json.popupApoio : [],
           materialCampaign: Array.isArray(json.materialCampaign) ? json.materialCampaign : [],
           ninaCampaign: Array.isArray(json.ninaCampaign) ? json.ninaCampaign : [],
@@ -196,7 +204,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           contraMausTratos: Array.isArray(json.contraMausTratos) ? json.contraMausTratos : [],
           jogoUsers: Array.isArray(json.jogoUsers) ? json.jogoUsers : [],
           importedLeads: Array.isArray(json.importedLeads) ? json.importedLeads : []
-        });
+        };
+        (window as any).__RAW_DATA_CACHE__ = newData;
+        (window as any).__CONSOLIDATED_LEADS_CACHE__ = null; // Invalidate processed cache
+        setRawData(newData);
       } else {
         // Fallback: fetch individual endpoints
         const [
@@ -219,7 +230,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           fetch(`/api/imported-leads?_t=${t}`).then(r => r.json()).catch(() => [])
         ]);
 
-        setRawData({
+        const fallbackData = {
           popupApoio: Array.isArray(apoioRes) ? apoioRes : [],
           materialCampaign: Array.isArray(matRes) ? matRes : [],
           ninaCampaign: Array.isArray(ninaRes) ? ninaRes : [],
@@ -228,7 +239,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           contraMausTratos: Array.isArray(contraRes) ? contraRes : [],
           jogoUsers: Array.isArray(jogoRes) ? jogoRes : [],
           importedLeads: Array.isArray(impRes) ? impRes : []
-        });
+        };
+        (window as any).__RAW_DATA_CACHE__ = fallbackData;
+        (window as any).__CONSOLIDATED_LEADS_CACHE__ = null; // Invalidate processed cache
+        setRawData(fallbackData);
       }
     } catch (err) {
       console.warn("Erro ao buscar dados consolidados:", err);
@@ -248,12 +262,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     };
 
     const list = rows.map((row) => {
-      const nome = getMapVal(mapping, row, 'nome');
+      let nome = getMapVal(mapping, row, 'nome');
       const sobrenome = getMapVal(mapping, row, 'sobrenome');
-      const finalName = sobrenome ? `${nome} ${sobrenome}`.trim() : nome;
 
-      const whatsapp = getMapVal(mapping, row, 'whatsapp');
-      const email = getMapVal(mapping, row, 'email');
+      let whatsapp = getMapVal(mapping, row, 'whatsapp');
+      let email = getMapVal(mapping, row, 'email');
       const cep = getMapVal(mapping, row, 'cep') || '';
       const deducedState = getStateFromCep(cep);
       const estado = normalizeState(getMapVal(mapping, row, 'estado'), deducedState);
@@ -267,11 +280,46 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       
       const extraData: any = {};
       const mappedHeaders = mapping.map((m: any) => m.originalHeader).filter(Boolean);
+      
+      let extraPhones: string[] = whatsapp ? [whatsapp] : [];
+      let extraEmails: string[] = email ? [email] : [];
+      let extraNames: string[] = nome ? [nome] : [];
+
       Object.keys(row).forEach(key => {
         if (!mappedHeaders.includes(key) && row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
-          extraData[key] = String(row[key]).trim();
+          const val = String(row[key]).trim();
+          const keyLower = key.toLowerCase();
+          
+          // Always keep the original category/column name
+          extraData[key] = val;
+          
+          // Auto-detect extra phones (only to help populate primary if missing)
+          if (keyLower.includes('tel') || keyLower.includes('cel') || keyLower.includes('whats') || keyLower.includes('fone') || keyLower.includes('contato')) {
+            const digits = val.replace(/\D/g, '');
+            if (digits.length >= 8 && digits.length <= 14) {
+              if (!extraPhones.includes(val)) extraPhones.push(val);
+            }
+          } 
+          // Auto-detect extra emails
+          else if (keyLower.includes('email') || keyLower.includes('e-mail') || keyLower.includes('mail') || val.includes('@')) {
+            if (val.includes('@') && val.includes('.')) {
+              if (!extraEmails.includes(val)) extraEmails.push(val);
+            }
+          }
+          // Auto-detect fallback names
+          else if (keyLower.includes('nome') && !keyLower.includes('sobrenome')) {
+            extraNames.push(val);
+          }
         }
       });
+
+      // Populate primary if empty
+      if (!whatsapp && extraPhones.length > 0) whatsapp = extraPhones[0];
+      if (!email && extraEmails.length > 0) email = extraEmails[0];
+      
+      if (!nome && extraNames.length > 0) nome = extraNames[0];
+
+      const finalName = sobrenome ? `${nome} ${sobrenome}`.trim() : nome;
 
       return {
         nome: finalName || 'Apoiador Importado',
@@ -3301,6 +3349,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   // Consolidate all actions into unique lead profiles
   const consolidatedLeads = useMemo(() => {
+    // Use cache if rawData hasn't changed
+    if ((window as any).__CONSOLIDATED_LEADS_CACHE__ && (window as any).__LAST_RAW_DATA_REF__ === rawData) {
+      return (window as any).__CONSOLIDATED_LEADS_CACHE__;
+    }
+
     const rawActions: LeadAction[] = [];
 
     // 1. Popup Apoio Capital
@@ -3499,13 +3552,51 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const nameCityKey = normName && normName.length > 5 ? `${normName}__${normCity}` : '';
       
 
-      let targetIdx = -1;
+      // Gather all possible phones/emails from the raw item and extraData to maximize deduplication chances
+      const allPossiblePhones = new Set<string>();
+      if (normPhone && normPhone.length >= 8) allPossiblePhones.add(normPhone);
+      
+      const allPossibleEmails = new Set<string>();
+      if (normEmail && normEmail.includes('@')) allPossibleEmails.add(normEmail);
 
-      if (normPhone && normPhone.length >= 8 && phoneToLeadIdx.has(normPhone)) {
-        targetIdx = phoneToLeadIdx.get(normPhone)!;
-      } else if (normEmail && normEmail.includes('@') && emailToLeadIdx.has(normEmail)) {
-        targetIdx = emailToLeadIdx.get(normEmail)!;
-      } else if (nameCityKey && nameCityToLeadIdx.has(nameCityKey)) {
+      const ed = action.details.extraData;
+      if (ed) {
+        Object.keys(ed).forEach(k => {
+          const v = String(ed[k] || '');
+          const kl = k.toLowerCase();
+          
+          if (kl.includes('tel') || kl.includes('cel') || kl.includes('whats') || kl.includes('fone') || kl.includes('contato')) {
+            const p = normalizePhone(v);
+            if (p && p.length >= 8) allPossiblePhones.add(p);
+          } else if (kl.includes('email') || kl.includes('e-mail') || kl.includes('mail') || v.includes('@')) {
+            const em = normalizeEmail(v);
+            if (em && em.includes('@')) allPossibleEmails.add(em);
+          }
+        });
+      }
+
+      let targetIdx = -1;
+      
+      // Try to find a match by ANY of the known phones for this person
+      for (const p of allPossiblePhones) {
+        if (phoneToLeadIdx.has(p)) {
+          targetIdx = phoneToLeadIdx.get(p)!;
+          break;
+        }
+      }
+
+      // If no phone match, try ANY email
+      if (targetIdx === -1) {
+        for (const e of allPossibleEmails) {
+          if (emailToLeadIdx.has(e)) {
+            targetIdx = emailToLeadIdx.get(e)!;
+            break;
+          }
+        }
+      }
+
+      // Finally, try name + city
+      if (targetIdx === -1 && nameCityKey && nameCityToLeadIdx.has(nameCityKey)) {
         targetIdx = nameCityToLeadIdx.get(nameCityKey)!;
       }
 
@@ -3569,9 +3660,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
         existing.isMultiAction = existing.actions.length > 1;
 
-        // Register any newly discovered keys
-        if (normPhone && normPhone.length >= 8) phoneToLeadIdx.set(normPhone, targetIdx);
-        if (normEmail && normEmail.includes('@')) emailToLeadIdx.set(normEmail, targetIdx);
+        // Register ALL discovered keys for this lead to catch future variations
+        allPossiblePhones.forEach(p => phoneToLeadIdx.set(p, targetIdx));
+        allPossibleEmails.forEach(e => emailToLeadIdx.set(e, targetIdx));
         if (nameCityKey) nameCityToLeadIdx.set(nameCityKey, targetIdx);
         
       } else {
@@ -3600,8 +3691,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
         leads.push(newLead);
 
-        if (normPhone && normPhone.length >= 8) phoneToLeadIdx.set(normPhone, newLeadIdx);
-        if (normEmail && normEmail.includes('@')) emailToLeadIdx.set(normEmail, newLeadIdx);
+        allPossiblePhones.forEach(p => phoneToLeadIdx.set(p, newLeadIdx));
+        allPossibleEmails.forEach(e => emailToLeadIdx.set(e, newLeadIdx));
         if (nameCityKey) nameCityToLeadIdx.set(nameCityKey, newLeadIdx);
       }
     });
@@ -3610,6 +3701,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     leads.forEach(lead => {
       lead.actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     });
+
+    // Save to global cache
+    (window as any).__CONSOLIDATED_LEADS_CACHE__ = leads;
+    (window as any).__LAST_RAW_DATA_REF__ = rawData;
 
     return leads;
   }, [rawData]);
