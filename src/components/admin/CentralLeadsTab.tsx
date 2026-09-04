@@ -285,7 +285,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         complemento,
         bairro,
         adesivos,
-        adesivoPerfurado: adesivo_perfurado ? (adesivo_perfurado.toLowerCase() === 'sim' || adesivo_perfurado.toLowerCase() === 's' || adesivo_perfurado.toLowerCase() === 'true' || adesivo_perfurado === '1' || adesivo_perfurado.toLowerCase() === 'x' || adesivo_perfurado.toLowerCase() === 'ok' || adesivo_perfurado.toLowerCase() === 'marcado' || adesivo_perfurado === 'true' || adesivo_perfurado === true) : false,
+        adesivoPerfurado: adesivo_perfurado ? (String(adesivo_perfurado).toLowerCase() === 'sim' || String(adesivo_perfurado).toLowerCase() === 's' || String(adesivo_perfurado).toLowerCase() === 'true' || String(adesivo_perfurado) === '1' || String(adesivo_perfurado).toLowerCase() === 'x' || String(adesivo_perfurado).toLowerCase() === 'ok' || String(adesivo_perfurado).toLowerCase() === 'marcado') : false,
         extraData: Object.keys(extraData).length > 0 ? extraData : undefined
       };
     }).filter((item: any) => item.nome !== 'Apoiador Importado' || item.whatsapp || item.email);
@@ -473,13 +473,24 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   };
 
   const normalizePhone = (phone?: string) => {
-
     if (!phone) return '';
     let digits = phone.replace(/\D/g, '');
-    if (digits.startsWith('55') && digits.length >= 12) {
-      digits = digits.substring(2);
-    }
+    if (digits.length === 0) return '';
+    if (digits.startsWith('0') && digits.length > 10) digits = digits.substring(1);
+    if (digits.startsWith('55') && digits.length >= 12) return digits;
+    if (digits.length >= 10 && digits.length <= 11) return '55' + digits;
     return digits;
+  };
+
+  const formatDisplayTitleName = (n?: string) => {
+    if (!n) return 'Sem Nome';
+    let cleaned = n.replace(/[0-9_!@#$%^&*()+=\[\]{};':"\\|,.<>\/?~]/g, '');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    if (!cleaned) return 'Sem Nome';
+    return cleaned.toLowerCase().split(' ').map(word => {
+      if (['da', 'de', 'do', 'das', 'dos', 'e'].includes(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
   };
 
   const normalizeEmail = (email?: string) => {
@@ -3464,12 +3475,12 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     const phoneToLeadIdx = new Map<string, number>();
     const emailToLeadIdx = new Map<string, number>();
     const nameCityToLeadIdx = new Map<string, number>();
-    const exactNameToLeadIdx = new Map<string, number>();
+    
 
     rawActions.forEach(action => {
       const item = action.rawItem;
-      const fullName = item.nomeCompleto || (item.sobrenome ? `${item.nome} ${item.sobrenome}`.trim() : item.nome) || 'Anônimo';
-      const phone = item.whatsapp || '';
+      const fullName = formatDisplayTitleName(item.nomeCompleto || item.name || (item.sobrenome ? `${item.nome} ${item.sobrenome}`.trim() : item.nome) || 'Anônimo');
+      const phone = item.whatsapp || item.telefone || item.celular || '';
       const email = item.email || '';
       const cep = (item.cep || '').trim();
       const deducedState = getStateFromCep(cep);
@@ -3486,7 +3497,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const normCity = normalizeName(cidade);
       
       const nameCityKey = normName && normName.length > 5 ? `${normName}__${normCity}` : '';
-      const justNameKey = normName && normName.length > 8 && normName.includes(' ') ? normName : '';
+      
 
       let targetIdx = -1;
 
@@ -3496,8 +3507,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         targetIdx = emailToLeadIdx.get(normEmail)!;
       } else if (nameCityKey && nameCityToLeadIdx.has(nameCityKey)) {
         targetIdx = nameCityToLeadIdx.get(nameCityKey)!;
-      } else if (justNameKey && exactNameToLeadIdx.has(justNameKey)) {
-        targetIdx = exactNameToLeadIdx.get(justNameKey)!;
       }
 
       if (targetIdx !== -1) {
@@ -3564,7 +3573,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         if (normPhone && normPhone.length >= 8) phoneToLeadIdx.set(normPhone, targetIdx);
         if (normEmail && normEmail.includes('@')) emailToLeadIdx.set(normEmail, targetIdx);
         if (nameCityKey) nameCityToLeadIdx.set(nameCityKey, targetIdx);
-        if (justNameKey) exactNameToLeadIdx.set(justNameKey, targetIdx);
+        
       } else {
         // Create new lead record
         const newLeadIdx = leads.length;
@@ -3730,7 +3739,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const physicalMaterials = useMemo(() => {
     const materialsMap = new Map();
 
-    const normalizePhone = (p) => p ? p.replace(/\D/g, '') : '';
+    const normalizePhone = (p) => {
+      if (!p) return '';
+      let digits = p.replace(/\D/g, '');
+      if (digits.length === 0) return '';
+      if (digits.startsWith('0') && digits.length > 10) digits = digits.substring(1);
+      if (digits.startsWith('55') && digits.length >= 12) return digits;
+      if (digits.length >= 10 && digits.length <= 11) return '55' + digits;
+      return digits;
+    };
     const normalizeEmail = (e) => e ? e.toLowerCase().trim() : '';
     const normalizeNameCity = (n, c) => {
        const nn = n ? n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
@@ -3943,7 +3960,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   }, [consolidatedLeads, municipiosData]);
 
   const exportMailMergeExcel = () => {
-    const listToExport = filteredLeads.length > 0 ? filteredLeads : consolidatedLeads;
+    const listToExport = filteredLeads;
     
     // Filtra apenas leads que tem endereço consideravelmente completo
     const completeAddresses = listToExport.filter(lead => {
@@ -3982,7 +3999,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   // Export Unified List to Excel (.xlsx)
   const exportConsolidatedExcel = () => {
-    const listToExport = filteredLeads.length > 0 ? filteredLeads : consolidatedLeads;
+    const listToExport = filteredLeads;
 
     const data = listToExport.map(lead => {
       const allCampaigns = lead.distinctCampaigns.join(' | ');
