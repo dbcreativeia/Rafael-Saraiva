@@ -447,22 +447,14 @@ class LeadsConsolidationManager {
       console.log('🔄 Starting full database lead consolidation in background...');
       const start = Date.now();
 
-      const [[popupApoio]] = await db.query('SELECT * FROM popup_apoio').catch(() => [[[]]]);
-      const [[materialCampaign]] = await db.query('SELECT * FROM material_campaign').catch(() => [[[]]]);
-      const [[ninaCampaign]] = await db.query('SELECT * FROM ninapassadore_campaign').catch(() => [[[]]]);
-      const [[citizens]] = await db.query('SELECT * FROM citizens').catch(() => [[[]]]);
-      const [[petitions]] = await db.query('SELECT * FROM petitions').catch(() => [[[]]]);
-      const [[contraMausTratos]] = await db.query('SELECT * FROM contra_maus_tratos').catch(() => [[[]]]);
-      const [[jogoUsers]] = await db.query('SELECT * FROM jogo_users').catch(() => [[[]]]);
+      const [popupApoio] = await db.query('SELECT * FROM popup_apoio').catch(() => [[]]);
+      const [materialCampaign] = await db.query('SELECT * FROM material_campaign').catch(() => [[]]);
+      const [ninaCampaign] = await db.query('SELECT * FROM ninapassadore_campaign').catch(() => [[]]);
+      const [citizens] = await db.query('SELECT * FROM citizens').catch(() => [[]]);
+      const [petitions] = await db.query('SELECT * FROM petitions').catch(() => [[]]);
+      const [contraMausTratos] = await db.query('SELECT * FROM contra_maus_tratos').catch(() => [[]]);
+      const [jogoUsers] = await db.query('SELECT * FROM jogo_users').catch(() => [[]]);
       
-      let imported: any[] = [];
-      try {
-        const [importedData] = await db.query('SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt FROM imported_leads');
-        imported = importedData as any[];
-      } catch (err) {
-        console.error("Error fetching imported_leads:", err);
-      }
-
       const leads: ConsolidatedLead[] = [];
       const phoneIndex = new Map<string, number>();
       const emailIndex = new Map<string, number>();
@@ -687,14 +679,30 @@ class LeadsConsolidationManager {
         details: { cidade: item.cidade, estado: item.estado, usuario: item.usuario }
       }));
 
-      (imported as any[]).forEach(item => addOrMerge(item, {
-        id: `imp_${item.id}`,
-        sourceKey: 'IMPORTED',
-        sourceName: `Base Externa: ${item.campanha || 'Importação CSV'}`,
-        sourceCategory: item.campanha || 'Base Externa',
-        date: item.createdAt,
-        details: { cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
-      }));
+      // Stream imported leads in chunks to prevent OOM
+      let offset = 0;
+      const limit = 50000;
+      while (true) {
+        try {
+          const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
+          const chunk = importedChunk as any[];
+          if (chunk.length === 0) break;
+          
+          chunk.forEach(item => addOrMerge(item, {
+            id: `imp_${item.id}`,
+            sourceKey: 'IMPORTED',
+            sourceName: `Base Externa: ${item.campanha || 'Importação CSV'}`,
+            sourceCategory: item.campanha || 'Base Externa',
+            date: item.createdAt,
+            details: { cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
+          }));
+          
+          offset += limit;
+        } catch (err) {
+          console.error("Error fetching imported_leads chunk:", err);
+          break;
+        }
+      }
 
       // Sort actions descending and update multi-action / super-supporter status
       leads.forEach(l => {
