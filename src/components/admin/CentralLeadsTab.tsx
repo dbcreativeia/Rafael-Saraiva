@@ -437,35 +437,54 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     setUploadSuccessMessage('Iniciando importação...');
 
     try {
-      const CHUNK_SIZE = 5000;
+      const CHUNK_SIZE = 2500;
       const totalLeads = parsedCsvLeads.length;
+      const totalBatches = Math.ceil(totalLeads / CHUNK_SIZE);
       let importedCount = 0;
 
       for (let i = 0; i < totalLeads; i += CHUNK_SIZE) {
         const chunk = parsedCsvLeads.slice(i, i + CHUNK_SIZE);
-        setUploadSuccessMessage(`Importando lote ${Math.floor(i / CHUNK_SIZE) + 1} de ${Math.ceil(totalLeads / CHUNK_SIZE)}... (${importedCount} de ${totalLeads})`);
+        const currentBatch = Math.floor(i / CHUNK_SIZE) + 1;
+        setUploadSuccessMessage(`Importando lote ${currentBatch} de ${totalBatches}... (${importedCount} de ${totalLeads})`);
         
-        const res = await fetch('/api/imported-leads/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            leads: chunk,
-            campanha: campaignInput.trim()
-          })
-        });
+        let success = false;
+        let lastError = '';
 
-        let data;
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          data = await res.json();
-        } else {
-          throw new Error('Servidor retornou um formato inesperado. O arquivo pode ser muito grande.');
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch('/api/imported-leads/bulk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                leads: chunk,
+                campanha: campaignInput.trim()
+              })
+            });
+
+            const contentType = res.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+              throw new Error(`Servidor ocupado (HTTP ${res.status}). Tentando novamente (${attempt}/3)...`);
+            }
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+              importedCount += data.count;
+              success = true;
+              break;
+            } else {
+              throw new Error(data.error || `Erro ao processar lote ${currentBatch}`);
+            }
+          } catch (err: any) {
+            lastError = err.message || 'Erro de conexão';
+            if (attempt < 3) {
+              setUploadSuccessMessage(`Lote ${currentBatch} oscilou. Tentativa ${attempt + 1} de 3 em instantes...`);
+              await new Promise(r => setTimeout(r, 1200 * attempt));
+            }
+          }
         }
 
-        if (res.ok && data.success) {
-          importedCount += data.count;
-        } else {
-          throw new Error(data.error || 'Erro ao processar importação no servidor.');
+        if (!success) {
+          throw new Error(`Falha no lote ${currentBatch} de ${totalBatches}: ${lastError}`);
         }
       }
 
