@@ -319,6 +319,7 @@ class LeadsConsolidationManager {
   private isRefreshing = false;
   private municipiosSP: Array<{ codigo_ibge: number; nome: string; latitude: number; longitude: number }> = [];
   private spCitiesMap: Map<string, string> = new Map();
+  private lastKnownDbCount = 0;
 
   constructor() {
     this.initMaps();
@@ -327,6 +328,43 @@ class LeadsConsolidationManager {
       setTimeout(() => {
         this.refreshFromDatabase().catch(err => console.error('Auto startup refresh error:', err));
       }, 1500);
+    } else {
+      setTimeout(() => {
+        this.checkAndSyncDatabaseCounts().catch(err => console.warn('Background DB sync check error:', err));
+      }, 5000);
+    }
+
+    // Auto-verify if database has new records every 10 minutes
+    setInterval(() => {
+      this.checkAndSyncDatabaseCounts().catch(err => console.warn('Periodic sync check error:', err));
+    }, 10 * 60 * 1000);
+  }
+
+  public async checkAndSyncDatabaseCounts(): Promise<void> {
+    try {
+      const db = await getDbConnection();
+      if (!db) return;
+      const [rows] = await db.query<any[]>(`
+        SELECT 
+          (SELECT COUNT(*) FROM popup_apoio) +
+          (SELECT COUNT(*) FROM material_campaign) +
+          (SELECT COUNT(*) FROM ninapassadore_campaign) +
+          (SELECT COUNT(*) FROM citizens) +
+          (SELECT COUNT(*) FROM petitions) +
+          (SELECT COUNT(*) FROM contra_maus_tratos) +
+          (SELECT COUNT(*) FROM jogo_users) +
+          (SELECT COUNT(*) FROM imported_leads) AS totalCount
+      `);
+      const currentDbCount = rows?.[0]?.totalCount ? Number(rows[0].totalCount) : 0;
+      if (this.lastKnownDbCount === 0) {
+        this.lastKnownDbCount = currentDbCount;
+      } else if (currentDbCount !== this.lastKnownDbCount) {
+        console.log(`🔄 Database change detected: previously ${this.lastKnownDbCount}, now ${currentDbCount}. Auto-refreshing leads cache...`);
+        this.lastKnownDbCount = currentDbCount;
+        await this.refreshFromDatabase();
+      }
+    } catch (err) {
+      console.warn('Could not check database counts for auto-sync:', err);
     }
   }
 
