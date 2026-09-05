@@ -193,9 +193,16 @@ export async function getDbConnection() {
         estado VARCHAR(2),
         campanha VARCHAR(255) NOT NULL,
         origem VARCHAR(255) DEFAULT 'Importação CSV',
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_campanha (campanha)
       )
     `);
+
+    try {
+      await pool.query(`CREATE INDEX idx_campanha ON imported_leads(campanha)`);
+    } catch (e) {
+      // Index already exists
+    }
 
     try {
       await pool.query(`ALTER TABLE material_campaign ADD COLUMN adesivoPerfurado BOOLEAN DEFAULT false`);

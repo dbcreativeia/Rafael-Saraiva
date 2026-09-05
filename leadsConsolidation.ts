@@ -875,22 +875,40 @@ class LeadsConsolidationManager {
     };
   }
 
+  private isSavingDiskCache = false;
+  private pendingDiskSave = false;
+
   private saveToDiskCache() {
-    try {
-      console.log('💾 Saving leads to disk cache...');
-      const payload = {
-        version: CACHE_VERSION,
-        summary: this.summary,
-        physicalMaterials: this.physicalMaterials,
-        leads: this.consolidatedLeads
-      };
-      const tmpFile = CACHE_FILE + '.tmp';
-      fs.writeFileSync(tmpFile, JSON.stringify(payload), 'utf-8');
-      fs.renameSync(tmpFile, CACHE_FILE);
-      console.log('✅ Disk cache updated successfully.');
-    } catch (e) {
-      console.error('Failed to write disk cache:', e);
+    if (this.isSavingDiskCache) {
+      this.pendingDiskSave = true;
+      return;
     }
+    this.isSavingDiskCache = true;
+    this.pendingDiskSave = false;
+
+    // Asynchronous background file write so HTTP responses return in milliseconds
+    setImmediate(async () => {
+      try {
+        console.log('💾 Saving leads to disk cache in background...');
+        const payload = {
+          version: CACHE_VERSION,
+          summary: this.summary,
+          physicalMaterials: this.physicalMaterials,
+          leads: this.consolidatedLeads
+        };
+        const tmpFile = CACHE_FILE + '.tmp';
+        await fs.promises.writeFile(tmpFile, JSON.stringify(payload), 'utf-8');
+        await fs.promises.rename(tmpFile, CACHE_FILE);
+        console.log('✅ Disk cache updated successfully.');
+      } catch (e) {
+        console.error('Failed to write disk cache:', e);
+      } finally {
+        this.isSavingDiskCache = false;
+        if (this.pendingDiskSave) {
+          this.saveToDiskCache();
+        }
+      }
+    });
   }
 
   public getSummary(): LeadsSummary & { isReady: boolean } {
