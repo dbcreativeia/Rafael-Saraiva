@@ -42,10 +42,16 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setIsRefreshing(true);
+    try {
+      // Dispara sincronização no backend com o banco MySQL
+      await fetch('/api/leads/refresh-cache', { method: 'POST' }).catch(() => {});
+    } catch {
+      // silencioso se desconectado
+    }
     setRefreshTrigger(prev => prev + 1);
-    setTimeout(() => setIsRefreshing(false), 800);
+    setTimeout(() => setIsRefreshing(false), 1200);
   };
 
   useEffect(() => {
