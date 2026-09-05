@@ -205,6 +205,12 @@ export async function getDbConnection() {
     }
 
     try {
+      await pool.query(`ALTER TABLE imported_leads ADD COLUMN extraData TEXT`);
+    } catch (e) {
+      // Column probably already exists, ignore
+    }
+
+    try {
       await pool.query(`ALTER TABLE material_campaign ADD COLUMN adesivoPerfurado BOOLEAN DEFAULT false`);
     } catch (e) {
       // Column probably already exists, ignore

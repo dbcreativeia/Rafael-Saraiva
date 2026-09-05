@@ -512,6 +512,8 @@ async function startServer() {
     res.json(importedLeadsData.map(sanitizeLeadFields));
   });
 
+  let importRefreshTimer: NodeJS.Timeout | null = null;
+
   app.post('/api/imported-leads/bulk', async (req, res) => {
     const { leads, campanha } = req.body;
     if (!Array.isArray(leads) || leads.length === 0) {
@@ -519,6 +521,10 @@ async function startServer() {
     }
     if (!campanha || !campanha.trim()) {
       return res.status(400).json({ error: "O nome da campanha é obrigatório." });
+    }
+
+    if (!db) {
+      db = await getDbConnection();
     }
 
     const campaignName = campanha.trim();
@@ -572,7 +578,6 @@ async function startServer() {
 
     if (db && valuesArray.length > 0) {
       try {
-        await db.query(`ALTER TABLE imported_leads ADD COLUMN extraData TEXT`).catch(() => {});
         const CHUNK_SIZE = 1000;
         for (let i = 0; i < valuesArray.length; i += CHUNK_SIZE) {
           const chunk = valuesArray.slice(i, i + CHUNK_SIZE);
@@ -581,17 +586,20 @@ async function startServer() {
             [chunk]
           );
         }
-      } catch (e) {
-        console.error("Erro ao inserir leads importados em lote:", e);
+      } catch (e: any) {
+        console.error("Erro ao inserir leads importados em lote no MySQL:", e);
+        return res.status(500).json({ error: "Erro ao gravar no banco: " + (e?.message || 'Falha no MySQL') });
       }
     } else if (!db) {
       saveImportedLeadsToDisk();
     }
 
-    // Trigger background cache update in leads consolidator
-    setTimeout(() => {
+    // Debounce consolidation: só executa 15 segundos após o término de todos os lotes
+    if (importRefreshTimer) clearTimeout(importRefreshTimer);
+    importRefreshTimer = setTimeout(() => {
+      console.log('🔄 Disparando consolidação após término dos lotes de importação...');
       leadsConsolidator.refresh().catch(err => console.error("Erro ao atualizar consolidador após importação:", err));
-    }, 500);
+    }, 15000);
 
     return res.json({
       success: true,
