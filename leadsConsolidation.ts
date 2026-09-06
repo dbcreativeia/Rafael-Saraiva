@@ -319,6 +319,12 @@ class LeadsConsolidationManager {
   private physicalMaterials: PhysicalMaterialItem[] = [];
   private isReady = false;
   private isRefreshing = false;
+  private refreshProgress = {
+    step: '',
+    current: 0,
+    total: 0,
+    startedAt: ''
+  };
   private municipiosSP: Array<{ codigo_ibge: number; nome: string; latitude: number; longitude: number }> = [];
   private spCitiesMap: Map<string, string> = new Map();
   private lastKnownDbCount = 0;
@@ -532,6 +538,12 @@ class LeadsConsolidationManager {
 
       console.log('🔄 Starting full database lead consolidation in background...');
       const start = Date.now();
+      this.refreshProgress = {
+        step: 'Consultando cadastros do site (apoio, materiais, petições)...',
+        current: 0,
+        total: 0,
+        startedAt: new Date().toISOString()
+      };
 
       const [popupApoio] = await db.query('SELECT * FROM popup_apoio').catch(() => [[]]);
       const [materialCampaign] = await db.query('SELECT * FROM material_campaign').catch(() => [[]]);
@@ -768,6 +780,19 @@ class LeadsConsolidationManager {
       // Stream imported leads in chunks to prevent OOM
       let offset = 0;
       const limit = 50000;
+
+      // Obter total aproximado para feedback visual
+      try {
+        const [cntRows]: any = await db.query('SELECT COUNT(*) as total FROM imported_leads');
+        const dbTotal = cntRows?.[0]?.total || 0;
+        this.refreshProgress = {
+          step: `Cruzando e desduplicando contatos das bases importadas (${dbTotal.toLocaleString('pt-BR')} registros)...`,
+          current: 0,
+          total: dbTotal,
+          startedAt: this.refreshProgress.startedAt
+        };
+      } catch (e) {}
+
       while (true) {
         try {
           const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
@@ -784,6 +809,8 @@ class LeadsConsolidationManager {
           }));
           
           offset += limit;
+          this.refreshProgress.current = offset;
+          this.refreshProgress.step = `Processando registros: ${Math.min(offset, this.refreshProgress.total || offset).toLocaleString('pt-BR')} de ${(this.refreshProgress.total || offset).toLocaleString('pt-BR')}...`;
         } catch (err) {
           console.error("Error fetching imported_leads chunk:", err);
           break;
@@ -791,6 +818,7 @@ class LeadsConsolidationManager {
       }
 
       // Sort actions descending and update multi-action / super-supporter status
+      this.refreshProgress.step = 'Normalizando endereços de SP e classificando Super Apoiadores...';
       leads.forEach(l => {
         l.actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
@@ -804,6 +832,7 @@ class LeadsConsolidationManager {
       this.physicalMaterials = Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       // Generate summary
+      this.refreshProgress.step = 'Gerando métricas e mapas consolidados...';
       this.computeSummary();
       this.isReady = true;
 
@@ -996,10 +1025,12 @@ class LeadsConsolidationManager {
     });
   }
 
-  public getSummary(): LeadsSummary & { isReady: boolean } {
+  public getSummary(): LeadsSummary & { isReady: boolean; isRefreshing: boolean; refreshProgress: { step: string; current: number; total: number; startedAt: string } } {
     return {
       ...this.summary,
-      isReady: this.isReady
+      isReady: this.isReady,
+      isRefreshing: this.isRefreshing,
+      refreshProgress: this.refreshProgress
     };
   }
 
