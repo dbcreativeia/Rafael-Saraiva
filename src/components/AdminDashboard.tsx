@@ -51,7 +51,28 @@ export const AdminDashboard: React.FC = () => {
       // silencioso se desconectado
     }
     setRefreshTrigger(prev => prev + 1);
-    setTimeout(() => setIsRefreshing(false), 1200);
+
+    // Polling inteligente para manter o botão em estado de animação enquanto o backend processa
+    let attempts = 0;
+    const checkInterval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.isRefreshing || attempts > 60) {
+            clearInterval(checkInterval);
+            setIsRefreshing(false);
+            setRefreshTrigger(prev => prev + 1);
+          }
+        }
+      } catch {
+        if (attempts > 10) {
+          clearInterval(checkInterval);
+          setIsRefreshing(false);
+        }
+      }
+    }, 2000);
   };
 
   useEffect(() => {

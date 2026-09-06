@@ -121,6 +121,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     cityOptions: { name: string; count: number }[];
     campaignOptions: string[];
     spHeatmapPoints: any[];
+    isReady?: boolean;
+    isRefreshing?: boolean;
+    refreshProgress?: {
+      step: string;
+      current: number;
+      total: number;
+      startedAt: string;
+    };
   }>({
     totalUniqueLeads: 0,
     totalSubmissions: 0,
@@ -130,8 +138,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     stateOptions: [],
     cityOptions: [],
     campaignOptions: [],
-    spHeatmapPoints: []
+    spHeatmapPoints: [],
+    isReady: true,
+    isRefreshing: false
   });
+
+  const [isSyncingConsolidation, setIsSyncingConsolidation] = useState(false);
+  const [syncStatusMessage, setSyncStatusMessage] = useState('');
 
   const [serverLeads, setServerLeads] = useState<ConsolidatedLead[]>([]);
   const [totalFiltered, setTotalFiltered] = useState(0);
@@ -192,10 +205,62 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
+        if (data.isRefreshing) {
+          setIsSyncingConsolidation(true);
+          setSyncStatusMessage(data.refreshProgress?.step || 'Cruzando e consolidando contatos no banco...');
+        } else if (isSyncingConsolidation) {
+          setIsSyncingConsolidation(false);
+          setSyncStatusMessage('');
+        }
+        return data;
       }
     } catch (err) {
       console.warn("Erro ao buscar resumo de leads:", err);
     }
+  };
+
+  const triggerSyncDatabase = async () => {
+    if (isSyncingConsolidation) return;
+    setIsSyncingConsolidation(true);
+    setSyncStatusMessage('Iniciando sincronização e varredura do banco de dados...');
+    try {
+      await fetch('/api/leads/refresh-cache', { method: 'POST' });
+    } catch (e) {
+      console.warn('Erro ao disparar refresh-cache:', e);
+    }
+
+    // Polling inteligente até o backend concluir o processamento dos 870k+ registros
+    let attempts = 0;
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSummary(data);
+          if (data.isRefreshing) {
+            setSyncStatusMessage(data.refreshProgress?.step || 'Processando desduplicação de cadastros no servidor...');
+          } else {
+            // Finalizado com sucesso!
+            clearInterval(pollInterval);
+            setIsSyncingConsolidation(false);
+            setSyncStatusMessage('Consolidação concluída! Atualizando listas...');
+            setTimeout(() => setSyncStatusMessage(''), 3000);
+            fetchLeadsPage(1);
+            fetchImportedBases();
+          }
+        }
+      } catch (err) {
+        console.warn('Erro no polling de sincronização:', err);
+      }
+
+      if (attempts > 80) { // Timeout de segurança: 4 minutos
+        clearInterval(pollInterval);
+        setIsSyncingConsolidation(false);
+        setSyncStatusMessage('');
+        fetchLeadsPage(1);
+      }
+    }, 2500);
   };
 
   const fetchLeadsPage = async (page = currentPage) => {
@@ -488,12 +553,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
       }
 
-      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista...`);
+      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista e consolidando em segundo plano...`);
       await fetchImportedBases();
-      try {
-        await fetch('/api/leads/refresh-cache', { method: 'POST' });
-      } catch (e) {}
-      await fetchAllLeads(true);
+      triggerSyncDatabase();
       setTimeout(() => {
         setIsUploadModalOpen(false);
         setUploadSuccessMessage('');
@@ -504,7 +566,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         setCsvRawRows([]);
         setCsvHeaders([]);
         setCampaignInput('');
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
       console.error('Erro ao enviar leads importados:', err);
       setUploadError(err.message || 'Erro de conexão ao enviar os leads para o servidor.');
@@ -1002,6 +1064,20 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           <div className="flex flex-wrap items-center gap-3">
 
             <button
+              onClick={triggerSyncDatabase}
+              disabled={isSyncingConsolidation}
+              title="Disparar varredura do banco de dados e recalcular totais consolidados"
+              className={`font-bold py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer border ${
+                isSyncingConsolidation
+                  ? 'bg-amber-600/90 text-white border-amber-400/50 animate-pulse'
+                  : 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white border-indigo-400/40 shadow-indigo-900/40'
+              }`}
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncingConsolidation ? 'animate-spin' : ''}`} />
+              <span>{isSyncingConsolidation ? 'Consolidando...' : 'Atualizar Dados'}</span>
+            </button>
+
+            <button
               onClick={() => {
                 setIsUploadModalOpen(true);
                 setUploadError('');
@@ -1095,6 +1171,37 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           </div>
         </div>
       </div>
+
+      {/* Consolidation / Processing Status Banner */}
+      {isSyncingConsolidation && (
+        <div className="bg-gradient-to-r from-amber-50 via-amber-100 to-orange-50 border-2 border-amber-300/80 rounded-2xl p-5 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in duration-300">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center shrink-0">
+              <RefreshCw className="w-6 h-6 text-amber-700 animate-spin" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-amber-500 text-white uppercase tracking-wider">
+                  Processando em Segundo Plano
+                </span>
+                <span className="text-xs text-amber-800/80 font-semibold">
+                  (Pode levar de 20 a 40 segundos devido ao volume de ~870 mil registros)
+                </span>
+              </div>
+              <p className="text-sm sm:text-base font-bold text-amber-950 mt-1">
+                {syncStatusMessage || 'Varrendo banco MySQL, cruzando telefones/CPFs/e-mails e atualizando o painel...'}
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0 w-full md:w-auto flex items-center justify-end">
+            <div className="text-xs font-semibold text-amber-800 bg-amber-200/70 border border-amber-300 px-3 py-1.5 rounded-lg flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping"></span>
+              Sincronização em andamento
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* View Switcher: Lista vs Mapa de Calor */}
       <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-gray-200/80 shadow-xs">
