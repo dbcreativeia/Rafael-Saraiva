@@ -488,7 +488,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
       }
 
-      setUploadSuccessMessage(`Sucesso! ${importedCount} leads importados para a campanha "${campaignInput.trim()}".`);
+      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista...`);
+      await fetchImportedBases();
       try {
         await fetch('/api/leads/refresh-cache', { method: 'POST' });
       } catch (e) {}
@@ -503,16 +504,18 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         setCsvRawRows([]);
         setCsvHeaders([]);
         setCampaignInput('');
-      }, 1800);
+      }, 2000);
     } catch (err: any) {
       console.error('Erro ao enviar leads importados:', err);
       setUploadError(err.message || 'Erro de conexão ao enviar os leads para o servidor.');
-    } finally {    setIsUploading(false);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   useEffect(() => {
     fetchAllLeads();
+    fetchImportedBases();
   }, [refreshTrigger]);
 
   // Helpers for normalization & deduplication
