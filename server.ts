@@ -609,11 +609,14 @@ async function startServer() {
   });
 
 
+  const deletingCampaigns = new Set<string>();
+
   app.get('/api/imported-leads/campaigns', async (req, res) => {
     if (db) {
       try {
-        const [rows] = await db.query('SELECT campanha, COUNT(*) as count, MAX(createdAt) as lastImport FROM imported_leads GROUP BY campanha ORDER BY lastImport DESC');
-        return res.json(rows);
+        const [rows]: any = await db.query('SELECT campanha, COUNT(*) as count, MAX(createdAt) as lastImport FROM imported_leads GROUP BY campanha ORDER BY lastImport DESC');
+        const activeRows = (rows as any[]).filter(r => !deletingCampaigns.has(r.campanha));
+        return res.json(activeRows);
       } catch (err) {
         return res.status(500).json({ error: "DB erro" });
       }
@@ -631,35 +634,68 @@ async function startServer() {
         c.lastImport = lead.createdAt;
       }
     });
-    const result = Array.from(campaignsMap.entries()).map(([campanha, data]) => ({
-      campanha,
-      count: data.count,
-      lastImport: data.lastImport
-    }));
+    const result = Array.from(campaignsMap.entries())
+      .filter(([campanha]) => !deletingCampaigns.has(campanha))
+      .map(([campanha, data]) => ({
+        campanha,
+        count: data.count,
+        lastImport: data.lastImport
+      }));
     return res.json(result);
   });
 
   app.delete('/api/imported-leads/campaign/:campaignName', async (req, res) => {
     const campaignName = req.params.campaignName;
-    if (db) {
-      try {
-        await db.query('DELETE FROM imported_leads WHERE campanha = ?', [campaignName]);
-        leadsConsolidator.removeCampaign(campaignName);
-        return res.json({ success: true });
-      } catch (err) {
-        return res.status(500).json({ error: "DB erro" });
-      }
+    if (!campaignName) {
+      return res.status(400).json({ error: "Nome de campanha inválido" });
     }
-    
-    const initialLength = importedLeadsData.length;
-    // In-memory fallback
+
+    // 1. Marca imediatamente como em exclusão para não aparecer em mais nenhuma listagem
+    deletingCampaigns.add(campaignName);
+
+    // 2. Remove imediatamente do consolidado em memória e atualiza sumário
+    try {
+      leadsConsolidator.removeCampaign(campaignName);
+    } catch (err) {
+      console.error('Erro ao remover campanha da consolidação:', err);
+    }
+
+    // 3. Remove do fallback em memória
     const filtered = importedLeadsData.filter(lead => lead.campanha !== campaignName);
     importedLeadsData.length = 0;
     importedLeadsData.push(...filtered);
+
+    // 4. Se tiver MySQL conectado, efetua a limpeza no banco em segundo plano via lotes para resposta instantânea
+    if (db) {
+      (async () => {
+        try {
+          const start = Date.now();
+          let totalDeleted = 0;
+          const CHUNK = 15000;
+          while (true) {
+            const [delResult]: any = await db.query(
+              'DELETE FROM imported_leads WHERE campanha = ? LIMIT ?',
+              [campaignName, CHUNK]
+            );
+            const affected = delResult?.affectedRows || 0;
+            totalDeleted += affected;
+            if (affected === 0) break;
+            await new Promise(r => setTimeout(r, 40));
+          }
+          console.log(`🗑️ Exclusão concluída: ${totalDeleted} leads da campanha "${campaignName}" removidos do MySQL em ${Date.now() - start}ms.`);
+        } catch (err) {
+          console.error(`Erro ao deletar registros da campanha "${campaignName}" no MySQL:`, err);
+        } finally {
+          deletingCampaigns.delete(campaignName);
+        }
+      })();
+
+      return res.json({ success: true, message: `Campanha "${campaignName}" excluída.` });
+    }
+
     saveImportedLeadsToDisk();
-    leadsConsolidator.removeCampaign(campaignName);
-    
-    res.json({ success: true, deleted: initialLength - importedLeadsData.length });
+    deletingCampaigns.delete(campaignName);
+    return res.json({ success: true });
   });
 
   app.delete('/api/imported-leads/:id', async (req, res) => {
