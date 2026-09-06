@@ -534,17 +534,21 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   const handleDeleteBase = async (campaignName: string) => {
     setIsDeletingBase(campaignName);
+    // Remove visualmente da lista e fecha confirmação imediatamente
+    setImportedBases(prev => prev.filter(b => b.campanha !== campaignName));
+    setConfirmDeleteBase('');
     try {
       const res = await fetch(`/api/imported-leads/campaign/${encodeURIComponent(campaignName)}`, {
         method: 'DELETE'
       });
       if (res.ok) {
+        fetchAllLeads(); // Atualiza os leads consolidados e sumário
+      } else {
         await fetchImportedBases();
-        fetchAllLeads(); // Atualiza os leads consolidados
-        setConfirmDeleteBase('');
       }
     } catch (err) {
       console.error('Erro ao excluir base:', err);
+      await fetchImportedBases();
     } finally {
       setIsDeletingBase('');
     }
