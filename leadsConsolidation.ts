@@ -77,7 +77,9 @@ export interface PhysicalMaterialItem {
 }
 
 const CACHE_FILE = path.join(process.cwd(), 'leads_cache.json');
-const CACHE_VERSION = 'v3_strict_phone_and_fullname_dedup';
+const CACHE_META_FILE = path.join(process.cwd(), 'leads_cache_meta.json');
+const CACHE_DIR = path.join(process.cwd(), 'leads_cache_parts');
+const CACHE_VERSION = 'v4_chunked_cache';
 const MUNICIPIOS_FILE = path.join(process.cwd(), 'public', 'municipios.json');
 const SP_CITIES_FILE = path.join(process.cwd(), 'sp-cities.json');
 
@@ -415,32 +417,78 @@ class LeadsConsolidationManager {
   }
 
   private loadFromDiskCache(): boolean {
-    if (!fs.existsSync(CACHE_FILE)) {
-      return false;
-    }
-    try {
-      console.log('⚡ Loading consolidated leads from local disk cache...');
-      const start = Date.now();
-      const content = fs.readFileSync(CACHE_FILE, 'utf-8');
-      const data = JSON.parse(content);
-      if (data && data.version === CACHE_VERSION && Array.isArray(data.leads) && data.summary) {
-        this.consolidatedLeads = data.leads;
-        // Re-sanitize states and apply new multi-action/super-supporter business rules
-        for (let i = 0; i < this.consolidatedLeads.length; i++) {
-          const l = this.consolidatedLeads[i];
-          l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
-          updateLeadMultiActionStatus(l);
+    // 1. Try modern chunked cache first
+    if (fs.existsSync(CACHE_META_FILE) && fs.existsSync(CACHE_DIR)) {
+      try {
+        console.log('⚡ Loading consolidated leads from chunked disk cache...');
+        const start = Date.now();
+        const metaRaw = fs.readFileSync(CACHE_META_FILE, 'utf-8');
+        const meta = JSON.parse(metaRaw);
+
+        if (meta && meta.version === CACHE_VERSION && meta.totalParts > 0) {
+          const loadedLeads: ConsolidatedLead[] = [];
+
+          for (let p = 0; p < meta.totalParts; p++) {
+            const partFile = path.join(CACHE_DIR, `part_${p}.json`);
+            if (!fs.existsSync(partFile)) {
+              console.warn(`Part file missing: ${partFile}, falling back to DB refresh`);
+              return false;
+            }
+            const partRaw = fs.readFileSync(partFile, 'utf-8');
+            const chunk = JSON.parse(partRaw);
+            if (Array.isArray(chunk)) {
+              for (let i = 0; i < chunk.length; i++) {
+                const l = chunk[i];
+                l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
+                updateLeadMultiActionStatus(l);
+                loadedLeads.push(l);
+              }
+            }
+          }
+
+          this.consolidatedLeads = loadedLeads;
+          this.physicalMaterials = Array.isArray(meta.physicalMaterials) ? meta.physicalMaterials : [];
+          this.rebuildIndexes();
+          this.computeSummary();
+          this.isReady = true;
+          console.log(`✅ Loaded and sanitized ${this.consolidatedLeads.length} leads from chunked cache in ${Date.now() - start}ms!`);
+          return true;
         }
-        this.physicalMaterials = Array.isArray(data.physicalMaterials) ? data.physicalMaterials : [];
-        this.rebuildIndexes();
-        this.computeSummary();
-        this.isReady = true;
-        this.saveToDiskCache();
-        console.log(`✅ Loaded and sanitized ${this.consolidatedLeads.length} leads from disk cache in ${Date.now() - start}ms!`);
-        return true;
+      } catch (err) {
+        console.error('Failed to read chunked disk cache:', err);
       }
-    } catch (err) {
-      console.error('Failed to read disk cache:', err);
+    }
+
+    // 2. Fallback: try legacy single-file cache if present and not oversized
+    if (fs.existsSync(CACHE_FILE)) {
+      try {
+        const stats = fs.statSync(CACHE_FILE);
+        if (stats.size < 300 * 1024 * 1024) {
+          console.log('⚡ Loading consolidated leads from legacy single-file disk cache...');
+          const start = Date.now();
+          const content = fs.readFileSync(CACHE_FILE, 'utf-8');
+          const data = JSON.parse(content);
+          if (data && Array.isArray(data.leads) && data.summary) {
+            this.consolidatedLeads = data.leads;
+            for (let i = 0; i < this.consolidatedLeads.length; i++) {
+              const l = this.consolidatedLeads[i];
+              l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
+              updateLeadMultiActionStatus(l);
+            }
+            this.physicalMaterials = Array.isArray(data.physicalMaterials) ? data.physicalMaterials : [];
+            this.rebuildIndexes();
+            this.computeSummary();
+            this.isReady = true;
+            this.saveToDiskCache();
+            console.log(`✅ Loaded and migrated ${this.consolidatedLeads.length} leads from legacy cache in ${Date.now() - start}ms!`);
+            return true;
+          }
+        } else {
+          console.warn(`Legacy cache file is too large (${(stats.size / 1024 / 1024).toFixed(1)}MB). Rebuilding from database...`);
+        }
+      } catch (err) {
+        console.error('Failed to read legacy disk cache:', err);
+      }
     }
     return false;
   }
@@ -886,20 +934,57 @@ class LeadsConsolidationManager {
     this.isSavingDiskCache = true;
     this.pendingDiskSave = false;
 
-    // Asynchronous background file write so HTTP responses return in milliseconds
+    // Asynchronous background file write in safe chunks so V8 never hits string length limits
     setImmediate(async () => {
       try {
-        console.log('💾 Saving leads to disk cache in background...');
-        const payload = {
+        console.log('💾 Saving leads to chunked disk cache in background...');
+        const start = Date.now();
+
+        if (!fs.existsSync(CACHE_DIR)) {
+          fs.mkdirSync(CACHE_DIR, { recursive: true });
+        }
+
+        const CHUNK_SIZE = 50000;
+        const totalParts = Math.ceil(this.consolidatedLeads.length / CHUNK_SIZE);
+
+        for (let part = 0; part < totalParts; part++) {
+          const chunk = this.consolidatedLeads.slice(part * CHUNK_SIZE, (part + 1) * CHUNK_SIZE);
+          const chunkTmp = path.join(CACHE_DIR, `part_${part}.json.tmp`);
+          const chunkFinal = path.join(CACHE_DIR, `part_${part}.json`);
+          await fs.promises.writeFile(chunkTmp, JSON.stringify(chunk), 'utf-8');
+          await fs.promises.rename(chunkTmp, chunkFinal);
+        }
+
+        // Clean up any old extra part files if totalParts decreased
+        const existingFiles = await fs.promises.readdir(CACHE_DIR).catch(() => [] as string[]);
+        for (const f of existingFiles) {
+          if (f.startsWith('part_') && f.endsWith('.json')) {
+            const partNum = parseInt(f.replace('part_', '').replace('.json', ''), 10);
+            if (!isNaN(partNum) && partNum >= totalParts) {
+              await fs.promises.unlink(path.join(CACHE_DIR, f)).catch(() => {});
+            }
+          }
+        }
+
+        // Write metadata
+        const metaPayload = {
           version: CACHE_VERSION,
+          totalParts,
+          totalLeads: this.consolidatedLeads.length,
           summary: this.summary,
           physicalMaterials: this.physicalMaterials,
-          leads: this.consolidatedLeads
+          updatedAt: new Date().toISOString()
         };
-        const tmpFile = CACHE_FILE + '.tmp';
-        await fs.promises.writeFile(tmpFile, JSON.stringify(payload), 'utf-8');
-        await fs.promises.rename(tmpFile, CACHE_FILE);
-        console.log('✅ Disk cache updated successfully.');
+        const metaTmp = CACHE_META_FILE + '.tmp';
+        await fs.promises.writeFile(metaTmp, JSON.stringify(metaPayload), 'utf-8');
+        await fs.promises.rename(metaTmp, CACHE_META_FILE);
+
+        // Delete legacy single-file cache if it exists to free disk space
+        if (fs.existsSync(CACHE_FILE)) {
+          await fs.promises.unlink(CACHE_FILE).catch(() => {});
+        }
+
+        console.log(`✅ Chunked disk cache updated successfully in ${Date.now() - start}ms (${totalParts} parts, ${this.consolidatedLeads.length} leads).`);
       } catch (e) {
         console.error('Failed to write disk cache:', e);
       } finally {
