@@ -31,6 +31,8 @@ export interface ConsolidatedLead {
   firstDate: string;
   lastDate: string;
   actions: LeadAction[];
+  cpf?: string;
+  otherPhones?: string[];
   extraData?: Record<string, any>;
 }
 
@@ -162,6 +164,62 @@ export function normalizePhone(p?: string | null): string {
   if (digits.startsWith('55') && digits.length >= 12) return digits;
   if (digits.length >= 10 && digits.length <= 11) return '55' + digits;
   return digits;
+}
+
+export function normalizeCpf(cpf?: string | null): string {
+  if (!cpf) return '';
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+  }
+  return cpf.trim();
+}
+
+export function extractExtraDetails(extraData: Record<string, any> = {}): {
+  cpf?: string;
+  extraPhones: string[];
+  cleanExtra: Record<string, any>;
+} {
+  let foundCpf: string | undefined = undefined;
+  const extraPhones: string[] = [];
+  const cleanExtra: Record<string, any> = {};
+
+  for (const [rawKey, rawVal] of Object.entries(extraData)) {
+    if (rawVal === undefined || rawVal === null || String(rawVal).trim() === '') continue;
+    const valStr = String(rawVal).trim();
+    const keyLower = rawKey.toLowerCase();
+
+    if (keyLower.includes('cpf') || keyLower === 'documento') {
+      const digits = valStr.replace(/\D/g, '');
+      if (digits.length === 11 && !foundCpf) {
+        foundCpf = normalizeCpf(valStr);
+      }
+      cleanExtra[rawKey] = valStr;
+    } else if (
+      keyLower.includes('tel') ||
+      keyLower.includes('cel') ||
+      keyLower.includes('whats') ||
+      keyLower.includes('fone') ||
+      keyLower.includes('contato') ||
+      keyLower.includes('phone') ||
+      keyLower.includes('outro telefone') ||
+      keyLower.includes('telefone 2') ||
+      keyLower.includes('telefone 3')
+    ) {
+      const digits = valStr.replace(/\D/g, '');
+      if (digits.length >= 8 && digits.length <= 14) {
+        const norm = normalizePhone(valStr);
+        if (norm && !extraPhones.includes(norm)) {
+          extraPhones.push(norm);
+        }
+      }
+      cleanExtra[rawKey] = valStr;
+    } else {
+      cleanExtra[rawKey] = valStr;
+    }
+  }
+
+  return { cpf: foundCpf, extraPhones, cleanExtra };
 }
 
 export function normalizeEmail(e?: string | null): string {
@@ -319,12 +377,6 @@ class LeadsConsolidationManager {
   private physicalMaterials: PhysicalMaterialItem[] = [];
   private isReady = false;
   private isRefreshing = false;
-  private refreshProgress = {
-    step: '',
-    current: 0,
-    total: 0,
-    startedAt: ''
-  };
   private municipiosSP: Array<{ codigo_ibge: number; nome: string; latitude: number; longitude: number }> = [];
   private spCitiesMap: Map<string, string> = new Map();
   private lastKnownDbCount = 0;
@@ -538,12 +590,6 @@ class LeadsConsolidationManager {
 
       console.log('🔄 Starting full database lead consolidation in background...');
       const start = Date.now();
-      this.refreshProgress = {
-        step: 'Consultando cadastros do site (apoio, materiais, petições)...',
-        current: 0,
-        total: 0,
-        startedAt: new Date().toISOString()
-      };
 
       const [popupApoio] = await db.query('SELECT * FROM popup_apoio').catch(() => [[]]);
       const [materialCampaign] = await db.query('SELECT * FROM material_campaign').catch(() => [[]]);
@@ -645,8 +691,34 @@ class LeadsConsolidationManager {
           if (nameCityKey && !nameCityIndex.has(nameCityKey)) {
             nameCityIndex.set(nameCityKey, targetIdx);
           }
+
+          // Merge extraData, other phones, and CPF
+          if (data.extraData && typeof data.extraData === 'object') {
+            const { cpf: foundCpf, extraPhones, cleanExtra } = extractExtraDetails(data.extraData);
+            if (!existing.cpf && foundCpf) existing.cpf = foundCpf;
+            if (!existing.extraData) existing.extraData = {};
+            Object.assign(existing.extraData, cleanExtra);
+
+            if (!existing.otherPhones) existing.otherPhones = [];
+            for (const ep of extraPhones) {
+              if (ep !== existing.whatsapp && !existing.otherPhones.includes(ep)) {
+                existing.otherPhones.push(ep);
+              }
+            }
+          }
         } else {
           const newIdx = leads.length;
+          let newCpf: string | undefined = undefined;
+          let newOtherPhones: string[] = [];
+          let cleanExtra: Record<string, any> = {};
+
+          if (data.extraData && typeof data.extraData === 'object') {
+            const extracted = extractExtraDetails(data.extraData);
+            newCpf = extracted.cpf;
+            newOtherPhones = extracted.extraPhones.filter(p => p !== phone);
+            cleanExtra = extracted.cleanExtra;
+          }
+
           const newLead: ConsolidatedLead = {
             id: data.id ? String(data.id) : `lead_${newIdx}_${Math.random().toString(36).substring(2, 7)}`,
             nome: rawName,
@@ -665,7 +737,10 @@ class LeadsConsolidationManager {
             distinctCampaigns: [action.sourceCategory],
             firstDate: date,
             lastDate: date,
-            actions: [action]
+            actions: [action],
+            cpf: newCpf,
+            otherPhones: newOtherPhones.length > 0 ? newOtherPhones : undefined,
+            extraData: Object.keys(cleanExtra).length > 0 ? cleanExtra : undefined
           };
           leads.push(newLead);
           if (phone && phone.length >= 8) phoneIndex.set(phone, newIdx);
@@ -780,37 +855,42 @@ class LeadsConsolidationManager {
       // Stream imported leads in chunks to prevent OOM
       let offset = 0;
       const limit = 50000;
-
-      // Obter total aproximado para feedback visual
-      try {
-        const [cntRows]: any = await db.query('SELECT COUNT(*) as total FROM imported_leads');
-        const dbTotal = cntRows?.[0]?.total || 0;
-        this.refreshProgress = {
-          step: `Cruzando e desduplicando contatos das bases importadas (${dbTotal.toLocaleString('pt-BR')} registros)...`,
-          current: 0,
-          total: dbTotal,
-          startedAt: this.refreshProgress.startedAt
-        };
-      } catch (e) {}
-
       while (true) {
         try {
-          const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
+          const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
           const chunk = importedChunk as any[];
           if (chunk.length === 0) break;
           
-          chunk.forEach(item => addOrMerge(item, {
-            id: `imp_${item.id}`,
-            sourceKey: 'IMPORTED',
-            sourceName: `Base Externa: ${item.campanha || 'Importação CSV'}`,
-            sourceCategory: item.campanha || 'Base Externa',
-            date: item.createdAt,
-            details: { cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
-          }));
+          chunk.forEach(item => {
+            let parsedExtra: Record<string, any> = {};
+            if (item.extraData) {
+              if (typeof item.extraData === 'string') {
+                try { parsedExtra = JSON.parse(item.extraData); } catch {}
+              } else if (typeof item.extraData === 'object') {
+                parsedExtra = item.extraData;
+              }
+            }
+            item.extraData = parsedExtra;
+
+            addOrMerge(item, {
+              id: `imp_${item.id}`,
+              sourceKey: 'IMPORTED',
+              sourceName: `Base Externa: ${item.campanha || 'Importação CSV'}`,
+              sourceCategory: item.campanha || 'Base Externa',
+              date: item.createdAt,
+              details: {
+                cidade: item.cidade,
+                estado: item.estado,
+                endereco: item.endereco,
+                numero: item.numero,
+                bairro: item.bairro,
+                cep: item.cep,
+                extraData: parsedExtra
+              }
+            });
+          });
           
           offset += limit;
-          this.refreshProgress.current = offset;
-          this.refreshProgress.step = `Processando registros: ${Math.min(offset, this.refreshProgress.total || offset).toLocaleString('pt-BR')} de ${(this.refreshProgress.total || offset).toLocaleString('pt-BR')}...`;
         } catch (err) {
           console.error("Error fetching imported_leads chunk:", err);
           break;
@@ -818,7 +898,6 @@ class LeadsConsolidationManager {
       }
 
       // Sort actions descending and update multi-action / super-supporter status
-      this.refreshProgress.step = 'Normalizando endereços de SP e classificando Super Apoiadores...';
       leads.forEach(l => {
         l.actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
@@ -832,7 +911,6 @@ class LeadsConsolidationManager {
       this.physicalMaterials = Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       // Generate summary
-      this.refreshProgress.step = 'Gerando métricas e mapas consolidados...';
       this.computeSummary();
       this.isReady = true;
 
@@ -1025,12 +1103,10 @@ class LeadsConsolidationManager {
     });
   }
 
-  public getSummary(): LeadsSummary & { isReady: boolean; isRefreshing: boolean; refreshProgress: { step: string; current: number; total: number; startedAt: string } } {
+  public getSummary(): LeadsSummary & { isReady: boolean } {
     return {
       ...this.summary,
-      isReady: this.isReady,
-      isRefreshing: this.isRefreshing,
-      refreshProgress: this.refreshProgress
+      isReady: this.isReady
     };
   }
 
@@ -1183,8 +1259,32 @@ class LeadsConsolidationManager {
       if (new Date(date).getTime() > new Date(existing.lastDate).getTime()) {
         existing.lastDate = date;
       }
+      if (leadData.extraData && typeof leadData.extraData === 'object') {
+        const { cpf: foundCpf, extraPhones, cleanExtra } = extractExtraDetails(leadData.extraData);
+        if (!existing.cpf && foundCpf) existing.cpf = foundCpf;
+        if (!existing.extraData) existing.extraData = {};
+        Object.assign(existing.extraData, cleanExtra);
+
+        if (!existing.otherPhones) existing.otherPhones = [];
+        for (const ep of extraPhones) {
+          if (ep !== existing.whatsapp && !existing.otherPhones.includes(ep)) {
+            existing.otherPhones.push(ep);
+          }
+        }
+      }
     } else {
       const newIdx = this.consolidatedLeads.length;
+      let newCpf: string | undefined = undefined;
+      let newOtherPhones: string[] = [];
+      let cleanExtra: Record<string, any> = {};
+
+      if (leadData.extraData && typeof leadData.extraData === 'object') {
+        const extracted = extractExtraDetails(leadData.extraData);
+        newCpf = extracted.cpf;
+        newOtherPhones = extracted.extraPhones.filter(p => p !== phone);
+        cleanExtra = extracted.cleanExtra;
+      }
+
       const newLead: ConsolidatedLead = {
         id: leadData.id ? String(leadData.id) : `lead_${Date.now()}`,
         nome: rawName,
@@ -1203,7 +1303,10 @@ class LeadsConsolidationManager {
         distinctCampaigns: [action.sourceCategory],
         firstDate: date,
         lastDate: date,
-        actions: [action]
+        actions: [action],
+        cpf: newCpf,
+        otherPhones: newOtherPhones.length > 0 ? newOtherPhones : undefined,
+        extraData: Object.keys(cleanExtra).length > 0 ? cleanExtra : undefined
       };
       updateLeadMultiActionStatus(newLead);
       this.consolidatedLeads.unshift(newLead);
@@ -1240,13 +1343,18 @@ class LeadsConsolidationManager {
     const res = this.getPaginatedLeads({ ...params, page: 1, pageSize: 500000 });
     
     if (format === 'csv') {
-      const headers = ['Nome', 'WhatsApp', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato'];
+      const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
       const csvRows = [headers.join(',')];
       
       for (const l of res.leads) {
+        const extraFieldsStr = l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
+        const otherPhonesStr = l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '';
+
         const row = [
           `"${(l.nome || '').replace(/"/g, '""')}"`,
           `"${(l.whatsapp || '').replace(/"/g, '""')}"`,
+          `"${otherPhonesStr.replace(/"/g, '""')}"`,
+          `"${(l.cpf || '').replace(/"/g, '""')}"`,
           `"${(l.email || '').replace(/"/g, '""')}"`,
           `"${(l.cidade || '').replace(/"/g, '""')}"`,
           `"${(l.estado || '').replace(/"/g, '""')}"`,
@@ -1260,7 +1368,8 @@ class LeadsConsolidationManager {
           l.isSuperSupporter ? 'SIM' : 'NÃO',
           `"${l.distinctCampaigns.join(' | ').replace(/"/g, '""')}"`,
           `"${l.firstDate ? new Date(l.firstDate).toLocaleDateString('pt-BR') : ''}"`,
-          `"${l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''}"`
+          `"${l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''}"`,
+          `"${extraFieldsStr.replace(/"/g, '""')}"`
         ];
         csvRows.push(row.join(','));
       }
@@ -1270,6 +1379,8 @@ class LeadsConsolidationManager {
     const rows = res.leads.map(l => ({
       'Nome': l.nome,
       'WhatsApp': l.whatsapp,
+      'Outros Telefones': l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '',
+      'CPF': l.cpf || '',
       'Email': l.email,
       'Cidade': l.cidade,
       'Estado': l.estado,
@@ -1283,7 +1394,8 @@ class LeadsConsolidationManager {
       'Super Apoiador': l.isSuperSupporter ? 'SIM' : 'NÃO',
       'Campanhas': l.distinctCampaigns.join(' | '),
       'Primeiro Contato': l.firstDate ? new Date(l.firstDate).toLocaleDateString('pt-BR') : '',
-      'Último Contato': l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''
+      'Último Contato': l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : '',
+      'Dados Extras': l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);

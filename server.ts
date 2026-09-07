@@ -760,13 +760,18 @@ async function startServer() {
         const params = req.query as any;
         const resData = leadsConsolidator.getPaginatedLeads({ ...params, page: 1, pageSize: 1000000 });
         
-        const headers = ['Nome', 'WhatsApp', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato'];
+        const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
         res.write('\uFEFF' + headers.join(',') + '\n');
         
         for (const l of resData.leads) {
+          const extraFieldsStr = l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
+          const otherPhonesStr = l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '';
+
           const row = [
             `"${(l.nome || '').replace(/"/g, '""')}"`,
             `"${(l.whatsapp || '').replace(/"/g, '""')}"`,
+            `"${otherPhonesStr.replace(/"/g, '""')}"`,
+            `"${(l.cpf || '').replace(/"/g, '""')}"`,
             `"${(l.email || '').replace(/"/g, '""')}"`,
             `"${(l.cidade || '').replace(/"/g, '""')}"`,
             `"${(l.estado || '').replace(/"/g, '""')}"`,
@@ -780,7 +785,8 @@ async function startServer() {
             l.isSuperSupporter ? 'SIM' : 'NÃO',
             `"${l.distinctCampaigns.join(' | ').replace(/"/g, '""')}"`,
             `"${l.firstDate ? new Date(l.firstDate).toLocaleDateString('pt-BR') : ''}"`,
-            `"${l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''}"`
+            `"${l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''}"`,
+            `"${extraFieldsStr.replace(/"/g, '""')}"`
           ];
           res.write(row.join(',') + '\n');
         }
