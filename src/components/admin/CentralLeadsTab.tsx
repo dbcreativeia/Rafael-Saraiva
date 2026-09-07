@@ -538,8 +538,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     try {
       const res = await fetch('/api/imported-leads/campaigns');
       if (res.ok) {
-        const data = await res.json();
-        setImportedBases(data);
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          setImportedBases(data);
+        } catch (parseErr) {
+          console.error('Invalid JSON response from /api/imported-leads/campaigns:', text.substring(0, 50));
+        }
       }
     } catch (err) {
       console.error('Erro ao buscar bases importadas:', err);
