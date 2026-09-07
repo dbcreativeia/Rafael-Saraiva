@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
+import AdmZip from 'adm-zip';
 import { getDbConnection } from './db.js';
 
 export interface LeadAction {
@@ -1130,7 +1131,7 @@ class LeadsConsolidationManager {
     const sortField = params.sortField || 'lastDate';
     const sortOrder = params.sortOrder === 'asc' ? 'asc' : 'desc';
     const page = Math.max(1, Number(params.page) || 1);
-    const pageSize = Math.max(1, Math.min(500000, Number(params.pageSize) || 100));
+    const pageSize = Math.max(1, Math.min(10000000, Number(params.pageSize) || 100));
     const addressOnly = params.addressOnly === 'true';
 
     let filtered = this.consolidatedLeads;
@@ -1339,8 +1340,8 @@ class LeadsConsolidationManager {
     sortField?: string;
     sortOrder?: string;
     addressOnly?: string;
-  }, format: 'xlsx' | 'csv' = 'xlsx'): Buffer {
-    const res = this.getPaginatedLeads({ ...params, page: 1, pageSize: 500000 });
+  }, format: 'xlsx' | 'csv' = 'xlsx'): { buffer: Buffer, type: 'csv' | 'xlsx' | 'zip' } {
+    const res = this.getPaginatedLeads({ ...params, page: 1, pageSize: 99999999 });
     
     if (format === 'csv') {
       const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
@@ -1373,7 +1374,7 @@ class LeadsConsolidationManager {
         ];
         csvRows.push(row.join(','));
       }
-      return Buffer.from('\uFEFF' + csvRows.join('\n'), 'utf-8');
+      return { buffer: Buffer.from('\uFEFF' + csvRows.join('\n'), 'utf-8'), type: 'csv' };
     }
 
     const rows = res.leads.map(l => ({
@@ -1398,11 +1399,28 @@ class LeadsConsolidationManager {
       'Dados Extras': l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : ''
     }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Leads Consolidados');
+    const MAX_ROWS = 1000000;
 
-    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    if (rows.length <= MAX_ROWS) {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Leads Consolidados');
+      return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), type: 'xlsx' };
+    } else {
+      const zip = new AdmZip();
+      const numParts = Math.ceil(rows.length / MAX_ROWS);
+      
+      for (let i = 0; i < numParts; i++) {
+        const chunk = rows.slice(i * MAX_ROWS, (i + 1) * MAX_ROWS);
+        const ws = XLSX.utils.json_to_sheet(chunk);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, `Leads Parte ${i + 1}`);
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        zip.addFile(`leads_consolidados_parte_${i + 1}.xlsx`, buf);
+      }
+      
+      return { buffer: zip.toBuffer(), type: 'zip' };
+    }
   }
 }
 

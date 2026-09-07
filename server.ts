@@ -10,7 +10,7 @@ const PIXEL_ID = "909578061696893";
 async function startServer() {
   const app = express();
   app.use(compression());
-  const PORT = process.env.PORT || 3000;
+  const PORT = 3000;
 
   // Middleware para parsear JSON no body
   app.use(express.json({ limit: '50mb' }));
@@ -758,7 +758,7 @@ async function startServer() {
         res.flushHeaders(); // Envia os cabeçalhos imediatamente para evitar timeout
         
         const params = req.query as any;
-        const resData = leadsConsolidator.getPaginatedLeads({ ...params, page: 1, pageSize: 1000000 });
+        const resData = leadsConsolidator.getPaginatedLeads({ ...params, page: 1, pageSize: 10000000 });
         
         const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
         res.write('\uFEFF' + headers.join(',') + '\n');
@@ -794,10 +794,18 @@ async function startServer() {
         return;
       }
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      const buffer = leadsConsolidator.exportLeads(req.query as any, format);
-      return res.send(buffer);
+      const result = leadsConsolidator.exportLeads(req.query as any, format);
+      
+      if (result.type === 'zip') {
+        const zipFilename = `leads_consolidados_${new Date().toISOString().slice(0, 10)}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+      } else {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      }
+      
+      return res.send(result.buffer);
     } catch (err) {
       console.error("Error in /api/leads/export:", err);
       if (!res.headersSent) {
