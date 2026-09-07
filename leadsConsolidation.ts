@@ -385,10 +385,13 @@ class LeadsConsolidationManager {
   constructor() {
     this.initMaps();
     const loaded = this.loadFromDiskCache();
+    if (loaded) {
+      this.computeSummary();
+    }
     if (!loaded) {
       setTimeout(() => {
         this.refreshFromDatabase().catch(err => console.error('Auto startup refresh error:', err));
-      }, 1500);
+      }, 15000);
     } else {
       setTimeout(() => {
         this.checkAndSyncDatabaseCounts().catch(err => console.warn('Background DB sync check error:', err));
@@ -657,6 +660,7 @@ class LeadsConsolidationManager {
             existing.actions.push(action);
             existing.totalActions = existing.actions.length;
           }
+          updateLeadMultiActionStatus(existing);
           if (!existing.distinctCampaigns.includes(action.sourceCategory)) {
             existing.distinctCampaigns.push(action.sourceCategory);
           }
@@ -855,7 +859,7 @@ class LeadsConsolidationManager {
 
       // Stream imported leads in chunks to prevent OOM
       let offset = 0;
-      const limit = 50000;
+      const limit = 15000;
       while (true) {
         try {
           const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
@@ -892,6 +896,7 @@ class LeadsConsolidationManager {
           });
           
           offset += limit;
+          await new Promise(r => setTimeout(r, 100)); // Yield to event loop
         } catch (err) {
           console.error("Error fetching imported_leads chunk:", err);
           break;

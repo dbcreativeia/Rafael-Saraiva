@@ -1,0 +1,311 @@
+        return;
+      }
+
+      console.log('🔄 Starting full database lead consolidation in background...');
+      const start = Date.now();
+
+      const [popupApoio] = await db.query('SELECT * FROM popup_apoio').catch(() => [[]]);
+      const [materialCampaign] = await db.query('SELECT * FROM material_campaign').catch(() => [[]]);
+      const [ninaCampaign] = await db.query('SELECT * FROM ninapassadore_campaign').catch(() => [[]]);
+      const [citizens] = await db.query('SELECT * FROM citizens').catch(() => [[]]);
+      const [petitions] = await db.query('SELECT * FROM petitions').catch(() => [[]]);
+      const [contraMausTratos] = await db.query('SELECT * FROM contra_maus_tratos').catch(() => [[]]);
+      const [jogoUsers] = await db.query('SELECT * FROM jogo_users').catch(() => [[]]);
+      
+      const leads: ConsolidatedLead[] = [];
+      const phoneIndex = new Map<string, number>();
+      const emailIndex = new Map<string, number>();
+      const nameCityIndex = new Map<string, number>();
+      const materialsMap = new Map<string, PhysicalMaterialItem>();
+
+      const addOrMerge = (data: any, action: LeadAction) => {
+        const rawName = formatDisplayTitleName(data.nome || data.nomeCompleto);
+        const phone = normalizePhone(data.whatsapp || data.telefone || data.celular || '');
+        const email = normalizeEmail(data.email || '');
+        const cidade = this.resolveCityName(data.cidade, data.estado, data.cep);
+        const estado = normalizeEstado(data.estado, cidade, data.cep);
+        const date = action.date || new Date().toISOString();
+        const cep = (data.cep || '').trim();
+        const endereco = fixMojibake(data.endereco || '');
+        const numero = data.numero || '';
+        const complemento = fixMojibake(data.complemento || '');
+        const bairro = fixMojibake(data.bairro || '');
+
+        const isFullName = isValidFullNameForMatching(rawName);
+        const nKey = isFullName ? normalizeKey(rawName) : '';
+        const cKey = normalizeKey(cidade);
+        const nameCityKey = nKey && nKey.length >= 6 && cKey ? `${nKey}__${cKey}` : '';
+
+        let targetIdx = -1;
+        if (phone && phone.length >= 8 && phoneIndex.has(phone)) {
+          targetIdx = phoneIndex.get(phone)!;
+        } else if (email && email.includes('@') && emailIndex.has(email)) {
+          const candidateIdx = emailIndex.get(email)!;
+          const candidate = leads[candidateIdx];
+          const candPhone = candidate.whatsapp;
+          // Never merge if phone numbers conflict!
+          const hasPhoneConflict = !!(phone && phone.length >= 8 && candPhone && candPhone.length >= 8 && phone !== candPhone);
+          if (!hasPhoneConflict) {
+            targetIdx = candidateIdx;
+          }
+        } else if (nameCityKey && nameCityIndex.has(nameCityKey)) {
+          const candidateIdx = nameCityIndex.get(nameCityKey)!;
+          const candidate = leads[candidateIdx];
+          const candPhone = candidate.whatsapp;
+          const candEmail = candidate.email;
+          // Never merge if phone numbers or emails conflict!
+          const hasPhoneConflict = !!(phone && phone.length >= 8 && candPhone && candPhone.length >= 8 && phone !== candPhone);
+          const hasEmailConflict = !!(email && email.includes('@') && candEmail && candEmail.includes('@') && email !== candEmail);
+
+          if (!hasPhoneConflict && !hasEmailConflict) {
+            targetIdx = candidateIdx;
+          }
+        }
+
+        if (targetIdx !== -1) {
+          const existing = leads[targetIdx];
+          const hasDup = existing.actions.some(a => a.sourceCategory === action.sourceCategory);
+          if (!hasDup) {
+            existing.actions.push(action);
+            existing.totalActions = existing.actions.length;
+          }
+          if (!existing.distinctCampaigns.includes(action.sourceCategory)) {
+            existing.distinctCampaigns.push(action.sourceCategory);
+          }
+
+          // Upgrade fields
+          if (rawName && (!existing.nome || existing.nome === 'Sem Nome' || (existing.nome.length < rawName.length && rawName !== 'Sem Nome' && !rawName.toLowerCase().includes('apoiador importado')))) {
+            existing.nome = rawName;
+          }
+          if (phone && !existing.whatsapp) {
+            existing.whatsapp = phone;
+            phoneIndex.set(phone, targetIdx);
+          }
+          if (email && !existing.email) {
+            existing.email = email;
+            emailIndex.set(email, targetIdx);
+          }
+          if (cep && (!existing.cep || existing.cep.length < 8)) existing.cep = cep;
+          if (endereco && (!existing.endereco || existing.endereco.length < 3)) existing.endereco = endereco;
+          if (numero && !existing.numero) existing.numero = numero;
+          if (complemento && !existing.complemento) existing.complemento = complemento;
+          if (bairro && !existing.bairro) existing.bairro = bairro;
+          if (cidade && existing.cidade === 'São Paulo' && cidade !== 'São Paulo') existing.cidade = cidade;
+          if (estado && (!existing.estado || existing.estado === 'SP')) existing.estado = estado;
+          existing.estado = normalizeEstado(existing.estado, existing.cidade, existing.cep);
+
+          if (new Date(date).getTime() < new Date(existing.firstDate).getTime()) {
+            existing.firstDate = date;
+          }
+          if (new Date(date).getTime() > new Date(existing.lastDate).getTime()) {
+            existing.lastDate = date;
+          }
+
+          if (nameCityKey && !nameCityIndex.has(nameCityKey)) {
+            nameCityIndex.set(nameCityKey, targetIdx);
+          }
+
+          // Merge extraData, other phones, and CPF
+          if (data.extraData && typeof data.extraData === 'object') {
+            const { cpf: foundCpf, extraPhones, cleanExtra } = extractExtraDetails(data.extraData);
+            if (!existing.cpf && foundCpf) existing.cpf = foundCpf;
+            if (!existing.extraData) existing.extraData = {};
+            Object.assign(existing.extraData, cleanExtra);
+
+            if (!existing.otherPhones) existing.otherPhones = [];
+            for (const ep of extraPhones) {
+              if (ep !== existing.whatsapp && !existing.otherPhones.includes(ep)) {
+                existing.otherPhones.push(ep);
+              }
+            }
+          }
+        } else {
+          const newIdx = leads.length;
+          let newCpf: string | undefined = undefined;
+          let newOtherPhones: string[] = [];
+          let cleanExtra: Record<string, any> = {};
+
+          if (data.extraData && typeof data.extraData === 'object') {
+            const extracted = extractExtraDetails(data.extraData);
+            newCpf = extracted.cpf;
+            newOtherPhones = extracted.extraPhones.filter(p => p !== phone);
+            cleanExtra = extracted.cleanExtra;
+          }
+
+          const newLead: ConsolidatedLead = {
+            id: data.id ? String(data.id) : `lead_${newIdx}_${Math.random().toString(36).substring(2, 7)}`,
+            nome: rawName,
+            whatsapp: phone,
+            email: email,
+            cep: cep,
+            endereco: endereco,
+            numero: numero,
+            complemento: complemento,
+            bairro: bairro,
+            cidade: cidade,
+            estado: estado,
+            totalActions: 1,
+            isMultiAction: false,
+            isSuperSupporter: false,
+            distinctCampaigns: [action.sourceCategory],
+            firstDate: date,
+            lastDate: date,
+            actions: [action],
+            cpf: newCpf,
+            otherPhones: newOtherPhones.length > 0 ? newOtherPhones : undefined,
+            extraData: Object.keys(cleanExtra).length > 0 ? cleanExtra : undefined
+          };
+          leads.push(newLead);
+          if (phone && phone.length >= 8) phoneIndex.set(phone, newIdx);
+          if (email && email.includes('@')) emailIndex.set(email, newIdx);
+          if (nameCityKey) nameCityIndex.set(nameCityKey, newIdx);
+        }
+
+        // Check physical materials
+        const isImpresso = data.tipoMaterial === 'impresso' || action.details?.tipoMaterial === 'impresso';
+        const isPerfurado = !!data.adesivoPerfurado || !!action.details?.adesivoPerfurado || (data.campanha && String(data.campanha).toLowerCase().includes('perfurado'));
+        const isMaterialCamp = action.sourceKey === 'MATERIAL' || action.sourceKey === 'NINA' || (data.campanha && String(data.campanha).toLowerCase().includes('material'));
+
+        if (isImpresso || (isMaterialCamp && (isPerfurado || data.endereco))) {
+          const matKey = phone || email || (nameCityKey || `mat_${Math.random()}`);
+          let sourceLabel = action.sourceName;
+          if (action.sourceKey === 'MATERIAL') sourceLabel = 'Oficial Rafael';
+          else if (action.sourceKey === 'NINA') sourceLabel = 'Dobrada Nina';
+
+          if (materialsMap.has(matKey)) {
+            const m = materialsMap.get(matKey)!;
+            if (m.source !== sourceLabel && !m.source.includes('Ambos')) {
+              m.source = 'Ambos (Rafael + Nina)';
+            }
+            if (isPerfurado) m.adesivoPerfurado = true;
+            if (new Date(date).getTime() > new Date(m.date).getTime()) m.date = date;
+          } else {
+            materialsMap.set(matKey, {
+              id: `mat_${materialsMap.size}_${Math.random().toString(36).substring(2, 6)}`,
+              date: date,
+              source: sourceLabel,
+              nome: rawName,
+              sobrenome: data.sobrenome || '',
+              whatsapp: phone,
+              email: email,
+              adesivoPerfurado: isPerfurado,
+              endereco: endereco,
+              numero: numero,
+              complemento: complemento,
+              bairro: bairro,
+              cidade: cidade,
+              estado: estado,
+              cep: cep
+            });
+          }
+        }
+      };
+
+      // Process all sources
+      (popupApoio as any[]).forEach(item => addOrMerge(item, {
+        id: `apoio_${item.id}`,
+        sourceKey: 'APOIO',
+        sourceName: 'Apoio Capital / SP',
+        sourceCategory: 'Apoio Capital',
+        date: item.createdAt,
+        details: { cidade: item.cidade, estado: item.estado, bairro: item.bairro, cep: item.cep }
+      }));
+
+      (materialCampaign as any[]).forEach(item => addOrMerge(item, {
+        id: `mat_${item.id}`,
+        sourceKey: 'MATERIAL',
+        sourceName: `Material Campanha (${item.tipoMaterial === 'impresso' ? 'Impresso' : 'Digital'})`,
+        sourceCategory: 'Material Oficial',
+        date: item.createdAt,
+        details: { tipoMaterial: item.tipoMaterial, adesivoPerfurado: !!item.adesivoPerfurado, cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
+      }));
+
+      (ninaCampaign as any[]).forEach(item => addOrMerge(item, {
+        id: `nina_${item.id}`,
+        sourceKey: 'NINA',
+        sourceName: `Material Dobrada Nina (${item.tipoMaterial === 'impresso' ? 'Impresso' : 'Digital'})`,
+        sourceCategory: 'Material Dobrada',
+        date: item.createdAt,
+        details: { tipoMaterial: item.tipoMaterial, adesivoPerfurado: !!item.adesivoPerfurado, cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
+      }));
+
+      (citizens as any[]).forEach(item => addOrMerge(item, {
+        id: `cit_${item.id}`,
+        sourceKey: 'CITIZENS',
+        sourceName: 'Minuta Código Animal (PL)',
+        sourceCategory: 'Projeto de Lei',
+        date: item.createdAt,
+        details: { cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
+      }));
+
+      (petitions as any[]).forEach(item => addOrMerge(item, {
+        id: `pet_${item.id}`,
+        sourceKey: 'PETITIONS',
+        sourceName: 'Abaixo-Assinado Código Animal',
+        sourceCategory: 'Abaixo-Assinado',
+        date: item.createdAt,
+        details: { cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
+      }));
+
+      (contraMausTratos as any[]).forEach(item => addOrMerge(item, {
+        id: `cmt_${item.id}`,
+        sourceKey: 'CONTRA_MAUS_TRATOS',
+        sourceName: 'Assinatura Contra Maus-Tratos',
+        sourceCategory: 'Maus-Tratos',
+        date: item.createdAt,
+        details: { cidade: item.cidade, estado: item.estado, endereco: item.endereco, numero: item.numero, bairro: item.bairro, cep: item.cep }
+      }));
+
+      (jogoUsers as any[]).forEach(item => addOrMerge(item, {
+        id: `jogo_${item.id}`,
+        sourceKey: 'JOGO',
+        sourceName: 'Jogador Missão Resgate',
+        sourceCategory: 'Jogo Resgate',
+        date: item.createdAt,
+        details: { cidade: item.cidade, estado: item.estado, usuario: item.usuario }
+      }));
+
+      // Stream imported leads in chunks to prevent OOM
+      let offset = 0;
+      const limit = 50000;
+      while (true) {
+        try {
+          const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
+          const chunk = importedChunk as any[];
+          if (chunk.length === 0) break;
+          
+          chunk.forEach(item => {
+            let parsedExtra: Record<string, any> = {};
+            if (item.extraData) {
+              if (typeof item.extraData === 'string') {
+                try { parsedExtra = JSON.parse(item.extraData); } catch {}
+              } else if (typeof item.extraData === 'object') {
+                parsedExtra = item.extraData;
+              }
+            }
+            item.extraData = parsedExtra;
+
+            addOrMerge(item, {
+              id: `imp_${item.id}`,
+              sourceKey: 'IMPORTED',
+              sourceName: `Base Externa: ${item.campanha || 'Importação CSV'}`,
+              sourceCategory: item.campanha || 'Base Externa',
+              date: item.createdAt,
+              details: {
+                cidade: item.cidade,
+                estado: item.estado,
+                endereco: item.endereco,
+                numero: item.numero,
+                bairro: item.bairro,
+                cep: item.cep,
+                extraData: parsedExtra
+              }
+            });
+          });
+          
+          offset += limit; await new Promise(r => setTimeout(r, 10));
+        } catch (err) {
+          console.error("Error fetching imported_leads chunk:", err);
+          break;
+        }
+      }
