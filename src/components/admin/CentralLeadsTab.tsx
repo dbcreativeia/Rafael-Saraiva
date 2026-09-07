@@ -82,6 +82,8 @@ export interface ConsolidatedLead {
   firstDate: string;
   lastDate: string;
   actions: LeadAction[];
+  cpf?: string;
+  otherPhones?: string[];
   extraData?: Record<string, string>;
 }
 
@@ -93,6 +95,8 @@ const SYSTEM_FIELDS = [
   { id: 'nome', label: 'Nome Completo', aliases: ['nome completo', 'full name', 'nomecompleto', 'nome', 'name', 'contato', 'lead', 'apoiador', 'primeiro nome'] },
   { id: 'sobrenome', label: 'Sobrenome', aliases: ['sobrenome', 'last name', 'segundo nome'] },
   { id: 'whatsapp', label: 'WhatsApp / Celular', aliases: ['whatsapp', 'whats', 'celular', 'telefone', 'phone', 'tel', 'fone', 'mobile', 'contato'] },
+  { id: 'telefone2', label: 'Outro Telefone / Fone 2', aliases: ['telefone 2', 'telefone2', 'tel2', 'celular 2', 'outro telefone', 'celular2', 'contato 2', 'fone 2', 'fixo', 'telefone alternativo'] },
+  { id: 'cpf', label: 'CPF / Documento', aliases: ['cpf', 'cpf/cnpj', 'documento', 'doc', 'nr documento', 'identidade'] },
   { id: 'email', label: 'E-mail', aliases: ['email', 'e-mail', 'mail', 'correio'] },
   { id: 'cep', label: 'CEP', aliases: ['cep', 'zip', 'zipcode', 'codigo postal', 'postal'] },
   { id: 'estado', label: 'Estado (UF)', aliases: ['estado', 'state', 'uf'] },
@@ -121,14 +125,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     cityOptions: { name: string; count: number }[];
     campaignOptions: string[];
     spHeatmapPoints: any[];
-    isReady?: boolean;
-    isRefreshing?: boolean;
-    refreshProgress?: {
-      step: string;
-      current: number;
-      total: number;
-      startedAt: string;
-    };
   }>({
     totalUniqueLeads: 0,
     totalSubmissions: 0,
@@ -138,13 +134,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     stateOptions: [],
     cityOptions: [],
     campaignOptions: [],
-    spHeatmapPoints: [],
-    isReady: true,
-    isRefreshing: false
+    spHeatmapPoints: []
   });
-
-  const [isSyncingConsolidation, setIsSyncingConsolidation] = useState(false);
-  const [syncStatusMessage, setSyncStatusMessage] = useState('');
 
   const [serverLeads, setServerLeads] = useState<ConsolidatedLead[]>([]);
   const [totalFiltered, setTotalFiltered] = useState(0);
@@ -205,62 +196,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
-        if (data.isRefreshing) {
-          setIsSyncingConsolidation(true);
-          setSyncStatusMessage(data.refreshProgress?.step || 'Cruzando e consolidando contatos no banco...');
-        } else if (isSyncingConsolidation) {
-          setIsSyncingConsolidation(false);
-          setSyncStatusMessage('');
-        }
-        return data;
       }
     } catch (err) {
       console.warn("Erro ao buscar resumo de leads:", err);
     }
-  };
-
-  const triggerSyncDatabase = async () => {
-    if (isSyncingConsolidation) return;
-    setIsSyncingConsolidation(true);
-    setSyncStatusMessage('Iniciando sincronização e varredura do banco de dados...');
-    try {
-      await fetch('/api/leads/refresh-cache', { method: 'POST' });
-    } catch (e) {
-      console.warn('Erro ao disparar refresh-cache:', e);
-    }
-
-    // Polling inteligente até o backend concluir o processamento dos 870k+ registros
-    let attempts = 0;
-    const pollInterval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSummary(data);
-          if (data.isRefreshing) {
-            setSyncStatusMessage(data.refreshProgress?.step || 'Processando desduplicação de cadastros no servidor...');
-          } else {
-            // Finalizado com sucesso!
-            clearInterval(pollInterval);
-            setIsSyncingConsolidation(false);
-            setSyncStatusMessage('Consolidação concluída! Atualizando listas...');
-            setTimeout(() => setSyncStatusMessage(''), 3000);
-            fetchLeadsPage(1);
-            fetchImportedBases();
-          }
-        }
-      } catch (err) {
-        console.warn('Erro no polling de sincronização:', err);
-      }
-
-      if (attempts > 80) { // Timeout de segurança: 4 minutos
-        clearInterval(pollInterval);
-        setIsSyncingConsolidation(false);
-        setSyncStatusMessage('');
-        fetchLeadsPage(1);
-      }
-    }, 2500);
   };
 
   const fetchLeadsPage = async (page = currentPage) => {
@@ -333,6 +272,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const sobrenome = fixMojibake(getMapVal(mapping, row, 'sobrenome'));
 
       let whatsapp = getMapVal(mapping, row, 'whatsapp');
+      let telefone2 = getMapVal(mapping, row, 'telefone2');
+      let cpf = getMapVal(mapping, row, 'cpf');
       let email = getMapVal(mapping, row, 'email');
       const rawCity = fixMojibake(getMapVal(mapping, row, 'cidade'));
       const cleanNormCity = rawCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
@@ -382,6 +323,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           }
         }
       });
+
+      if (telefone2 && !extraPhones.includes(telefone2)) {
+        extraPhones.push(telefone2);
+        extraData['Telefone 2'] = telefone2;
+      }
+      if (cpf) {
+        extraData['CPF'] = cpf;
+      }
 
       // Populate primary if empty
       if (!whatsapp && extraPhones.length > 0) whatsapp = extraPhones[0];
@@ -553,9 +502,12 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
       }
 
-      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista e consolidando em segundo plano...`);
+      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista...`);
       await fetchImportedBases();
-      triggerSyncDatabase();
+      try {
+        await fetch('/api/leads/refresh-cache', { method: 'POST' });
+      } catch (e) {}
+      await fetchAllLeads(true);
       setTimeout(() => {
         setIsUploadModalOpen(false);
         setUploadSuccessMessage('');
@@ -566,7 +518,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         setCsvRawRows([]);
         setCsvHeaders([]);
         setCampaignInput('');
-      }, 1500);
+      }, 2000);
     } catch (err: any) {
       console.error('Erro ao enviar leads importados:', err);
       setUploadError(err.message || 'Erro de conexão ao enviar os leads para o servidor.');
@@ -1064,20 +1016,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           <div className="flex flex-wrap items-center gap-3">
 
             <button
-              onClick={triggerSyncDatabase}
-              disabled={isSyncingConsolidation}
-              title="Disparar varredura do banco de dados e recalcular totais consolidados"
-              className={`font-bold py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer border ${
-                isSyncingConsolidation
-                  ? 'bg-amber-600/90 text-white border-amber-400/50 animate-pulse'
-                  : 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white border-indigo-400/40 shadow-indigo-900/40'
-              }`}
-            >
-              <RefreshCw className={`w-4 h-4 ${isSyncingConsolidation ? 'animate-spin' : ''}`} />
-              <span>{isSyncingConsolidation ? 'Consolidando...' : 'Atualizar Dados'}</span>
-            </button>
-
-            <button
               onClick={() => {
                 setIsUploadModalOpen(true);
                 setUploadError('');
@@ -1171,37 +1109,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           </div>
         </div>
       </div>
-
-      {/* Consolidation / Processing Status Banner */}
-      {isSyncingConsolidation && (
-        <div className="bg-gradient-to-r from-amber-50 via-amber-100 to-orange-50 border-2 border-amber-300/80 rounded-2xl p-5 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in duration-300">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center shrink-0">
-              <RefreshCw className="w-6 h-6 text-amber-700 animate-spin" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-amber-500 text-white uppercase tracking-wider">
-                  Processando em Segundo Plano
-                </span>
-                <span className="text-xs text-amber-800/80 font-semibold">
-                  (Pode levar de 20 a 40 segundos devido ao volume de ~870 mil registros)
-                </span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-amber-950 mt-1">
-                {syncStatusMessage || 'Varrendo banco MySQL, cruzando telefones/CPFs/e-mails e atualizando o painel...'}
-              </p>
-            </div>
-          </div>
-
-          <div className="shrink-0 w-full md:w-auto flex items-center justify-end">
-            <div className="text-xs font-semibold text-amber-800 bg-amber-200/70 border border-amber-300 px-3 py-1.5 rounded-lg flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping"></span>
-              Sincronização em andamento
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* View Switcher: Lista vs Mapa de Calor */}
       <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-gray-200/80 shadow-xs">
@@ -1820,6 +1727,18 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                                   {lead.email}
                                 </div>
                               ) : null}
+
+                              {lead.otherPhones && lead.otherPhones.length > 0 && (
+                                <div className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 inline-block font-bold" title={`Outros telefones: ${lead.otherPhones.join(', ')}`}>
+                                  +{lead.otherPhones.length} {lead.otherPhones.length === 1 ? 'outro fone' : 'outros fones'}
+                                </div>
+                              )}
+
+                              {lead.cpf && (
+                                <div className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded inline-block font-mono">
+                                  CPF: {lead.cpf}
+                                </div>
+                              )}
                             </div>
                           </td>
 
@@ -2041,6 +1960,50 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     {selectedLead.cep && `CEP: ${selectedLead.cep}`}
                   </div>
                 </div>
+
+                {selectedLead.cpf && (
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
+                    <div className="text-gray-400 font-bold uppercase text-[10px]">CPF / Documento</div>
+                    <div className="font-mono font-bold text-gray-900 text-xs mt-0.5">
+                      {selectedLead.cpf}
+                    </div>
+                  </div>
+                )}
+
+                {selectedLead.otherPhones && selectedLead.otherPhones.length > 0 && (
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
+                    <div className="text-gray-400 font-bold uppercase text-[10px]">Outros Telefones</div>
+                    <div className="space-y-1 mt-1">
+                      {selectedLead.otherPhones.map((p, pIdx) => (
+                        <div key={pIdx} className="text-xs font-bold text-gray-800 flex items-center justify-between">
+                          <span>{p}</span>
+                          <a
+                            href={`https://wa.me/55${p.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-green-600 hover:text-green-800 font-bold ml-2"
+                          >
+                            WhatsApp →
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedLead.extraData && Object.keys(selectedLead.extraData).length > 0 && (
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200 sm:col-span-2 md:col-span-3">
+                    <div className="text-gray-400 font-bold uppercase text-[10px] mb-1.5">Dados Extras Importados</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {Object.entries(selectedLead.extraData).map(([k, v], exIdx) => (
+                        <div key={exIdx} className="bg-gray-50 p-2 rounded-lg border border-gray-100 text-[11px]">
+                          <span className="font-bold text-gray-600 block truncate" title={k}>{k}:</span>
+                          <span className="text-gray-900 font-medium break-words">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
