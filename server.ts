@@ -819,8 +819,8 @@ async function startServer() {
   app.post('/api/leads/refresh-cache', async (req, res) => {
     try {
       // Run in background without blocking
-      leadsConsolidator.refreshFromDatabase().catch(console.error);
-      return res.json({ success: true, message: "Atualização de leads iniciada em segundo plano." });
+      await leadsConsolidator.refreshFromDatabase();
+      return res.json({ success: true, message: "Atualização concluída com sucesso." });
     } catch (err) {
       return res.status(500).json({ error: "Erro ao disparar atualização de leads" });
     }

@@ -951,8 +951,8 @@ class LeadsConsolidationManager {
 
       console.log(`✨ Consolidation complete in ${Date.now() - start}ms: ${leads.length} unique leads.`);
 
-      // Write to disk cache asynchronously
-      this.saveToDiskCache();
+      // Write to disk cache and wait so Cloud Run stays awake
+      await this.saveToDiskCache();
 
     } catch (err) {
       console.error('Error in refreshFromDatabase:', err);
@@ -1071,7 +1071,7 @@ class LeadsConsolidationManager {
   private isSavingDiskCache = false;
   private pendingDiskSave = false;
 
-  private saveToDiskCache() {
+  private async saveToDiskCache(): Promise<void> {
     if (this.isSavingDiskCache) {
       this.pendingDiskSave = true;
       return;
@@ -1080,8 +1080,7 @@ class LeadsConsolidationManager {
     this.pendingDiskSave = false;
 
     // Asynchronous background file write in safe chunks so V8 never hits string length limits
-    setImmediate(async () => {
-      try {
+    try {
         console.log('💾 Saving leads to chunked disk cache in background...');
         const start = Date.now();
 
@@ -1135,10 +1134,9 @@ class LeadsConsolidationManager {
       } finally {
         this.isSavingDiskCache = false;
         if (this.pendingDiskSave) {
-          this.saveToDiskCache();
+          this.saveToDiskCache().catch(console.error);
         }
       }
-    });
   }
 
   public getSummary(): LeadsSummary & { isReady: boolean; isRefreshing: boolean; refreshMessage: string } {
