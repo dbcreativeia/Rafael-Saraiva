@@ -378,6 +378,7 @@ class LeadsConsolidationManager {
   private physicalMaterials: PhysicalMaterialItem[] = [];
   private isReady = false;
   private isRefreshing = false;
+  private refreshMessage = "";
   private municipiosSP: Array<{ codigo_ibge: number; nome: string; latitude: number; longitude: number }> = [];
   private spCitiesMap: Map<string, string> = new Map();
   private lastKnownDbCount = 0;
@@ -387,6 +388,7 @@ class LeadsConsolidationManager {
     const loaded = this.loadFromDiskCache();
     if (loaded) {
       this.computeSummary();
+      this.updateRefreshState("Tudo pronto!");
     }
     if (!loaded) {
       setTimeout(() => {
@@ -512,6 +514,7 @@ class LeadsConsolidationManager {
           this.physicalMaterials = Array.isArray(meta.physicalMaterials) ? meta.physicalMaterials : [];
           this.rebuildIndexes();
           this.computeSummary();
+      this.updateRefreshState("Tudo pronto!");
           this.isReady = true;
           console.log(`✅ Loaded and sanitized ${this.consolidatedLeads.length} leads from chunked cache in ${Date.now() - start}ms!`);
           return true;
@@ -540,6 +543,7 @@ class LeadsConsolidationManager {
             this.physicalMaterials = Array.isArray(data.physicalMaterials) ? data.physicalMaterials : [];
             this.rebuildIndexes();
             this.computeSummary();
+      this.updateRefreshState("Tudo pronto!");
             this.isReady = true;
             this.saveToDiskCache();
             console.log(`✅ Loaded and migrated ${this.consolidatedLeads.length} leads from legacy cache in ${Date.now() - start}ms!`);
@@ -580,9 +584,15 @@ class LeadsConsolidationManager {
     return this.refreshFromDatabase();
   }
 
+  private updateRefreshState(msg: string) {
+    this.refreshMessage = msg;
+    // console.log(msg); // Optional: keep logs clean
+  }
+
   public async refreshFromDatabase(): Promise<void> {
     if (this.isRefreshing) return;
     this.isRefreshing = true;
+    this.updateRefreshState("Iniciando atualização do banco de dados...");
 
     try {
       const db = await getDbConnection();
@@ -595,14 +605,22 @@ class LeadsConsolidationManager {
       console.log('🔄 Starting full database lead consolidation in background...');
       const start = Date.now();
 
+      this.updateRefreshState("Consultando novas assinaturas e ações (1/7)...");
       const [popupApoio] = await db.query('SELECT * FROM popup_apoio').catch(() => [[]]);
+      this.updateRefreshState("Consultando novos materiais (2/7)...");
       const [materialCampaign] = await db.query('SELECT * FROM material_campaign').catch(() => [[]]);
+      this.updateRefreshState("Consultando abaixo-assinados (3/7)...");
       const [ninaCampaign] = await db.query('SELECT * FROM ninapassadore_campaign').catch(() => [[]]);
+      this.updateRefreshState("Consultando cidadãos paulistas (4/7)...");
       const [citizens] = await db.query('SELECT * FROM citizens').catch(() => [[]]);
+      this.updateRefreshState("Consultando petições ativas (5/7)...");
       const [petitions] = await db.query('SELECT * FROM petitions').catch(() => [[]]);
+      this.updateRefreshState("Consultando campanhas de proteção (6/7)...");
       const [contraMausTratos] = await db.query('SELECT * FROM contra_maus_tratos').catch(() => [[]]);
+      this.updateRefreshState("Consultando jogadores do Jogo do Mandato (7/7)...");
       const [jogoUsers] = await db.query('SELECT * FROM jogo_users').catch(() => [[]]);
       
+      this.updateRefreshState("Aglutinando dados e unificando contatos...");
       const leads: ConsolidatedLead[] = [];
       const phoneIndex = new Map<string, number>();
       const emailIndex = new Map<string, number>();
@@ -860,10 +878,12 @@ class LeadsConsolidationManager {
       // Stream imported leads in chunks to prevent OOM
       let offset = 0;
       const limit = 15000;
+      this.updateRefreshState("Buscando bases importadas. Isso pode levar alguns minutos...");
       while (true) {
         try {
           const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
           const chunk = importedChunk as any[];
+          this.updateRefreshState(`Processando bases importadas... (Lote de ${offset} a ${offset + limit})`);
           if (chunk.length === 0) break;
           
           chunk.forEach(item => {
@@ -904,12 +924,14 @@ class LeadsConsolidationManager {
       }
 
       // Sort actions descending and update multi-action / super-supporter status
+      this.updateRefreshState("Validando Super Apoiadores e métricas Multi-Campanha...");
       leads.forEach(l => {
         l.actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
         updateLeadMultiActionStatus(l);
       });
 
+      this.updateRefreshState("Finalizando e atualizando painel...");
       this.consolidatedLeads = leads;
       this.phoneMap = phoneIndex;
       this.emailMap = emailIndex;
@@ -918,6 +940,7 @@ class LeadsConsolidationManager {
 
       // Generate summary
       this.computeSummary();
+      this.updateRefreshState("Tudo pronto!");
       this.isReady = true;
 
       console.log(`✨ Consolidation complete in ${Date.now() - start}ms: ${leads.length} unique leads.`);
@@ -1109,10 +1132,12 @@ class LeadsConsolidationManager {
     });
   }
 
-  public getSummary(): LeadsSummary & { isReady: boolean } {
+  public getSummary(): LeadsSummary & { isReady: boolean; isRefreshing: boolean; refreshMessage: string } {
     return {
       ...this.summary,
-      isReady: this.isReady
+      isReady: this.isReady,
+      isRefreshing: this.isRefreshing,
+      refreshMessage: this.refreshMessage
     };
   }
 
@@ -1321,6 +1346,7 @@ class LeadsConsolidationManager {
 
     // Refresh summary
     this.computeSummary();
+      this.updateRefreshState("Tudo pronto!");
   }
 
   public removeCampaign(campaignName: string) {
@@ -1333,6 +1359,7 @@ class LeadsConsolidationManager {
     });
     this.rebuildIndexes();
     this.computeSummary();
+      this.updateRefreshState("Tudo pronto!");
     this.saveToDiskCache();
   }
 
