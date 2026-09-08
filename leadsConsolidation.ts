@@ -379,6 +379,7 @@ class LeadsConsolidationManager {
   private isReady = false;
   private isRefreshing = false;
   private refreshMessage = "";
+  private refreshPending = false;
   private municipiosSP: Array<{ codigo_ibge: number; nome: string; latitude: number; longitude: number }> = [];
   private spCitiesMap: Map<string, string> = new Map();
   private lastKnownDbCount = 0;
@@ -590,7 +591,12 @@ class LeadsConsolidationManager {
   }
 
   public async refreshFromDatabase(): Promise<void> {
-    if (this.isRefreshing) return;
+    if (this.isRefreshing) {
+      this.refreshPending = true;
+      this.updateRefreshState("Aguardando processo atual terminar para reiniciar...");
+      return;
+    }
+    this.refreshPending = false;
     this.isRefreshing = true;
     this.updateRefreshState("Iniciando atualização do banco de dados...");
 
@@ -952,6 +958,9 @@ class LeadsConsolidationManager {
       console.error('Error in refreshFromDatabase:', err);
     } finally {
       this.isRefreshing = false;
+      if (this.refreshPending) {
+        this.refreshFromDatabase().catch(console.error);
+      }
     }
   }
 
