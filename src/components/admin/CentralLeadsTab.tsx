@@ -1,7 +1,8 @@
 import { CityDistributionMap } from '../CityDistributionMap';
 import { spCitiesList, spCitiesCleanMap, spCitiesNormMap, fixMojibake, isSpCity, knownNonSpCities } from '../../data/spCities';
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
-import { 
+import {
+  ShieldCheck, 
   Search, 
   RefreshCw, 
   Download, 
@@ -189,6 +190,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       })
       .catch(e => console.warn('Erro ao carregar municipios.json:', e));
   }, []);
+
+  const handleRefreshData = async () => {
+    try {
+      await fetch('/api/leads/refresh-cache', { method: 'POST' });
+      fetchSummary(); // Trigger a quick refresh to see the spinner
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchSummary = async () => {
     try {
@@ -868,6 +878,18 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const consolidatedLeads = serverLeads;
 
   useEffect(() => {
+    let interval;
+    if (summary?.isRefreshing || !summary?.isReady) {
+      interval = setInterval(() => {
+        fetchSummary();
+      }, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    }
+  }, [summary?.isRefreshing, summary?.isReady]);
+
+  useEffect(() => {
     fetchLeadsPage(currentPage);
   }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilter, multiActionFilter, sortField, sortOrder, currentPage]);
 
@@ -1019,6 +1041,16 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+
+            
+            <button
+              onClick={handleRefreshData}
+              disabled={summary?.isRefreshing || !summary?.isReady}
+              className={`${(summary?.isRefreshing || !summary?.isReady) ? 'bg-indigo-800/80 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700'} text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-indigo-900/40 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer border border-indigo-400/40`}
+            >
+              <RefreshCw className={`w-4 h-4 ${(summary?.isRefreshing || !summary?.isReady) ? 'animate-spin' : ''}`} />
+              <span>{(summary?.isRefreshing || !summary?.isReady) ? 'Atualizando...' : 'Atualizar Dados'}</span>
+            </button>
 
             <button
               onClick={() => {
