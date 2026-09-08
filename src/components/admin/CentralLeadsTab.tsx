@@ -126,6 +126,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     cityOptions: { name: string; count: number }[];
     campaignOptions: string[];
     spHeatmapPoints: any[];
+    isRefreshing?: boolean;
+    isReady?: boolean;
+    refreshMessage?: string;
   }>({
     totalUniqueLeads: 0,
     totalSubmissions: 0,
@@ -877,6 +880,17 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const filteredLeads = serverLeads;
   const consolidatedLeads = serverLeads;
 
+  const previousIsRefreshing = useRef(summary?.isRefreshing);
+  useEffect(() => {
+    if (previousIsRefreshing.current === true && summary?.isRefreshing === false) {
+      // Finished refreshing! Let's update the lists silently
+      fetchLeadsPage(currentPage);
+      fetchImportedBases();
+      // And don't fetchSummary() here, we just got the false state from it
+    }
+    previousIsRefreshing.current = summary?.isRefreshing;
+  }, [summary?.isRefreshing, currentPage]);
+
   useEffect(() => {
     let interval;
     if (summary?.isRefreshing || !summary?.isReady) {
@@ -1023,6 +1037,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   return (
     <div className="space-y-6">
       
+      {(summary?.isRefreshing || !summary?.isReady) && summary?.refreshMessage && (
+        <div className="bg-blue-900 border border-blue-400 text-blue-100 px-4 py-3 rounded-lg flex items-center justify-between mb-4 shadow-lg animate-pulse">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-5 h-5 animate-spin text-blue-300" />
+            <span className="font-medium">{summary.refreshMessage}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner & Overview */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1058,7 +1081,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 setUploadError('');
                 setUploadSuccessMessage('');
               }}
-              className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer border border-blue-400/40"
+              disabled={summary?.isRefreshing || !summary?.isReady}
+              className={`${(summary?.isRefreshing || !summary?.isReady) ? 'bg-blue-800/80 cursor-not-allowed opacity-50' : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 cursor-pointer'} text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 text-xs sm:text-sm transition-all border border-blue-400/40`}
             >
               <Upload className="w-4 h-4" />
               <span>Importar Base (.CSV/.XLSX)</span>
