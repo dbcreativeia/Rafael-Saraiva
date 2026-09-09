@@ -196,10 +196,36 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   const handleRefreshData = async () => {
     try {
-      await fetch('/api/leads/refresh-cache', { method: 'POST' });
-      fetchSummary(); // Trigger a quick refresh to see the spinner
+      // Connect to the stream which forces Cloud Run / production server to stay awake until cache is written
+      setSummary(prev => ({ ...prev, isRefreshing: true, refreshMessage: "Conectando ao servidor..." }));
+      const eventSource = new EventSource('/api/leads/refresh-cache-stream');
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setSummary(prev => ({
+            ...prev,
+            isRefreshing: data.isRefreshing,
+            refreshMessage: data.message,
+            isReady: data.isReady
+          }));
+          if (!data.isRefreshing && data.isReady) {
+            eventSource.close();
+            fetchSummary();
+            fetchLeadsPage(1);
+          }
+        } catch {}
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        fetchSummary();
+        fetchLeadsPage(1);
+      };
     } catch (e) {
       console.error(e);
+      fetch('/api/leads/refresh-cache', { method: 'POST' }).catch(() => {});
+      fetchSummary();
     }
   };
 
@@ -484,7 +510,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 leads: chunk,
-                campanha: campaignInput.trim() + (isColdBase ? ' [Fria]' : '')
+                campanha: campaignInput.trim() + (isColdBase ? ' [Sem Engajamento]' : '')
               })
             });
 
@@ -515,11 +541,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
       }
 
-      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista...`);
+      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista e sincronizando cache...`);
       await fetchImportedBases();
-      try {
-        await fetch('/api/leads/refresh-cache', { method: 'POST' });
-      } catch (e) {}
+      handleRefreshData();
       await fetchAllLeads(true);
       setTimeout(() => {
         setIsUploadModalOpen(false);
@@ -2366,18 +2390,58 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 </div>
               </div>
 
-              <div className="pt-1 space-y-2">
+              <div className="pt-2 space-y-2">
                 <label className="block text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">O</span>
-                  Opções avançadas da base (Opcional)
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">⚙️</span>
+                  Contagem de Engajamento / Ações desta Base
                 </label>
-                <label className="flex items-center gap-2 bg-gray-50 p-3 rounded-2xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
-                  <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" checked={isColdBase} onChange={(e) => setIsColdBase(e.target.checked)} />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-gray-800">Base Fria (Não contar engajamento)</span>
-                    <span className="text-[11px] text-gray-500">Marque esta opção se os leads desta lista não vieram de campanhas ativas, para não inflar métricas.</span>
-                  </div>
-                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    !isColdBase 
+                      ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs' 
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100/80 opacity-75'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="engagement_toggle"
+                      className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                      checked={!isColdBase} 
+                      onChange={() => setIsColdBase(false)} 
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                        <Flame className="w-3.5 h-3.5 text-blue-600" />
+                        Sim, contar como Engajamento / Ações
+                      </span>
+                      <span className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                        Campanhas ativas, petições, eventos ou apoiadores diretos. Incrementa o total de ações e super apoiadores.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    isColdBase 
+                      ? 'bg-amber-50/80 border-amber-500 ring-2 ring-amber-500/20 shadow-xs' 
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100/80 opacity-75'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="engagement_toggle"
+                      className="mt-0.5 w-4 h-4 text-amber-600 focus:ring-amber-500 cursor-pointer" 
+                      checked={isColdBase} 
+                      onChange={() => setIsColdBase(true)} 
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-amber-600" />
+                        Não, apenas enriquecer contatos (Base Fria)
+                      </span>
+                      <span className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                        Lista de telefones ou contatos externos. NÃO infla o número de ações nem cria falsos super apoiadores.
+                      </span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               {/* 2. Seleção do Arquivo CSV/XLSX */}
