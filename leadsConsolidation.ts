@@ -245,7 +245,9 @@ export const COLD_IMPORTED_BASES = new Set([
 
 export function isColdImportedBase(category?: string): boolean {
   if (!category) return false;
-  return COLD_IMPORTED_BASES.has(category.toLowerCase().trim());
+  const catLow = category.toLowerCase().trim();
+  // Check standard cold bases OR check if the user specifically tagged it to not count
+  return COLD_IMPORTED_BASES.has(catLow) || catLow.endsWith(' (sem engajamento)') || catLow.endsWith(' [fria]') || catLow.includes('[fria]');
 }
 
 export const VALID_BRAZILIAN_UFS = new Set([
