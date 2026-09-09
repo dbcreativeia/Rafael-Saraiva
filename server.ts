@@ -3,7 +3,14 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { getDbConnection } from "./db.js";
-import { leadsConsolidator } from "./leadsConsolidation.js";
+import {
+  leadsConsolidator,
+  normalizePhone,
+  normalizeEmail,
+  normalizeCpf,
+  normalizeKey,
+  isValidFullNameForMatching
+} from "./leadsConsolidation.js";
 
 const PIXEL_ID = "909578061696893";
 
@@ -763,7 +770,29 @@ async function startServer() {
         const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
         res.write('\uFEFF' + headers.join(',') + '\n');
         
+        // Strict runtime deduplication guard for streamed CSV
+        const exportedPhones = new Set<string>();
+        const exportedEmails = new Set<string>();
+        const exportedCpfs = new Set<string>();
+        const exportedNameCities = new Set<string>();
+
         for (const l of resData.leads) {
+          const p = normalizePhone(l.whatsapp);
+          const e = normalizeEmail(l.email);
+          const cpf = normalizeCpf(l.cpf);
+          const isFull = isValidFullNameForMatching(l.nome);
+          const nc = isFull ? `${normalizeKey(l.nome)}__${normalizeKey(l.cidade)}` : '';
+
+          if (p && p.length >= 8 && exportedPhones.has(p)) continue;
+          if (cpf && cpf.length >= 11 && exportedCpfs.has(cpf)) continue;
+          if (e && e.includes('@') && exportedEmails.has(e)) continue;
+          if (nc && nc.length >= 8 && !p && !e && exportedNameCities.has(nc)) continue;
+
+          if (p && p.length >= 8) exportedPhones.add(p);
+          if (cpf && cpf.length >= 11) exportedCpfs.add(cpf);
+          if (e && e.includes('@')) exportedEmails.add(e);
+          if (nc) exportedNameCities.add(nc);
+
           const extraFieldsStr = l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
           const otherPhonesStr = l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '';
 
@@ -816,11 +845,52 @@ async function startServer() {
     }
   });
 
+  // Keep-alive progress stream that forces Cloud Run to stay awake with 100% CPU priority until cache write completes
+  app.get('/api/leads/refresh-cache-stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // Trigger refresh if not currently running
+    leadsConsolidator.refreshFromDatabase().catch(err => {
+      console.error('Error in refresh-cache-stream:', err);
+    });
+
+    // Send heartbeat every 2 seconds to keep connection actively transferring bytes
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`event: ping\ndata: ${Date.now()}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 2000);
+
+    const unsubscribe = leadsConsolidator.subscribeRefreshProgress((state) => {
+      try {
+        res.write(`data: ${JSON.stringify(state)}\n\n`);
+        if (!state.isRefreshing && state.isReady && state.message.includes('pronto')) {
+          clearInterval(heartbeat);
+          unsubscribe();
+          res.end();
+        }
+      } catch {
+        clearInterval(heartbeat);
+        unsubscribe();
+      }
+    });
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
+
   app.post('/api/leads/refresh-cache', async (req, res) => {
     try {
-      // Run in background without blocking
-      await leadsConsolidator.refreshFromDatabase();
-      return res.json({ success: true, message: "Atualização concluída com sucesso." });
+      // Trigger refresh
+      leadsConsolidator.refreshFromDatabase().catch(console.error);
+      return res.json({ success: true, message: "Atualização disparada com sucesso." });
     } catch (err) {
       return res.status(500).json({ error: "Erro ao disparar atualização de leads" });
     }

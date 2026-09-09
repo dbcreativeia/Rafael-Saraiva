@@ -159,21 +159,61 @@ export function formatDisplayTitleName(name?: string | null): string {
 
 export function normalizePhone(p?: string | null): string {
   if (!p) return '';
-  let digits = p.replace(/\D/g, '');
+  let str = String(p).trim();
+  // Strip trailing .0 or .00 from Excel numeric values
+  str = str.replace(/\.0+$/, '');
+  // Handle scientific notation e.g. 5.51199e+12
+  if (/^\d+\.\d+e\+\d+$/i.test(str)) {
+    try {
+      str = BigInt(Math.round(Number(str))).toString();
+    } catch {}
+  }
+  let digits = str.replace(/\D/g, '');
   if (digits.length === 0) return '';
-  if (digits.startsWith('0') && digits.length > 10) digits = digits.substring(1);
-  if (digits.startsWith('55') && digits.length >= 12) return digits;
-  if (digits.length >= 10 && digits.length <= 11) return '55' + digits;
+
+  // Carrier operator dial prefixes (e.g. 015 11..., 021 11..., 031, 041, 014)
+  if (digits.length === 14 && digits.startsWith('0')) {
+    digits = digits.substring(3);
+  } else if (digits.length === 13 && digits.startsWith('0') && ['1', '2', '3', '4'].includes(digits.charAt(1))) {
+    digits = digits.substring(3);
+  }
+
+  // Strip leading 0 before DDD (e.g. 011988887777 -> 11988887777)
+  while (digits.startsWith('0') && digits.length > 10) {
+    digits = digits.substring(1);
+  }
+
+  // Strip country code 55 / 550
+  if (digits.startsWith('550') && digits.length >= 13) {
+    digits = digits.substring(3);
+  } else if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.substring(2);
+    while (digits.startsWith('0')) digits = digits.substring(1);
+  }
+
+  // If 10 digits and mobile (DDD + 6/7/8/9xxxxxxx), add the missing 9th digit
+  if (digits.length === 10) {
+    const firstDigit = digits.charAt(2);
+    if (['6', '7', '8', '9'].includes(firstDigit)) {
+      digits = digits.slice(0, 2) + '9' + digits.slice(2);
+    }
+  }
+
+  // Standardize Brazilian phones with 55
+  if (digits.length >= 10 && digits.length <= 11) {
+    return '55' + digits;
+  }
   return digits;
 }
 
 export function normalizeCpf(cpf?: string | null): string {
   if (!cpf) return '';
-  const digits = cpf.replace(/\D/g, '');
+  let str = String(cpf).trim().replace(/\.0+$/, '');
+  const digits = str.replace(/\D/g, '');
   if (digits.length === 11) {
     return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
   }
-  return cpf.trim();
+  return digits.length > 0 ? digits : '';
 }
 
 export function extractExtraDetails(extraData: Record<string, any> = {}): {
@@ -247,7 +287,22 @@ export function isColdImportedBase(category?: string): boolean {
   if (!category) return false;
   const catLow = category.toLowerCase().trim();
   // Check standard cold bases OR check if the user specifically tagged it to not count
-  return COLD_IMPORTED_BASES.has(catLow) || catLow.endsWith(' (sem engajamento)') || catLow.endsWith(' [fria]') || catLow.includes('[fria]');
+  return (
+    COLD_IMPORTED_BASES.has(catLow) ||
+    catLow.endsWith(' (sem engajamento)') ||
+    catLow.endsWith(' [fria]') ||
+    catLow.includes('[fria]') ||
+    catLow.includes('(fria)') ||
+    catLow.includes('[sem engajamento]') ||
+    catLow.includes('(sem engajamento)') ||
+    catLow.includes('[não contar]') ||
+    catLow.includes('(não contar)') ||
+    catLow.includes('[nao contar]') ||
+    catLow.includes('(nao contar)') ||
+    catLow.includes('sem engajamento') ||
+    catLow.includes('sem ações') ||
+    catLow.includes('sem acoes')
+  );
 }
 
 export const VALID_BRAZILIAN_UFS = new Set([
@@ -329,18 +384,7 @@ export function normalizeEstado(rawEstado?: string, cidade?: string, cep?: strin
 
 export function updateLeadMultiActionStatus(lead: ConsolidatedLead): void {
   const actions = lead.actions || [];
-  lead.totalActions = actions.length;
 
-  // Rule: Do NOT consider multi-campanha or super apoiadores if the ONLY actions are from
-  // "Lista de Telefones Completos" or "Endereços Completos Geral"
-  const onlyCold = actions.length > 0 && actions.every(a => isColdImportedBase(a.sourceCategory));
-  if (onlyCold || actions.length === 0) {
-    lead.isMultiAction = false;
-    lead.isSuperSupporter = false;
-    return;
-  }
-
-  // Count distinct campaign sources, grouping cold imported bases as at most 1 base contact source
   const distinctSources = new Set<string>();
   let realActionsCount = 0;
   for (const a of actions) {
@@ -353,17 +397,146 @@ export function updateLeadMultiActionStatus(lead: ConsolidatedLead): void {
     }
   }
 
-  // Multi-action: has at least one real engagement + another source (or 2+ real engagements)
-  lead.isMultiAction = distinctSources.size > 1 || realActionsCount > 1;
+  // Base fria ou sem engajamento NÃO entra na contagem de engajamento/ações
+  lead.totalActions = realActionsCount;
 
-  // Super supporter: at least 3 distinct campaign engagements
-  lead.isSuperSupporter = distinctSources.size >= 3;
+  // Rule: Do NOT consider multi-campanha or super apoiadores if the ONLY actions are from cold bases
+  const onlyCold = actions.length > 0 && actions.every(a => isColdImportedBase(a.sourceCategory));
+  if (onlyCold || actions.length === 0 || realActionsCount === 0) {
+    lead.isMultiAction = false;
+    lead.isSuperSupporter = false;
+    return;
+  }
+
+  // Multi-action: has 2+ real engagements or at least 1 real engagement + another distinct source
+  lead.isMultiAction = realActionsCount > 1 || (realActionsCount >= 1 && distinctSources.size > 1);
+
+  // Super supporter: at least 3 distinct campaign engagements or 3+ real actions
+  lead.isSuperSupporter = distinctSources.size >= 3 || realActionsCount >= 3;
+}
+
+export function deduplicateLeadsList(rawLeads: ConsolidatedLead[]): ConsolidatedLead[] {
+  if (!rawLeads || rawLeads.length === 0) return [];
+  const deduped: ConsolidatedLead[] = [];
+  const pMap = new Map<string, number>();
+  const eMap = new Map<string, number>();
+  const cMap = new Map<string, number>();
+  const ncMap = new Map<string, number>();
+
+  for (const lead of rawLeads) {
+    const p = normalizePhone(lead.whatsapp);
+    const e = normalizeEmail(lead.email);
+    const cpf = normalizeCpf(lead.cpf);
+    
+    const isFullName = isValidFullNameForMatching(lead.nome);
+    const nKey = isFullName ? normalizeKey(lead.nome) : '';
+    const cKey = normalizeKey(lead.cidade);
+    const ncKey = nKey && nKey.length >= 6 && cKey ? `${nKey}__${cKey}` : '';
+
+    let matchIdx = -1;
+    if (p && p.length >= 8 && pMap.has(p)) {
+      matchIdx = pMap.get(p)!;
+    } else if (cpf && cpf.length >= 11 && cMap.has(cpf)) {
+      matchIdx = cMap.get(cpf)!;
+    } else if (e && e.includes('@') && eMap.has(e)) {
+      const candidateIdx = eMap.get(e)!;
+      const candidate = deduped[candidateIdx];
+      const candPhone = normalizePhone(candidate.whatsapp);
+      const conflict = !!(p && p.length >= 8 && candPhone && candPhone.length >= 8 && p !== candPhone);
+      if (!conflict) matchIdx = candidateIdx;
+    } else if (ncKey && ncMap.has(ncKey)) {
+      const candidateIdx = ncMap.get(ncKey)!;
+      const candidate = deduped[candidateIdx];
+      const candPhone = normalizePhone(candidate.whatsapp);
+      const candEmail = normalizeEmail(candidate.email);
+      const pConflict = !!(p && p.length >= 8 && candPhone && candPhone.length >= 8 && p !== candPhone);
+      const eConflict = !!(e && e.includes('@') && candEmail && candEmail.includes('@') && e !== candEmail);
+      if (!pConflict && !eConflict) matchIdx = candidateIdx;
+    }
+
+    if (matchIdx !== -1) {
+      const target = deduped[matchIdx];
+      // Merge actions
+      if (Array.isArray(lead.actions)) {
+        for (const act of lead.actions) {
+          const alreadyHas = target.actions.some(a => 
+            a.sourceCategory === act.sourceCategory && 
+            (a.id === act.id || Math.abs(new Date(a.date).getTime() - new Date(act.date).getTime()) < 60000)
+          );
+          if (!alreadyHas) {
+            target.actions.push(act);
+          }
+        }
+        target.totalActions = target.actions.length;
+      }
+      if (Array.isArray(lead.distinctCampaigns)) {
+        for (const camp of lead.distinctCampaigns) {
+          if (!target.distinctCampaigns.includes(camp)) {
+            target.distinctCampaigns.push(camp);
+          }
+        }
+      }
+      // Upgrade fields
+      if (lead.nome && (!target.nome || target.nome === 'Sem Nome' || (target.nome.length < lead.nome.length && !lead.nome.toLowerCase().includes('apoiador importado')))) {
+        target.nome = lead.nome;
+      }
+      if (p && !target.whatsapp) {
+        target.whatsapp = p;
+        pMap.set(p, matchIdx);
+      }
+      if (e && !target.email) {
+        target.email = e;
+        eMap.set(e, matchIdx);
+      }
+      if (cpf && !target.cpf) {
+        target.cpf = cpf;
+        cMap.set(cpf, matchIdx);
+      }
+      if (lead.cep && (!target.cep || target.cep.length < 8)) target.cep = lead.cep;
+      if (lead.endereco && (!target.endereco || target.endereco.length < 3)) target.endereco = lead.endereco;
+      if (lead.numero && !target.numero) target.numero = lead.numero;
+      if (lead.complemento && !target.complemento) target.complemento = lead.complemento;
+      if (lead.bairro && !target.bairro) target.bairro = lead.bairro;
+      if (lead.cidade && target.cidade === 'São Paulo' && lead.cidade !== 'São Paulo') target.cidade = lead.cidade;
+      if (lead.estado && (!target.estado || target.estado === 'SP')) target.estado = lead.estado;
+      
+      if (lead.firstDate && (!target.firstDate || new Date(lead.firstDate).getTime() < new Date(target.firstDate).getTime())) {
+        target.firstDate = lead.firstDate;
+      }
+      if (lead.lastDate && (!target.lastDate || new Date(lead.lastDate).getTime() > new Date(target.lastDate).getTime())) {
+        target.lastDate = lead.lastDate;
+      }
+      if (lead.otherPhones && lead.otherPhones.length > 0) {
+        if (!target.otherPhones) target.otherPhones = [];
+        for (const op of lead.otherPhones) {
+          const normOp = normalizePhone(op);
+          if (normOp && normOp !== target.whatsapp && !target.otherPhones.includes(normOp)) {
+            target.otherPhones.push(normOp);
+          }
+        }
+      }
+      if (lead.extraData && typeof lead.extraData === 'object') {
+        target.extraData = { ...(target.extraData || {}), ...lead.extraData };
+      }
+      updateLeadMultiActionStatus(target);
+    } else {
+      const newIdx = deduped.length;
+      deduped.push(lead);
+      if (p && p.length >= 8) pMap.set(p, newIdx);
+      if (e && e.includes('@')) eMap.set(e, newIdx);
+      if (cpf && cpf.length >= 11) cMap.set(cpf, newIdx);
+      if (ncKey) ncMap.set(ncKey, newIdx);
+    }
+  }
+
+  return deduped;
 }
 
 class LeadsConsolidationManager {
   private consolidatedLeads: ConsolidatedLead[] = [];
   private phoneMap: Map<string, number> = new Map();
   private emailMap: Map<string, number> = new Map();
+  private cpfMap: Map<string, number> = new Map();
   private nameCityMap: Map<string, number> = new Map();
   private summary: LeadsSummary = {
     totalUniqueLeads: 0,
@@ -385,6 +558,25 @@ class LeadsConsolidationManager {
   private municipiosSP: Array<{ codigo_ibge: number; nome: string; latitude: number; longitude: number }> = [];
   private spCitiesMap: Map<string, string> = new Map();
   private lastKnownDbCount = 0;
+  private refreshListeners: Set<(state: { isRefreshing: boolean; message: string; isReady: boolean }) => void> = new Set();
+
+  public subscribeRefreshProgress(cb: (state: { isRefreshing: boolean; message: string; isReady: boolean }) => void) {
+    this.refreshListeners.add(cb);
+    // Send immediate current state
+    try {
+      cb({ isRefreshing: this.isRefreshing, message: this.refreshMessage || "Pronto", isReady: this.isReady });
+    } catch {}
+    return () => { this.refreshListeners.delete(cb); };
+  }
+
+  private updateRefreshState(msg: string) {
+    this.refreshMessage = msg;
+    for (const listener of this.refreshListeners) {
+      try {
+        listener({ isRefreshing: this.isRefreshing, message: this.refreshMessage, isReady: this.isReady });
+      } catch {}
+    }
+  }
 
   constructor() {
     this.initMaps();
@@ -513,13 +705,13 @@ class LeadsConsolidationManager {
             }
           }
 
-          this.consolidatedLeads = loadedLeads;
+          this.consolidatedLeads = deduplicateLeadsList(loadedLeads);
           this.physicalMaterials = Array.isArray(meta.physicalMaterials) ? meta.physicalMaterials : [];
           this.rebuildIndexes();
           this.computeSummary();
-      this.updateRefreshState("Tudo pronto!");
+          this.updateRefreshState("Tudo pronto!");
           this.isReady = true;
-          console.log(`✅ Loaded and sanitized ${this.consolidatedLeads.length} leads from chunked cache in ${Date.now() - start}ms!`);
+          console.log(`✅ Loaded, deduplicated and sanitized ${this.consolidatedLeads.length} leads from chunked cache in ${Date.now() - start}ms!`);
           return true;
         }
       } catch (err) {
@@ -537,19 +729,20 @@ class LeadsConsolidationManager {
           const content = fs.readFileSync(CACHE_FILE, 'utf-8');
           const data = JSON.parse(content);
           if (data && Array.isArray(data.leads) && data.summary) {
-            this.consolidatedLeads = data.leads;
-            for (let i = 0; i < this.consolidatedLeads.length; i++) {
-              const l = this.consolidatedLeads[i];
+            const raw = data.leads;
+            for (let i = 0; i < raw.length; i++) {
+              const l = raw[i];
               l.estado = normalizeEstado(l.estado, l.cidade, l.cep);
               updateLeadMultiActionStatus(l);
             }
+            this.consolidatedLeads = deduplicateLeadsList(raw);
             this.physicalMaterials = Array.isArray(data.physicalMaterials) ? data.physicalMaterials : [];
             this.rebuildIndexes();
             this.computeSummary();
-      this.updateRefreshState("Tudo pronto!");
+            this.updateRefreshState("Tudo pronto!");
             this.isReady = true;
             this.saveToDiskCache();
-            console.log(`✅ Loaded and migrated ${this.consolidatedLeads.length} leads from legacy cache in ${Date.now() - start}ms!`);
+            console.log(`✅ Loaded, deduplicated and migrated ${this.consolidatedLeads.length} leads from legacy cache in ${Date.now() - start}ms!`);
             return true;
           }
         } else {
@@ -565,6 +758,7 @@ class LeadsConsolidationManager {
   private rebuildIndexes() {
     this.phoneMap.clear();
     this.emailMap.clear();
+    this.cpfMap.clear();
     this.nameCityMap.clear();
 
     for (let i = 0; i < this.consolidatedLeads.length; i++) {
@@ -573,6 +767,8 @@ class LeadsConsolidationManager {
       if (p && p.length >= 8) this.phoneMap.set(p, i);
       const e = normalizeEmail(lead.email);
       if (e && e.includes('@')) this.emailMap.set(e, i);
+      const cpf = normalizeCpf(lead.cpf);
+      if (cpf && cpf.length >= 11) this.cpfMap.set(cpf, i);
       if (isValidFullNameForMatching(lead.nome)) {
         const nKey = normalizeKey(lead.nome);
         const cKey = normalizeKey(lead.cidade);
@@ -585,11 +781,6 @@ class LeadsConsolidationManager {
 
   public async refresh(): Promise<void> {
     return this.refreshFromDatabase();
-  }
-
-  private updateRefreshState(msg: string) {
-    this.refreshMessage = msg;
-    // console.log(msg); // Optional: keep logs clean
   }
 
   public async refreshFromDatabase(): Promise<void> {
@@ -632,6 +823,7 @@ class LeadsConsolidationManager {
       const leads: ConsolidatedLead[] = [];
       const phoneIndex = new Map<string, number>();
       const emailIndex = new Map<string, number>();
+      const cpfIndex = new Map<string, number>();
       const nameCityIndex = new Map<string, number>();
       const materialsMap = new Map<string, PhysicalMaterialItem>();
 
@@ -648,6 +840,18 @@ class LeadsConsolidationManager {
         const complemento = fixMojibake(data.complemento || '');
         const bairro = fixMojibake(data.bairro || '');
 
+        let directCpf = normalizeCpf(data.cpf || data.documento || '');
+        let extractedCpf: string | undefined = undefined;
+        let extractedPhones: string[] = [];
+        let cleanExtra: Record<string, any> = {};
+        if (data.extraData && typeof data.extraData === 'object') {
+          const extracted = extractExtraDetails(data.extraData);
+          extractedCpf = extracted.cpf;
+          extractedPhones = extracted.extraPhones;
+          cleanExtra = extracted.cleanExtra;
+        }
+        const itemCpf = directCpf || extractedCpf || '';
+
         const isFullName = isValidFullNameForMatching(rawName);
         const nKey = isFullName ? normalizeKey(rawName) : '';
         const cKey = normalizeKey(cidade);
@@ -656,6 +860,8 @@ class LeadsConsolidationManager {
         let targetIdx = -1;
         if (phone && phone.length >= 8 && phoneIndex.has(phone)) {
           targetIdx = phoneIndex.get(phone)!;
+        } else if (itemCpf && itemCpf.length >= 11 && cpfIndex.has(itemCpf)) {
+          targetIdx = cpfIndex.get(itemCpf)!;
         } else if (email && email.includes('@') && emailIndex.has(email)) {
           const candidateIdx = emailIndex.get(email)!;
           const candidate = leads[candidateIdx];
@@ -703,6 +909,10 @@ class LeadsConsolidationManager {
             existing.email = email;
             emailIndex.set(email, targetIdx);
           }
+          if (itemCpf && !existing.cpf) {
+            existing.cpf = itemCpf;
+            cpfIndex.set(itemCpf, targetIdx);
+          }
           if (cep && (!existing.cep || existing.cep.length < 8)) existing.cep = cep;
           if (endereco && (!existing.endereco || existing.endereco.length < 3)) existing.endereco = endereco;
           if (numero && !existing.numero) existing.numero = numero;
@@ -725,13 +935,12 @@ class LeadsConsolidationManager {
 
           // Merge extraData, other phones, and CPF
           if (data.extraData && typeof data.extraData === 'object') {
-            const { cpf: foundCpf, extraPhones, cleanExtra } = extractExtraDetails(data.extraData);
-            if (!existing.cpf && foundCpf) existing.cpf = foundCpf;
+            if (!existing.cpf && itemCpf) existing.cpf = itemCpf;
             if (!existing.extraData) existing.extraData = {};
             Object.assign(existing.extraData, cleanExtra);
 
             if (!existing.otherPhones) existing.otherPhones = [];
-            for (const ep of extraPhones) {
+            for (const ep of extractedPhones) {
               if (ep !== existing.whatsapp && !existing.otherPhones.includes(ep)) {
                 existing.otherPhones.push(ep);
               }
@@ -739,16 +948,7 @@ class LeadsConsolidationManager {
           }
         } else {
           const newIdx = leads.length;
-          let newCpf: string | undefined = undefined;
-          let newOtherPhones: string[] = [];
-          let cleanExtra: Record<string, any> = {};
-
-          if (data.extraData && typeof data.extraData === 'object') {
-            const extracted = extractExtraDetails(data.extraData);
-            newCpf = extracted.cpf;
-            newOtherPhones = extracted.extraPhones.filter(p => p !== phone);
-            cleanExtra = extracted.cleanExtra;
-          }
+          const newOtherPhones = extractedPhones.filter(p => p !== phone);
 
           const newLead: ConsolidatedLead = {
             id: data.id ? String(data.id) : `lead_${newIdx}_${Math.random().toString(36).substring(2, 7)}`,
@@ -769,12 +969,13 @@ class LeadsConsolidationManager {
             firstDate: date,
             lastDate: date,
             actions: [action],
-            cpf: newCpf,
+            cpf: itemCpf || undefined,
             otherPhones: newOtherPhones.length > 0 ? newOtherPhones : undefined,
             extraData: Object.keys(cleanExtra).length > 0 ? cleanExtra : undefined
           };
           leads.push(newLead);
           if (phone && phone.length >= 8) phoneIndex.set(phone, newIdx);
+          if (itemCpf && itemCpf.length >= 11) cpfIndex.set(itemCpf, newIdx);
           if (email && email.includes('@')) emailIndex.set(email, newIdx);
           if (nameCityKey) nameCityIndex.set(nameCityKey, newIdx);
         }
@@ -785,7 +986,7 @@ class LeadsConsolidationManager {
         const isMaterialCamp = action.sourceKey === 'MATERIAL' || action.sourceKey === 'NINA' || (data.campanha && String(data.campanha).toLowerCase().includes('material'));
 
         if (isImpresso || (isMaterialCamp && (isPerfurado || data.endereco))) {
-          const matKey = phone || email || (nameCityKey || `mat_${Math.random()}`);
+          const matKey = phone || (itemCpf && itemCpf.length >= 11 ? itemCpf : '') || email || (nameCityKey || `mat_${Math.random()}`);
           let sourceLabel = action.sourceName;
           if (action.sourceKey === 'MATERIAL') sourceLabel = 'Oficial Rafael';
           else if (action.sourceKey === 'NINA') sourceLabel = 'Dobrada Nina';
@@ -889,7 +1090,7 @@ class LeadsConsolidationManager {
       this.updateRefreshState("Buscando bases importadas. Isso pode levar alguns minutos...");
       while (true) {
         try {
-          const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData FROM imported_leads LIMIT ${limit} OFFSET ${offset}`);
+          const [importedChunk] = await db.query(`SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData FROM imported_leads ORDER BY id ASC LIMIT ${limit} OFFSET ${offset}`);
           const chunk = importedChunk as any[];
           this.updateRefreshState(`Processando bases importadas... (Lote de ${offset} a ${offset + limit})`);
           if (chunk.length === 0) break;
@@ -939,11 +1140,12 @@ class LeadsConsolidationManager {
         updateLeadMultiActionStatus(l);
       });
 
+      this.updateRefreshState("Executando varredura profunda de deduplicação...");
+      const finalLeads = deduplicateLeadsList(leads);
+
       this.updateRefreshState("Finalizando e atualizando painel...");
-      this.consolidatedLeads = leads;
-      this.phoneMap = phoneIndex;
-      this.emailMap = emailIndex;
-      this.nameCityMap = nameCityIndex;
+      this.consolidatedLeads = finalLeads;
+      this.rebuildIndexes();
       this.physicalMaterials = Array.from(materialsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       // Generate summary
@@ -1094,6 +1296,7 @@ class LeadsConsolidationManager {
         const totalParts = Math.ceil(this.consolidatedLeads.length / CHUNK_SIZE);
 
         for (let part = 0; part < totalParts; part++) {
+          this.updateRefreshState(`Gravando cache seguro em disco (bloco ${part + 1} de ${totalParts})...`);
           const chunk = this.consolidatedLeads.slice(part * CHUNK_SIZE, (part + 1) * CHUNK_SIZE);
           const chunkTmp = path.join(CACHE_DIR, `part_${part}.json.tmp`);
           const chunkFinal = path.join(CACHE_DIR, `part_${part}.json`);
@@ -1124,6 +1327,8 @@ class LeadsConsolidationManager {
         const metaTmp = CACHE_META_FILE + '.tmp';
         await fs.promises.writeFile(metaTmp, JSON.stringify(metaPayload), 'utf-8');
         await fs.promises.rename(metaTmp, CACHE_META_FILE);
+
+        this.updateRefreshState("Cache gravado com sucesso no disco! Tudo pronto!");
 
         // Delete legacy single-file cache if it exists to free disk space
         if (fs.existsSync(CACHE_FILE)) {
@@ -1257,6 +1462,18 @@ class LeadsConsolidationManager {
     const estado = normalizeEstado(leadData.estado, cidade, leadData.cep);
     const date = action.date || new Date().toISOString();
 
+    let directCpf = normalizeCpf(leadData.cpf || leadData.documento || '');
+    let extractedCpf: string | undefined = undefined;
+    let extractedPhones: string[] = [];
+    let cleanExtra: Record<string, any> = {};
+    if (leadData.extraData && typeof leadData.extraData === 'object') {
+      const extracted = extractExtraDetails(leadData.extraData);
+      extractedCpf = extracted.cpf;
+      extractedPhones = extracted.extraPhones;
+      cleanExtra = extracted.cleanExtra;
+    }
+    const itemCpf = directCpf || extractedCpf || '';
+
     const isFullName = isValidFullNameForMatching(rawName);
     const nKey = isFullName ? normalizeKey(rawName) : '';
     const cKey = normalizeKey(cidade);
@@ -1265,6 +1482,8 @@ class LeadsConsolidationManager {
     let targetIdx = -1;
     if (phone && phone.length >= 8 && this.phoneMap.has(phone)) {
       targetIdx = this.phoneMap.get(phone)!;
+    } else if (itemCpf && itemCpf.length >= 11 && this.cpfMap.has(itemCpf)) {
+      targetIdx = this.cpfMap.get(itemCpf)!;
     } else if (email && email.includes('@') && this.emailMap.has(email)) {
       const candidateIdx = this.emailMap.get(email)!;
       const candidate = this.consolidatedLeads[candidateIdx];
@@ -1296,34 +1515,26 @@ class LeadsConsolidationManager {
       if (rawName && (!existing.nome || existing.nome === 'Sem Nome')) existing.nome = rawName;
       if (phone && !existing.whatsapp) existing.whatsapp = phone;
       if (email && !existing.email) existing.email = email;
+      if (itemCpf && !existing.cpf) existing.cpf = itemCpf;
       if (new Date(date).getTime() > new Date(existing.lastDate).getTime()) {
         existing.lastDate = date;
       }
       if (leadData.extraData && typeof leadData.extraData === 'object') {
-        const { cpf: foundCpf, extraPhones, cleanExtra } = extractExtraDetails(leadData.extraData);
-        if (!existing.cpf && foundCpf) existing.cpf = foundCpf;
+        if (!existing.cpf && itemCpf) existing.cpf = itemCpf;
         if (!existing.extraData) existing.extraData = {};
         Object.assign(existing.extraData, cleanExtra);
 
         if (!existing.otherPhones) existing.otherPhones = [];
-        for (const ep of extraPhones) {
+        for (const ep of extractedPhones) {
           if (ep !== existing.whatsapp && !existing.otherPhones.includes(ep)) {
             existing.otherPhones.push(ep);
           }
         }
       }
+      this.rebuildIndexes();
     } else {
       const newIdx = this.consolidatedLeads.length;
-      let newCpf: string | undefined = undefined;
-      let newOtherPhones: string[] = [];
-      let cleanExtra: Record<string, any> = {};
-
-      if (leadData.extraData && typeof leadData.extraData === 'object') {
-        const extracted = extractExtraDetails(leadData.extraData);
-        newCpf = extracted.cpf;
-        newOtherPhones = extracted.extraPhones.filter(p => p !== phone);
-        cleanExtra = extracted.cleanExtra;
-      }
+      const newOtherPhones = extractedPhones.filter(p => p !== phone);
 
       const newLead: ConsolidatedLead = {
         id: leadData.id ? String(leadData.id) : `lead_${Date.now()}`,
@@ -1344,7 +1555,7 @@ class LeadsConsolidationManager {
         firstDate: date,
         lastDate: date,
         actions: [action],
-        cpf: newCpf,
+        cpf: itemCpf || undefined,
         otherPhones: newOtherPhones.length > 0 ? newOtherPhones : undefined,
         extraData: Object.keys(cleanExtra).length > 0 ? cleanExtra : undefined
       };
@@ -1355,7 +1566,7 @@ class LeadsConsolidationManager {
 
     // Refresh summary
     this.computeSummary();
-      this.updateRefreshState("Tudo pronto!");
+    this.updateRefreshState("Tudo pronto!");
   }
 
   public removeCampaign(campaignName: string) {
@@ -1368,7 +1579,7 @@ class LeadsConsolidationManager {
     });
     this.rebuildIndexes();
     this.computeSummary();
-      this.updateRefreshState("Tudo pronto!");
+    this.updateRefreshState("Tudo pronto!");
     this.saveToDiskCache();
   }
 
@@ -1383,12 +1594,38 @@ class LeadsConsolidationManager {
     addressOnly?: string;
   }, format: 'xlsx' | 'csv' = 'xlsx'): { buffer: Buffer, type: 'csv' | 'xlsx' | 'zip' } {
     const res = this.getPaginatedLeads({ ...params, page: 1, pageSize: 99999999 });
+
+    // Strict export deduplication guard
+    const exportedPhones = new Set<string>();
+    const exportedEmails = new Set<string>();
+    const exportedCpfs = new Set<string>();
+    const exportedNameCities = new Set<string>();
+
+    const uniqueLeads: ConsolidatedLead[] = [];
+    for (const l of res.leads) {
+      const p = normalizePhone(l.whatsapp);
+      const e = normalizeEmail(l.email);
+      const cpf = normalizeCpf(l.cpf);
+      const isFull = isValidFullNameForMatching(l.nome);
+      const nc = isFull ? `${normalizeKey(l.nome)}__${normalizeKey(l.cidade)}` : '';
+
+      if (p && p.length >= 8 && exportedPhones.has(p)) continue;
+      if (cpf && cpf.length >= 11 && exportedCpfs.has(cpf)) continue;
+      if (e && e.includes('@') && exportedEmails.has(e)) continue;
+      if (nc && nc.length >= 8 && !p && !e && exportedNameCities.has(nc)) continue;
+
+      if (p && p.length >= 8) exportedPhones.add(p);
+      if (cpf && cpf.length >= 11) exportedCpfs.add(cpf);
+      if (e && e.includes('@')) exportedEmails.add(e);
+      if (nc) exportedNameCities.add(nc);
+      uniqueLeads.push(l);
+    }
     
     if (format === 'csv') {
       const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
       const csvRows = [headers.join(',')];
       
-      for (const l of res.leads) {
+      for (const l of uniqueLeads) {
         const extraFieldsStr = l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
         const otherPhonesStr = l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '';
 
@@ -1418,7 +1655,7 @@ class LeadsConsolidationManager {
       return { buffer: Buffer.from('\uFEFF' + csvRows.join('\n'), 'utf-8'), type: 'csv' };
     }
 
-    const rows = res.leads.map(l => ({
+    const rows = uniqueLeads.map(l => ({
       'Nome': l.nome,
       'WhatsApp': l.whatsapp,
       'Outros Telefones': l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '',
