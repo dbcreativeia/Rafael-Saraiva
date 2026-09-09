@@ -29,7 +29,6 @@ import {
   HeartHandshake, 
   Gamepad2, 
   FileText, 
-  ShieldCheck, 
   Clock, 
   Map as MapIcon, 
   ListFilter,
@@ -170,6 +169,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [confirmDeleteBase, setConfirmDeleteBase] = useState('');
 
   const [campaignInput, setCampaignInput] = useState('');
+  const [isColdBase, setIsColdBase] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvFileName, setCsvFileName] = useState('');
   const [parsedCsvLeads, setParsedCsvLeads] = useState<any[]>([]);
@@ -484,7 +484,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 leads: chunk,
-                campanha: campaignInput.trim()
+                campanha: campaignInput.trim() + (isColdBase ? ' [Fria]' : '')
               })
             });
 
@@ -531,6 +531,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         setCsvRawRows([]);
         setCsvHeaders([]);
         setCampaignInput('');
+        setIsColdBase(false);
       }, 2000);
     } catch (err: any) {
       console.error('Erro ao enviar leads importados:', err);
@@ -2363,6 +2364,20 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     ))}
                   </div>
                 </div>
+              </div>
+
+              <div className="pt-1 space-y-2">
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">O</span>
+                  Opções avançadas da base (Opcional)
+                </label>
+                <label className="flex items-center gap-2 bg-gray-50 p-3 rounded-2xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" checked={isColdBase} onChange={(e) => setIsColdBase(e.target.checked)} />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-800">Base Fria (Não contar engajamento)</span>
+                    <span className="text-[11px] text-gray-500">Marque esta opção se os leads desta lista não vieram de campanhas ativas, para não inflar métricas.</span>
+                  </div>
+                </label>
               </div>
 
               {/* 2. Seleção do Arquivo CSV/XLSX */}
