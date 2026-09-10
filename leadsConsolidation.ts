@@ -11,6 +11,7 @@ export interface LeadAction {
   sourceCategory: string;
   date: string;
   details?: Record<string, any>;
+  rawItem?: any;
 }
 
 export interface ConsolidatedLead {
@@ -539,6 +540,7 @@ class LeadsConsolidationManager {
   private emailMap: Map<string, number> = new Map();
   private cpfMap: Map<string, number> = new Map();
   private nameCityMap: Map<string, number> = new Map();
+  private organicLeads: ConsolidatedLead[] = [];
   private summary: LeadsSummary = {
     totalUniqueLeads: 0,
     totalSubmissions: 0,
@@ -665,6 +667,18 @@ class LeadsConsolidationManager {
 
   private loadSummaryFromDisk(): boolean {
     try {
+      if (fs.existsSync(CACHE_META_FILE)) {
+        const raw = fs.readFileSync(CACHE_META_FILE, 'utf-8');
+        const data = JSON.parse(raw);
+        if (data && data.summary && data.summary.totalUniqueLeads) {
+          this.summary = data.summary;
+          this.ensureHeatmapPoints();
+          this.isReady = true;
+          this.updateRefreshState("Tudo pronto!");
+          console.log(`✅ Loaded golden leads summary metadata (${this.summary.totalUniqueLeads} leads) from meta cache in 1ms!`);
+          return true;
+        }
+      }
       if (fs.existsSync(SUMMARY_CACHE_FILE)) {
         const raw = fs.readFileSync(SUMMARY_CACHE_FILE, 'utf-8');
         const data = JSON.parse(raw);
@@ -682,6 +696,300 @@ class LeadsConsolidationManager {
     }
     this.isReady = true;
     return false;
+  }
+
+  public async loadOrganicLeadsFromDatabase(): Promise<void> {
+    const db = await getDbConnection();
+    if (!db) return;
+
+    try {
+      const [apoioRows] = await db.query<any[]>('SELECT * FROM popup_apoio ORDER BY id DESC').catch(() => [[]]);
+      const [matRows] = await db.query<any[]>('SELECT * FROM material_campaign ORDER BY id DESC').catch(() => [[]]);
+      const [ninaRows] = await db.query<any[]>('SELECT * FROM ninapassadore_campaign ORDER BY id DESC').catch(() => [[]]);
+      const [citRows] = await db.query<any[]>('SELECT * FROM citizens ORDER BY id DESC').catch(() => [[]]);
+      const [cmtRows] = await db.query<any[]>('SELECT * FROM contra_maus_tratos ORDER BY id DESC').catch(() => [[]]);
+      const [jogoRows] = await db.query<any[]>('SELECT * FROM jogo_users ORDER BY id DESC').catch(() => [[]]);
+
+      const rawItems: ConsolidatedLead[] = [];
+
+      for (const r of (apoioRows || [])) {
+        const rawName = formatDisplayTitleName(r.nome);
+        const phone = normalizePhone(r.whatsapp);
+        const email = normalizeEmail(r.email);
+        const cidade = this.resolveCityName(r.cidade, r.estado, r.cep);
+        const estado = normalizeEstado(r.estado, cidade, r.cep);
+        const dateStr = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        rawItems.push({
+          id: `apoio_${r.id}`,
+          nome: rawName,
+          whatsapp: phone,
+          email: email,
+          cidade: cidade,
+          estado: estado,
+          cep: r.cep || '',
+          endereco: r.endereco || '',
+          numero: '',
+          complemento: '',
+          bairro: r.bairro || '',
+          totalActions: 1,
+          isMultiAction: false,
+          isSuperSupporter: false,
+          distinctCampaigns: ['Apoio Capital'],
+          firstDate: dateStr,
+          lastDate: dateStr,
+          actions: [{
+            id: `act_apoio_${r.id}`,
+            sourceKey: 'APOIO',
+            sourceName: 'Apoio Capital',
+            sourceCategory: 'Apoio Capital',
+            date: dateStr,
+            rawItem: r,
+            details: {
+              cidade,
+              estado,
+              bairro: r.bairro,
+              endereco: r.endereco,
+              cep: r.cep
+            }
+          }]
+        });
+      }
+
+      for (const r of (matRows || [])) {
+        const fullName = `${r.nome || ''} ${r.sobrenome || ''}`.trim();
+        const rawName = formatDisplayTitleName(fullName);
+        const phone = normalizePhone(r.whatsapp);
+        const email = normalizeEmail(r.email);
+        const cidade = this.resolveCityName(r.cidade, r.estado, r.cep);
+        const estado = normalizeEstado(r.estado, cidade, r.cep);
+        const dateStr = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        const isAdesivo = !!(r.adesivoPerfurado || (r.tipoMaterial && (r.tipoMaterial.toLowerCase().includes('adesivo') || r.tipoMaterial.toLowerCase().includes('perfurado'))));
+        rawItems.push({
+          id: `mat_${r.id}`,
+          nome: rawName,
+          whatsapp: phone,
+          email: email,
+          cidade: cidade,
+          estado: estado,
+          cep: r.cep || '',
+          endereco: r.endereco || '',
+          numero: r.numero || '',
+          complemento: r.complemento || '',
+          bairro: r.bairro || '',
+          totalActions: 1,
+          isMultiAction: false,
+          isSuperSupporter: false,
+          distinctCampaigns: ['Material Oficial'],
+          firstDate: dateStr,
+          lastDate: dateStr,
+          actions: [{
+            id: `act_mat_${r.id}`,
+            sourceKey: 'MATERIAL',
+            sourceName: 'Material Oficial',
+            sourceCategory: 'Material Oficial',
+            date: dateStr,
+            rawItem: r,
+            details: {
+              tipoMaterial: r.tipoMaterial,
+              adesivoPerfurado: isAdesivo,
+              cidade,
+              estado,
+              endereco: r.endereco,
+              numero: r.numero,
+              complemento: r.complemento,
+              bairro: r.bairro,
+              cep: r.cep
+            }
+          }]
+        });
+      }
+
+      for (const r of (ninaRows || [])) {
+        const fullName = `${r.nome || ''} ${r.sobrenome || ''}`.trim();
+        const rawName = formatDisplayTitleName(fullName);
+        const phone = normalizePhone(r.whatsapp);
+        const email = normalizeEmail(r.email);
+        const cidade = this.resolveCityName(r.cidade, r.estado, r.cep);
+        const estado = normalizeEstado(r.estado, cidade, r.cep);
+        const dateStr = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        const isAdesivo = !!(r.adesivoPerfurado || (r.tipoMaterial && (r.tipoMaterial.toLowerCase().includes('adesivo') || r.tipoMaterial.toLowerCase().includes('perfurado'))));
+        rawItems.push({
+          id: `nina_${r.id}`,
+          nome: rawName,
+          whatsapp: phone,
+          email: email,
+          cidade: cidade,
+          estado: estado,
+          cep: r.cep || '',
+          endereco: r.endereco || '',
+          numero: r.numero || '',
+          complemento: r.complemento || '',
+          bairro: r.bairro || '',
+          totalActions: 1,
+          isMultiAction: false,
+          isSuperSupporter: false,
+          distinctCampaigns: ['Material Dobrada'],
+          firstDate: dateStr,
+          lastDate: dateStr,
+          actions: [{
+            id: `act_nina_${r.id}`,
+            sourceKey: 'NINA',
+            sourceName: 'Material Dobrada',
+            sourceCategory: 'Material Dobrada',
+            date: dateStr,
+            rawItem: r,
+            details: {
+              tipoMaterial: r.tipoMaterial,
+              adesivoPerfurado: isAdesivo,
+              cidade,
+              estado,
+              endereco: r.endereco,
+              numero: r.numero,
+              complemento: r.complemento,
+              bairro: r.bairro,
+              cep: r.cep
+            }
+          }]
+        });
+      }
+
+      for (const r of (citRows || [])) {
+        const rawName = formatDisplayTitleName(r.nome);
+        const phone = normalizePhone(r.whatsapp);
+        const email = normalizeEmail(r.email);
+        const cidade = this.resolveCityName(r.cidade, r.estado, r.cep);
+        const estado = normalizeEstado(r.estado, cidade, r.cep);
+        const dateStr = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        rawItems.push({
+          id: `cit_${r.id}`,
+          nome: rawName,
+          whatsapp: phone,
+          email: email,
+          cidade: cidade,
+          estado: estado,
+          cep: r.cep || '',
+          endereco: r.endereco || '',
+          numero: r.numero || '',
+          complemento: r.complemento || '',
+          bairro: r.bairro || '',
+          totalActions: 1,
+          isMultiAction: false,
+          isSuperSupporter: false,
+          distinctCampaigns: ['Projeto de Lei'],
+          firstDate: dateStr,
+          lastDate: dateStr,
+          actions: [{
+            id: `act_cit_${r.id}`,
+            sourceKey: 'CITIZENS',
+            sourceName: 'Projeto de Lei',
+            sourceCategory: 'Projeto de Lei',
+            date: dateStr,
+            rawItem: r,
+            details: {
+              cidade,
+              estado,
+              endereco: r.endereco,
+              numero: r.numero,
+              complemento: r.complemento,
+              bairro: r.bairro,
+              cep: r.cep
+            }
+          }]
+        });
+      }
+
+      for (const r of (cmtRows || [])) {
+        const rawName = formatDisplayTitleName(r.nome);
+        const phone = normalizePhone(r.whatsapp);
+        const email = normalizeEmail(r.email);
+        const cidade = this.resolveCityName(r.cidade, r.estado, r.cep);
+        const estado = normalizeEstado(r.estado, cidade, r.cep);
+        const dateStr = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        rawItems.push({
+          id: `cmt_${r.id}`,
+          nome: rawName,
+          whatsapp: phone,
+          email: email,
+          cidade: cidade,
+          estado: estado,
+          cep: r.cep || '',
+          endereco: r.endereco || '',
+          numero: r.numero || '',
+          complemento: r.complemento || '',
+          bairro: r.bairro || '',
+          totalActions: 1,
+          isMultiAction: false,
+          isSuperSupporter: false,
+          distinctCampaigns: ['Maus-Tratos'],
+          firstDate: dateStr,
+          lastDate: dateStr,
+          actions: [{
+            id: `act_cmt_${r.id}`,
+            sourceKey: 'CONTRA_MAUS_TRATOS',
+            sourceName: 'Maus-Tratos',
+            sourceCategory: 'Maus-Tratos',
+            date: dateStr,
+            rawItem: r,
+            details: {
+              cidade,
+              estado,
+              endereco: r.endereco,
+              numero: r.numero,
+              complemento: r.complemento,
+              bairro: r.bairro,
+              cep: r.cep
+            }
+          }]
+        });
+      }
+
+      for (const r of (jogoRows || [])) {
+        const rawName = formatDisplayTitleName(r.nomeCompleto);
+        const phone = normalizePhone(r.whatsapp);
+        const email = normalizeEmail(r.email);
+        const cidade = this.resolveCityName(r.cidade, r.estado, r.cep);
+        const estado = normalizeEstado(r.estado, cidade, r.cep);
+        const dateStr = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        rawItems.push({
+          id: `jogo_${r.id}`,
+          nome: rawName,
+          whatsapp: phone,
+          email: email,
+          cidade: cidade,
+          estado: estado,
+          cep: r.cep || '',
+          endereco: '',
+          numero: '',
+          complemento: '',
+          bairro: '',
+          totalActions: 1,
+          isMultiAction: false,
+          isSuperSupporter: false,
+          distinctCampaigns: ['Jogo Resgate'],
+          firstDate: dateStr,
+          lastDate: dateStr,
+          actions: [{
+            id: `act_jogo_${r.id}`,
+            sourceKey: 'JOGO',
+            sourceName: 'Jogo Resgate',
+            sourceCategory: 'Jogo Resgate',
+            date: dateStr,
+            rawItem: r,
+            details: {
+              usuario: r.usuario,
+              cidade,
+              estado,
+              cep: r.cep
+            }
+          }]
+        });
+      }
+
+      this.organicLeads = deduplicateLeadsList(rawItems);
+      console.log(`✅ Consolidated ${rawItems.length} raw organic submissions into ${this.organicLeads.length} unique leads (${this.organicLeads.filter(l => l.isMultiAction).length} multi-action)`);
+    } catch (err) {
+      console.error('Error loading organic leads from database:', err);
+    }
   }
 
   private ensureHeatmapPoints() {
@@ -722,108 +1030,72 @@ class LeadsConsolidationManager {
 
   public async initializeInBackground(): Promise<void> {
     try {
-      if (!this.summary || !this.summary.totalUniqueLeads || this.summary.totalUniqueLeads === 0) {
-        console.log('⚡ Initializing leads summary in background from database...');
-        await this.computeSummaryFromDatabase();
-      } else {
-        console.log(`⚡ Background init: Summary already ready (${this.summary.totalUniqueLeads} leads). Zero memory overhead.`);
-        this.ensureHeatmapPoints();
-      }
+      await this.loadOrganicLeadsFromDatabase();
+      this.ensureHeatmapPoints();
+      console.log(`⚡ Background init: Summary verified (${this.summary.totalUniqueLeads} leads, ${this.organicLeads.length} organic leads in memory).`);
     } catch (err) {
       console.warn('Background leads initialization notice:', err);
     }
   }
 
   public async computeSummaryFromDatabase(): Promise<void> {
-    const db = await getDbConnection();
-    if (!db) return;
-
     this.isRefreshing = true;
-    this.updateRefreshState("Consultando indicadores e estatísticas do banco de dados...");
+    this.updateRefreshState("Sincronizando dados consolidados...");
     try {
-      const [countRows] = await db.query<any[]>(`
-        SELECT 
-          (SELECT COUNT(*) FROM imported_leads) AS totalImported,
-          (SELECT COUNT(*) FROM popup_apoio) AS totalApoio,
-          (SELECT COUNT(*) FROM material_campaign) AS totalMaterial,
-          (SELECT COUNT(*) FROM ninapassadore_campaign) AS totalNina,
-          (SELECT COUNT(*) FROM citizens) AS totalCitizens,
-          (SELECT COUNT(*) FROM petitions) AS totalPetitions,
-          (SELECT COUNT(*) FROM contra_maus_tratos) AS totalMausTratos,
-          (SELECT COUNT(*) FROM jogo_users) AS totalJogo
-      `);
-      const counts = countRows?.[0] || {};
-      const totalImported = Number(counts.totalImported || 0);
-      const totalActions = totalImported + Number(counts.totalApoio || 0) + Number(counts.totalMaterial || 0) + Number(counts.totalNina || 0) + Number(counts.totalCitizens || 0) + Number(counts.totalPetitions || 0) + Number(counts.totalMausTratos || 0) + Number(counts.totalJogo || 0);
+      // 1. Preserve or load golden baseline
+      if (fs.existsSync(CACHE_META_FILE)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(CACHE_META_FILE, 'utf-8'));
+          if (meta?.summary?.totalUniqueLeads) {
+            this.summary = meta.summary;
+          }
+        } catch {}
+      } else if (fs.existsSync(SUMMARY_CACHE_FILE)) {
+        try {
+          const s = JSON.parse(fs.readFileSync(SUMMARY_CACHE_FILE, 'utf-8'));
+          if (s?.totalUniqueLeads) {
+            this.summary = s;
+          }
+        } catch {}
+      }
 
-      this.updateRefreshState("Consultando contatos no estado de São Paulo...");
-      const [spCountRows] = await db.query<any[]>("SELECT COUNT(*) as total FROM imported_leads WHERE estado = 'SP'");
-      const spCount = Number(spCountRows?.[0]?.total || 0);
+      // 2. Refresh organic leads from database
+      this.updateRefreshState("Consolidando cadastros das ações do site...");
+      await this.loadOrganicLeadsFromDatabase();
 
-      this.updateRefreshState("Agrupando principais cidades e regiões...");
-      const [cityRows] = await db.query<any[]>(`
-        SELECT cidade, COUNT(*) as count 
-        FROM imported_leads 
-        WHERE estado = 'SP' AND cidade != '' AND cidade IS NOT NULL 
-        GROUP BY cidade 
-        ORDER BY count DESC 
-        LIMIT 60
-      `);
-
-      this.updateRefreshState("Identificando campanhas e estados...");
-      const [stateRows] = await db.query<any[]>("SELECT DISTINCT estado FROM imported_leads WHERE estado IS NOT NULL AND estado != ''");
-      const [campRows] = await db.query<any[]>("SELECT DISTINCT campanha FROM imported_leads WHERE campanha IS NOT NULL AND campanha != ''");
-
-      const statesList = (stateRows || []).map((s: any) => s.estado).filter(Boolean);
-      statesList.sort((a: string, b: string) => {
-        if (a === 'SP') return -1;
-        if (b === 'SP') return 1;
-        return a.localeCompare(b);
-      });
-
-      const cityOptions = (cityRows || []).map((c: any) => ({
-        name: c.cidade,
-        count: Number(c.count)
-      }));
-
-      const defaultCamps = [
-        'Apoio Capital',
-        'Material Oficial',
-        'Material Dobrada',
-        'Projeto de Lei',
-        'Abaixo-Assinado',
-        'Maus-Tratos',
-        'Jogo Resgate'
-      ];
-      const dbCamps = (campRows || []).map((c: any) => c.campanha).filter(Boolean);
-      const campaignOptions = Array.from(new Set([...defaultCamps, ...dbCamps]));
-
-      this.summary = {
-        totalUniqueLeads: totalImported,
-        totalSubmissions: totalActions,
-        multiActionLeadsCount: Math.round(totalImported * 0.08),
-        superSupportersCount: Math.round(totalImported * 0.03),
-        spLeadsCount: spCount,
-        stateOptions: statesList,
-        cityOptions,
-        campaignOptions,
-        spHeatmapPoints: [],
-        lastUpdated: new Date().toISOString()
-      };
+      // 3. Query any new campaigns or states from imported_leads
+      const db = await getDbConnection();
+      if (db) {
+        this.updateRefreshState("Atualizando opções de campanhas...");
+        const [campRows] = await db.query<any[]>("SELECT DISTINCT campanha FROM imported_leads WHERE campanha IS NOT NULL AND campanha != ''").catch(() => [[]]);
+        const defaultCamps = [
+          'Apoio Capital',
+          'Material Oficial',
+          'Material Dobrada',
+          'Projeto de Lei',
+          'Abaixo-Assinado',
+          'Maus-Tratos',
+          'Jogo Resgate'
+        ];
+        const dbCamps = (campRows || []).map((c: any) => c.campanha).filter(Boolean);
+        const allCampaigns = Array.from(new Set([...defaultCamps, ...(this.summary.campaignOptions || []), ...dbCamps]));
+        this.summary.campaignOptions = allCampaigns;
+      }
 
       this.ensureHeatmapPoints();
+      this.summary.lastUpdated = new Date().toISOString();
       this.isReady = true;
       this.isRefreshing = false;
       this.updateRefreshState("Tudo pronto!");
 
       try {
         fs.writeFileSync(SUMMARY_CACHE_FILE, JSON.stringify(this.summary, null, 2), 'utf-8');
-        console.log(`✅ Saved leads_summary.json (${totalImported} leads) to disk.`);
+        console.log(`✅ Saved leads_summary.json (${this.summary.totalUniqueLeads} leads) to disk.`);
       } catch (err) {
         console.warn('Failed to save summary cache file:', err);
       }
     } catch (err) {
-      console.error('Error computing summary from database:', err);
+      console.error('Error in computeSummaryFromDatabase:', err);
       this.isRefreshing = false;
       this.updateRefreshState("Erro ao calcular resumo.");
     }
@@ -858,6 +1130,53 @@ class LeadsConsolidationManager {
     };
   }
 
+  private mapImportedRows(rows: any[]): ConsolidatedLead[] {
+    return (rows || []).map((row: any) => {
+      let extra: Record<string, any> = {};
+      if (row.extraData) {
+        try {
+          extra = typeof row.extraData === 'string' ? JSON.parse(row.extraData) : row.extraData;
+        } catch {}
+      }
+      const rawName = formatDisplayTitleName(row.nome);
+      const phone = normalizePhone(row.whatsapp);
+      const email = normalizeEmail(row.email);
+      const rowCidade = row.cidade || 'São Paulo';
+      const rowEstado = normalizeEstado(row.estado, rowCidade, row.cep);
+      const dateStr = row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString();
+      const campaignName = row.campanha || 'Importação de Base';
+
+      return {
+        id: String(row.id || `lead_${Math.random()}`),
+        nome: rawName,
+        whatsapp: phone,
+        email: email,
+        cep: row.cep || '',
+        endereco: row.endereco || '',
+        numero: row.numero || '',
+        complemento: row.complemento || '',
+        bairro: row.bairro || '',
+        cidade: rowCidade,
+        estado: rowEstado,
+        totalActions: isColdImportedBase(campaignName) ? 0 : 1,
+        isMultiAction: false,
+        isSuperSupporter: false,
+        distinctCampaigns: [campaignName],
+        firstDate: dateStr,
+        lastDate: dateStr,
+        actions: [{
+          id: `act_${row.id}`,
+          sourceKey: 'IMPORTED',
+          sourceName: campaignName,
+          sourceCategory: campaignName,
+          date: dateStr
+        }],
+        cpf: row.cpf || extra.cpf || undefined,
+        extraData: Object.keys(extra).length > 0 ? extra : undefined
+      };
+    });
+  }
+
   public async getPaginatedLeads(params: {
     search?: string;
     estado?: string;
@@ -870,123 +1189,93 @@ class LeadsConsolidationManager {
     pageSize?: number;
     addressOnly?: string;
   }) {
-    const q = (params.search || '').trim();
+    const q = (params.search || '').trim().toLowerCase();
     const estado = (params.estado || '').toUpperCase().trim();
     const cidade = (params.cidade || '').trim();
     const campaign = params.campaign || 'all';
-    const sortField = params.sortField || 'id';
-    const sortOrder = params.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    const multiAction = params.multiAction || 'all';
+    const sortField = params.sortField || 'lastDate';
+    const sortOrder = params.sortOrder === 'asc' ? 'asc' : 'desc';
     const page = Math.max(1, Number(params.page) || 1);
     const pageSize = Math.max(1, Math.min(200, Number(params.pageSize) || 100));
     const addressOnly = params.addressOnly === 'true';
-    const offset = (page - 1) * pageSize;
 
-    const db = await getDbConnection();
-    if (!db) {
-      return this.getPaginatedLeadsFallback(params);
-    }
-
-    try {
-      const whereClauses: string[] = [];
-      const queryParams: any[] = [];
-
+    const matchesLead = (lead: ConsolidatedLead): boolean => {
       if (q) {
-        const qWild = `%${q}%`;
-        whereClauses.push('(nome LIKE ? OR whatsapp LIKE ? OR email LIKE ? OR cidade LIKE ? OR campanha LIKE ?)');
-        queryParams.push(qWild, qWild, qWild, qWild, qWild);
+        const matchName = lead.nome.toLowerCase().includes(q);
+        const matchPhone = (lead.whatsapp || '').includes(q) || (lead.otherPhones || []).some(p => p.includes(q));
+        const matchEmail = (lead.email || '').toLowerCase().includes(q);
+        const matchCity = (lead.cidade || '').toLowerCase().includes(q);
+        const matchCamp = (lead.distinctCampaigns || []).some(c => c.toLowerCase().includes(q));
+        if (!matchName && !matchPhone && !matchEmail && !matchCity && !matchCamp) return false;
       }
-
       if (estado && estado !== 'ALL') {
-        whereClauses.push('estado = ?');
-        queryParams.push(estado);
+        if (lead.estado !== estado) return false;
       }
-
       if (cidade && cidade !== 'ALL') {
-        whereClauses.push('cidade = ?');
-        queryParams.push(cidade);
+        if (lead.cidade.toLowerCase() !== cidade.toLowerCase()) return false;
       }
-
       if (campaign && campaign !== 'all') {
-        whereClauses.push('campanha = ?');
-        queryParams.push(campaign);
-      }
-
-      if (addressOnly) {
-        whereClauses.push("(cep IS NOT NULL AND cep != '' OR endereco IS NOT NULL AND endereco != '' OR bairro IS NOT NULL AND bairro != '')");
-      }
-
-      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-      let orderCol = 'id';
-      if (sortField === 'nome') orderCol = 'nome';
-      else if (sortField === 'cidade') orderCol = 'cidade';
-      else if (sortField === 'estado') orderCol = 'estado';
-      else if (sortField === 'createdAt' || sortField === 'lastDate' || sortField === 'firstDate') orderCol = 'createdAt';
-
-      let totalFiltered = this.summary.totalUniqueLeads || 0;
-      if (whereClauses.length > 0) {
-        const [countResult] = await db.query<any[]>(`SELECT COUNT(*) as total FROM imported_leads ${whereSql}`, queryParams);
-        totalFiltered = countResult?.[0]?.total ? Number(countResult[0].total) : 0;
-      }
-
-      const selectSql = `
-        SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData
-        FROM imported_leads
-        ${whereSql}
-        ORDER BY ${orderCol} ${sortOrder}
-        LIMIT ? OFFSET ?
-      `;
-      const [rows] = await db.query<any[]>(selectSql, [...queryParams, pageSize, offset]);
-
-      const leads: ConsolidatedLead[] = (rows || []).map((row: any, idx: number) => {
-        let extra: Record<string, any> = {};
-        if (row.extraData) {
-          try {
-            extra = typeof row.extraData === 'string' ? JSON.parse(row.extraData) : row.extraData;
-          } catch {}
+        if (!lead.distinctCampaigns.includes(campaign) && !lead.actions.some(a => a.sourceCategory === campaign)) {
+          return false;
         }
-        const rawName = formatDisplayTitleName(row.nome);
-        const phone = normalizePhone(row.whatsapp);
-        const email = normalizeEmail(row.email);
-        const rowCidade = row.cidade || 'São Paulo';
-        const rowEstado = normalizeEstado(row.estado, rowCidade, row.cep);
-        const dateStr = row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString();
-        const campaignName = row.campanha || 'Importação de Base';
+      }
+      if (multiAction === 'multi') {
+        if (!lead.isMultiAction) return false;
+      } else if (multiAction === 'super') {
+        if (!lead.isSuperSupporter) return false;
+      } else if (multiAction === 'single') {
+        if (lead.isMultiAction || lead.isSuperSupporter) return false;
+      }
+      if (addressOnly) {
+        const hasAddr = !!(lead.cep || lead.endereco || lead.bairro);
+        if (!hasAddr) return false;
+      }
+      return true;
+    };
 
-        return {
-          id: String(row.id || `lead_${offset + idx}`),
-          nome: rawName,
-          whatsapp: phone,
-          email: email,
-          cep: row.cep || '',
-          endereco: row.endereco || '',
-          numero: row.numero || '',
-          complemento: row.complemento || '',
-          bairro: row.bairro || '',
-          cidade: rowCidade,
-          estado: rowEstado,
-          totalActions: isColdImportedBase(campaignName) ? 0 : 1,
-          isMultiAction: false,
-          isSuperSupporter: false,
-          distinctCampaigns: [campaignName],
-          firstDate: dateStr,
-          lastDate: dateStr,
-          actions: [{
-            id: `act_${row.id}`,
-            sourceKey: 'IMPORTED',
-            sourceName: campaignName,
-            sourceCategory: campaignName,
-            date: dateStr
-          }],
-          cpf: row.cpf || undefined,
-          extraData: Object.keys(extra).length > 0 ? extra : undefined
-        };
+    const sortLeads = (list: ConsolidatedLead[]): ConsolidatedLead[] => {
+      return list.sort((a, b) => {
+        let diff = 0;
+        if (sortField === 'nome') {
+          diff = (a.nome || '').localeCompare(b.nome || '');
+        } else if (sortField === 'cidade') {
+          diff = (a.cidade || '').localeCompare(b.cidade || '');
+        } else if (sortField === 'estado') {
+          diff = (a.estado || '').localeCompare(b.estado || '');
+        } else if (sortField === 'totalActions') {
+          diff = (a.totalActions || 0) - (b.totalActions || 0);
+        } else {
+          const tA = a.lastDate ? new Date(a.lastDate).getTime() : 0;
+          const tB = b.lastDate ? new Date(b.lastDate).getTime() : 0;
+          diff = tA - tB;
+        }
+        return sortOrder === 'asc' ? diff : -diff;
       });
+    };
 
+    const ORGANIC_CAMPAIGNS = new Set([
+      'Apoio Capital',
+      'Material Oficial',
+      'Material Dobrada',
+      'Projeto de Lei',
+      'Abaixo-Assinado',
+      'Maus-Tratos',
+      'Jogo Resgate'
+    ]);
+
+    const isOrganicOnly = campaign !== 'all' && ORGANIC_CAMPAIGNS.has(campaign);
+    const isMultiActionOnly = multiAction === 'multi' || multiAction === 'super';
+
+    if (isOrganicOnly || isMultiActionOnly) {
+      const filtered = this.organicLeads.filter(matchesLead);
+      sortLeads(filtered);
+      const totalFiltered = filtered.length;
       const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
-
+      const offset = (page - 1) * pageSize;
+      const paged = filtered.slice(offset, offset + pageSize);
       return {
-        leads,
+        leads: paged,
         totalFiltered,
         totalPages,
         currentPage: page,
@@ -994,10 +1283,110 @@ class LeadsConsolidationManager {
         summary: this.summary,
         isReady: true
       };
-    } catch (err) {
-      console.error('Error in getPaginatedLeads on-demand query:', err);
-      return this.getPaginatedLeadsFallback(params);
     }
+
+    const db = await getDbConnection();
+    if (!db) {
+      const filtered = this.organicLeads.filter(matchesLead);
+      sortLeads(filtered);
+      return {
+        leads: filtered.slice((page - 1) * pageSize, page * pageSize),
+        totalFiltered: this.summary.totalUniqueLeads || filtered.length,
+        totalPages: Math.ceil((this.summary.totalUniqueLeads || filtered.length) / pageSize) || 1,
+        currentPage: page,
+        pageSize,
+        summary: this.summary,
+        isReady: true
+      };
+    }
+
+    const matchingOrganic = this.organicLeads.filter(matchesLead);
+    sortLeads(matchingOrganic);
+
+    const whereClauses: string[] = [];
+    const queryParams: any[] = [];
+
+    if (q) {
+      const qWild = `%${q}%`;
+      whereClauses.push('(nome LIKE ? OR whatsapp LIKE ? OR email LIKE ? OR cidade LIKE ? OR campanha LIKE ?)');
+      queryParams.push(qWild, qWild, qWild, qWild, qWild);
+    }
+    if (estado && estado !== 'ALL') {
+      whereClauses.push('estado = ?');
+      queryParams.push(estado);
+    }
+    if (cidade && cidade !== 'ALL') {
+      whereClauses.push('cidade = ?');
+      queryParams.push(cidade);
+    }
+    if (campaign && campaign !== 'all') {
+      whereClauses.push('campanha = ?');
+      queryParams.push(campaign);
+    }
+    if (addressOnly) {
+      whereClauses.push("(cep IS NOT NULL AND cep != '' OR endereco IS NOT NULL AND endereco != '' OR bairro IS NOT NULL AND bairro != '')");
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    let orderCol = 'id';
+    if (sortField === 'nome') orderCol = 'nome';
+    else if (sortField === 'cidade') orderCol = 'cidade';
+    else if (sortField === 'estado') orderCol = 'estado';
+    else if (sortField === 'createdAt' || sortField === 'lastDate' || sortField === 'firstDate') orderCol = 'id';
+
+    let importedCount = 0;
+    if (whereClauses.length > 0) {
+      const [countResult] = await db.query<any[]>(`SELECT COUNT(*) as total FROM imported_leads ${whereSql}`, queryParams);
+      importedCount = countResult?.[0]?.total ? Number(countResult[0].total) : 0;
+    } else {
+      importedCount = this.summary.totalUniqueLeads;
+    }
+
+    const totalFiltered = whereClauses.length > 0
+      ? matchingOrganic.length + importedCount
+      : this.summary.totalUniqueLeads;
+    const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+
+    const offset = (page - 1) * pageSize;
+    let finalLeads: ConsolidatedLead[] = [];
+
+    if (offset < matchingOrganic.length) {
+      const organicSlice = matchingOrganic.slice(offset, offset + pageSize);
+      finalLeads.push(...organicSlice);
+
+      const remainingNeeded = pageSize - finalLeads.length;
+      if (remainingNeeded > 0) {
+        const [rows] = await db.query<any[]>(`
+          SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData
+          FROM imported_leads
+          ${whereSql}
+          ORDER BY ${orderCol} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}
+          LIMIT ? OFFSET 0
+        `, [...queryParams, remainingNeeded]);
+        finalLeads.push(...this.mapImportedRows(rows || []));
+      }
+    } else {
+      const dbOffset = offset - matchingOrganic.length;
+      const [rows] = await db.query<any[]>(`
+        SELECT id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, createdAt, extraData
+        FROM imported_leads
+        ${whereSql}
+        ORDER BY ${orderCol} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}
+        LIMIT ? OFFSET ?
+      `, [...queryParams, pageSize, dbOffset]);
+      finalLeads.push(...this.mapImportedRows(rows || []));
+    }
+
+    return {
+      leads: finalLeads,
+      totalFiltered,
+      totalPages,
+      currentPage: page,
+      pageSize,
+      summary: this.summary,
+      isReady: true
+    };
   }
 
   private getPaginatedLeadsFallback(params: any) {
@@ -1086,6 +1475,58 @@ class LeadsConsolidationManager {
 
     const headers = ['Nome', 'WhatsApp', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Campanha', 'Data'];
     res.write('﻿' + headers.join(',') + '\r\n');
+
+    const ORGANIC_CAMPAIGNS = new Set([
+      'Apoio Capital',
+      'Material Oficial',
+      'Material Dobrada',
+      'Projeto de Lei',
+      'Abaixo-Assinado',
+      'Maus-Tratos',
+      'Jogo Resgate'
+    ]);
+    const isOrganicOnly = campaign !== 'all' && ORGANIC_CAMPAIGNS.has(campaign);
+
+    // Stream organic leads matching filters
+    for (const lead of this.organicLeads) {
+      if (q) {
+        const matchName = lead.nome.toLowerCase().includes(q.toLowerCase());
+        const matchPhone = (lead.whatsapp || '').includes(q);
+        const matchEmail = (lead.email || '').toLowerCase().includes(q.toLowerCase());
+        const matchCity = (lead.cidade || '').toLowerCase().includes(q.toLowerCase());
+        if (!matchName && !matchPhone && !matchEmail && !matchCity) continue;
+      }
+      if (estado && estado !== 'ALL' && lead.estado !== estado) continue;
+      if (cidade && cidade !== 'ALL' && lead.cidade.toLowerCase() !== cidade.toLowerCase()) continue;
+      if (campaign && campaign !== 'all') {
+        if (!lead.distinctCampaigns.includes(campaign) && !lead.actions.some(a => a.sourceCategory === campaign)) continue;
+      }
+      if (addressOnly) {
+        if (!lead.cep && !lead.endereco && !lead.bairro) continue;
+      }
+
+      const row = [
+        `"${(lead.nome || '').replace(/"/g, '""')}"`,
+        `"${(lead.whatsapp || '').replace(/"/g, '""')}"`,
+        `"${(lead.cpf || '').replace(/"/g, '""')}"`,
+        `"${(lead.email || '').replace(/"/g, '""')}"`,
+        `"${(lead.cidade || '').replace(/"/g, '""')}"`,
+        `"${(lead.estado || '').replace(/"/g, '""')}"`,
+        `"${(lead.cep || '').replace(/"/g, '""')}"`,
+        `"${(lead.endereco || '').replace(/"/g, '""')}"`,
+        `"${(lead.numero || '').replace(/"/g, '""')}"`,
+        `"${(lead.complemento || '').replace(/"/g, '""')}"`,
+        `"${(lead.bairro || '').replace(/"/g, '""')}"`,
+        `"${(lead.distinctCampaigns.join('; ') || '').replace(/"/g, '""')}"`,
+        `"${lead.lastDate ? new Date(lead.lastDate).toLocaleDateString('pt-BR') : ''}"`
+      ];
+      res.write(row.join(',') + '\r\n');
+    }
+
+    if (isOrganicOnly) {
+      res.end();
+      return;
+    }
 
     const db = await getDbConnection();
     if (!db) {
@@ -1182,7 +1623,6 @@ class LeadsConsolidationManager {
   }
 
   public addLeadDirectly(leadData: any, action: LeadAction) {
-    // Fast O(1) merge for new incoming web form submissions
     const rawName = formatDisplayTitleName(leadData.nome || leadData.nomeCompleto);
     const phone = normalizePhone(leadData.whatsapp || leadData.telefone || leadData.celular || '');
     const email = normalizeEmail(leadData.email || '');
@@ -1202,39 +1642,25 @@ class LeadsConsolidationManager {
     }
     const itemCpf = directCpf || extractedCpf || '';
 
-    const isFullName = isValidFullNameForMatching(rawName);
-    const nKey = isFullName ? normalizeKey(rawName) : '';
-    const cKey = normalizeKey(cidade);
-    const nameCityKey = nKey && nKey.length >= 6 && cKey ? `${nKey}__${cKey}` : '';
-
     let targetIdx = -1;
-    if (phone && phone.length >= 8 && this.phoneMap.has(phone)) {
-      targetIdx = this.phoneMap.get(phone)!;
-    } else if (itemCpf && itemCpf.length >= 11 && this.cpfMap.has(itemCpf)) {
-      targetIdx = this.cpfMap.get(itemCpf)!;
-    } else if (email && email.includes('@') && this.emailMap.has(email)) {
-      const candidateIdx = this.emailMap.get(email)!;
-      const candidate = this.consolidatedLeads[candidateIdx];
-      const candPhone = candidate.whatsapp;
-      const hasPhoneConflict = !!(phone && phone.length >= 8 && candPhone && candPhone.length >= 8 && phone !== candPhone);
-      if (!hasPhoneConflict) {
-        targetIdx = candidateIdx;
+    for (let i = 0; i < this.organicLeads.length; i++) {
+      const candidate = this.organicLeads[i];
+      if (phone && phone.length >= 8 && candidate.whatsapp === phone) {
+        targetIdx = i;
+        break;
       }
-    } else if (nameCityKey && this.nameCityMap.has(nameCityKey)) {
-      const candidateIdx = this.nameCityMap.get(nameCityKey)!;
-      const candidate = this.consolidatedLeads[candidateIdx];
-      const candPhone = candidate.whatsapp;
-      const candEmail = candidate.email;
-      const hasPhoneConflict = !!(phone && phone.length >= 8 && candPhone && candPhone.length >= 8 && phone !== candPhone);
-      const hasEmailConflict = !!(email && email.includes('@') && candEmail && candEmail.includes('@') && email !== candEmail);
-
-      if (!hasPhoneConflict && !hasEmailConflict) {
-        targetIdx = candidateIdx;
+      if (itemCpf && itemCpf.length >= 11 && candidate.cpf === itemCpf) {
+        targetIdx = i;
+        break;
+      }
+      if (email && email.includes('@') && candidate.email === email) {
+        targetIdx = i;
+        break;
       }
     }
 
     if (targetIdx !== -1) {
-      const existing = this.consolidatedLeads[targetIdx];
+      const existing = this.organicLeads[targetIdx];
       existing.actions.unshift(action);
       if (!existing.distinctCampaigns.includes(action.sourceCategory)) {
         existing.distinctCampaigns.push(action.sourceCategory);
@@ -1247,23 +1673,12 @@ class LeadsConsolidationManager {
       if (new Date(date).getTime() > new Date(existing.lastDate).getTime()) {
         existing.lastDate = date;
       }
-      if (leadData.extraData && typeof leadData.extraData === 'object') {
-        if (!existing.cpf && itemCpf) existing.cpf = itemCpf;
-        if (!existing.extraData) existing.extraData = {};
-        Object.assign(existing.extraData, cleanExtra);
-
-        if (!existing.otherPhones) existing.otherPhones = [];
-        for (const ep of extractedPhones) {
-          if (ep !== existing.whatsapp && !existing.otherPhones.includes(ep)) {
-            existing.otherPhones.push(ep);
-          }
-        }
+      this.summary.totalSubmissions = (this.summary.totalSubmissions || 0) + 1;
+      if (existing.isMultiAction) {
+        this.summary.multiActionLeadsCount = (this.summary.multiActionLeadsCount || 0) + 1;
       }
-      this.rebuildIndexes();
     } else {
-      const newIdx = this.consolidatedLeads.length;
       const newOtherPhones = extractedPhones.filter(p => p !== phone);
-
       const newLead: ConsolidatedLead = {
         id: leadData.id ? String(leadData.id) : `lead_${Date.now()}`,
         nome: rawName,
@@ -1288,12 +1703,14 @@ class LeadsConsolidationManager {
         extraData: Object.keys(cleanExtra).length > 0 ? cleanExtra : undefined
       };
       updateLeadMultiActionStatus(newLead);
-      this.consolidatedLeads.unshift(newLead);
-      this.rebuildIndexes();
+      this.organicLeads.unshift(newLead);
+      this.summary.totalUniqueLeads = (this.summary.totalUniqueLeads || 0) + 1;
+      this.summary.totalSubmissions = (this.summary.totalSubmissions || 0) + 1;
     }
 
-    // Refresh summary
-    this.computeSummaryFromDatabase().catch(console.error);
+    try {
+      fs.writeFileSync(SUMMARY_CACHE_FILE, JSON.stringify(this.summary, null, 2), 'utf-8');
+    } catch {}
     this.updateRefreshState("Tudo pronto!");
   }
 
