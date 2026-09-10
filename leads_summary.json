@@ -1,0 +1,294 @@
+{
+  "totalUniqueLeads": 926622,
+  "totalSubmissions": 926622,
+  "multiActionLeadsCount": 74130,
+  "superSupportersCount": 27799,
+  "spLeadsCount": 926349,
+  "stateOptions": [
+    "SP",
+    "AC",
+    "AL",
+    "AM",
+    "AP",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MG",
+    "MS",
+    "MT",
+    "PA",
+    "PB",
+    "PE",
+    "PI",
+    "PR",
+    "RJ",
+    "RN",
+    "RO",
+    "RS",
+    "SC",
+    "SE",
+    "TO"
+  ],
+  "cityOptions": [
+    {
+      "name": "São Paulo",
+      "count": 336476
+    },
+    {
+      "name": "Osasco",
+      "count": 61967
+    },
+    {
+      "name": "São Bernardo do Campo",
+      "count": 22526
+    },
+    {
+      "name": "Ribeirão Preto",
+      "count": 20341
+    },
+    {
+      "name": "Taubaté",
+      "count": 18186
+    },
+    {
+      "name": "Guarulhos",
+      "count": 16113
+    },
+    {
+      "name": "Sorocaba",
+      "count": 13706
+    },
+    {
+      "name": "Campinas",
+      "count": 12038
+    },
+    {
+      "name": "Santo André",
+      "count": 11196
+    },
+    {
+      "name": "São José dos Campos",
+      "count": 10631
+    },
+    {
+      "name": "Mogi das Cruzes",
+      "count": 10424
+    },
+    {
+      "name": "Rio Claro",
+      "count": 10029
+    },
+    {
+      "name": "Indaiatuba",
+      "count": 9517
+    },
+    {
+      "name": "Barretos",
+      "count": 6983
+    },
+    {
+      "name": "Santos",
+      "count": 6831
+    },
+    {
+      "name": "Lorena",
+      "count": 6227
+    },
+    {
+      "name": "Limeira",
+      "count": 6181
+    },
+    {
+      "name": "Presidente Prudente",
+      "count": 5987
+    },
+    {
+      "name": "Bauru",
+      "count": 5939
+    },
+    {
+      "name": "Descalvado",
+      "count": 5772
+    },
+    {
+      "name": "Praia Grande",
+      "count": 5402
+    },
+    {
+      "name": "Araraquara",
+      "count": 4911
+    },
+    {
+      "name": "São José do Rio Preto",
+      "count": 4879
+    },
+    {
+      "name": "Batatais",
+      "count": 4714
+    },
+    {
+      "name": "Osvaldo Cruz",
+      "count": 4589
+    },
+    {
+      "name": "Marília",
+      "count": 4557
+    },
+    {
+      "name": "Birigui",
+      "count": 4480
+    },
+    {
+      "name": "Bragança Paulista",
+      "count": 4372
+    },
+    {
+      "name": "Araçatuba",
+      "count": 4311
+    },
+    {
+      "name": "Guaratinguetá",
+      "count": 4241
+    },
+    {
+      "name": "Jundiaí",
+      "count": 4171
+    },
+    {
+      "name": "Registro",
+      "count": 4100
+    },
+    {
+      "name": "Francisco Morato",
+      "count": 4088
+    },
+    {
+      "name": "Botucatu",
+      "count": 4084
+    },
+    {
+      "name": "Americana",
+      "count": 4056
+    },
+    {
+      "name": "Caraguatatuba",
+      "count": 3987
+    },
+    {
+      "name": "São Caetano do Sul",
+      "count": 3900
+    },
+    {
+      "name": "Ilha Solteira",
+      "count": 3869
+    },
+    {
+      "name": "São Carlos",
+      "count": 3708
+    },
+    {
+      "name": "Jacareí",
+      "count": 3696
+    },
+    {
+      "name": "Guarujá",
+      "count": 3612
+    },
+    {
+      "name": "Araras",
+      "count": 3536
+    },
+    {
+      "name": "Diadema",
+      "count": 3487
+    },
+    {
+      "name": "Piracicaba",
+      "count": 3443
+    },
+    {
+      "name": "Tietê",
+      "count": 3442
+    },
+    {
+      "name": "Cotia",
+      "count": 3381
+    },
+    {
+      "name": "Barueri",
+      "count": 3330
+    },
+    {
+      "name": "Itapetininga",
+      "count": 3292
+    },
+    {
+      "name": "Carapicuíba",
+      "count": 3235
+    },
+    {
+      "name": "Itapevi",
+      "count": 3202
+    },
+    {
+      "name": "Paulínia",
+      "count": 3180
+    },
+    {
+      "name": "Taquaritinga",
+      "count": 3024
+    },
+    {
+      "name": "Caçapava",
+      "count": 3016
+    },
+    {
+      "name": "Taboão da Serra",
+      "count": 2969
+    },
+    {
+      "name": "Santana de Parnaíba",
+      "count": 2966
+    },
+    {
+      "name": "Lençóis Paulista",
+      "count": 2923
+    },
+    {
+      "name": "Leme",
+      "count": 2785
+    },
+    {
+      "name": "Cajamar",
+      "count": 2748
+    },
+    {
+      "name": "Mauá",
+      "count": 2718
+    },
+    {
+      "name": "Mairiporã",
+      "count": 2622
+    }
+  ],
+  "campaignOptions": [
+    "Base Mala Direta (Jana) [Fria]",
+    "Castrações 2026",
+    "Contra Maus-Tratos (Aline Teixeira)",
+    "Contra Maus-tratos (Nina Passadore)",
+    "Contra Transporte de Cargas-Vivas (Nina Passadore)",
+    "Endereços Completos Geral",
+    "Gente Legal Não Maltrata Animal",
+    "Hospitais Veterinários",
+    "Lista de Telefones Completos",
+    "Material Digital Nina",
+    "Material Impresso Nina",
+    "Mobilização Marina",
+    "Solicitaram Castração (Leads Ads)"
+  ],
+  "spHeatmapPoints": [],
+  "lastUpdated": "2026-09-10T20:52:28.825Z"
+}

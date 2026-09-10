@@ -734,9 +734,9 @@ async function startServer() {
     }
   });
 
-  app.get('/api/leads/paginated', (req, res) => {
+  app.get('/api/leads/paginated', async (req, res) => {
     try {
-      const result = leadsConsolidator.getPaginatedLeads(req.query as any);
+      const result = await leadsConsolidator.getPaginatedLeads(req.query as any);
       return res.json(result);
     } catch (err) {
       console.error("Error in /api/leads/paginated:", err);
@@ -744,9 +744,9 @@ async function startServer() {
     }
   });
 
-  app.get('/api/leads/physical-materials', (req, res) => {
+  app.get('/api/leads/physical-materials', async (req, res) => {
     try {
-      const result = leadsConsolidator.getPhysicalMaterials((req.query.adesivoFilter as any) || 'ALL');
+      const result = await leadsConsolidator.getPhysicalMaterials((req.query.adesivoFilter as any) || 'ALL');
       return res.json(result);
     } catch (err) {
       console.error("Error in /api/leads/physical-materials:", err);
@@ -754,7 +754,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/leads/export', (req, res) => {
+  app.get('/api/leads/export', async (req, res) => {
     try {
       const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
       const filename = `leads_consolidados_${new Date().toISOString().slice(0, 10)}.${format}`;
@@ -762,68 +762,12 @@ async function startServer() {
       if (format === 'csv') {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.flushHeaders(); // Envia os cabeçalhos imediatamente para evitar timeout
-        
-        const params = req.query as any;
-        const resData = leadsConsolidator.getPaginatedLeads({ ...params, page: 1, pageSize: 10000000 });
-        
-        const headers = ['Nome', 'WhatsApp', 'Outros Telefones', 'CPF', 'Email', 'Cidade', 'Estado', 'CEP', 'Endereço', 'Número', 'Complemento', 'Bairro', 'Total de Ações', 'Multi-Campanha', 'Super Apoiador', 'Campanhas', 'Primeiro Contato', 'Último Contato', 'Dados Extras'];
-        res.write('\uFEFF' + headers.join(',') + '\n');
-        
-        // Strict runtime deduplication guard for streamed CSV
-        const exportedPhones = new Set<string>();
-        const exportedEmails = new Set<string>();
-        const exportedCpfs = new Set<string>();
-        const exportedNameCities = new Set<string>();
-
-        for (const l of resData.leads) {
-          const p = normalizePhone(l.whatsapp);
-          const e = normalizeEmail(l.email);
-          const cpf = normalizeCpf(l.cpf);
-          const isFull = isValidFullNameForMatching(l.nome);
-          const nc = isFull ? `${normalizeKey(l.nome)}__${normalizeKey(l.cidade)}` : '';
-
-          if (p && p.length >= 8 && exportedPhones.has(p)) continue;
-          if (cpf && cpf.length >= 11 && exportedCpfs.has(cpf)) continue;
-          if (e && e.includes('@') && exportedEmails.has(e)) continue;
-          if (nc && nc.length >= 8 && !p && !e && exportedNameCities.has(nc)) continue;
-
-          if (p && p.length >= 8) exportedPhones.add(p);
-          if (cpf && cpf.length >= 11) exportedCpfs.add(cpf);
-          if (e && e.includes('@')) exportedEmails.add(e);
-          if (nc) exportedNameCities.add(nc);
-
-          const extraFieldsStr = l.extraData ? Object.entries(l.extraData).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
-          const otherPhonesStr = l.otherPhones && l.otherPhones.length > 0 ? l.otherPhones.join('; ') : '';
-
-          const row = [
-            `"${(l.nome || '').replace(/"/g, '""')}"`,
-            `"${(l.whatsapp || '').replace(/"/g, '""')}"`,
-            `"${otherPhonesStr.replace(/"/g, '""')}"`,
-            `"${(l.cpf || '').replace(/"/g, '""')}"`,
-            `"${(l.email || '').replace(/"/g, '""')}"`,
-            `"${(l.cidade || '').replace(/"/g, '""')}"`,
-            `"${(l.estado || '').replace(/"/g, '""')}"`,
-            `"${(l.cep || '').replace(/"/g, '""')}"`,
-            `"${(l.endereco || '').replace(/"/g, '""')}"`,
-            `"${(l.numero || '').replace(/"/g, '""')}"`,
-            `"${(l.complemento || '').replace(/"/g, '""')}"`,
-            `"${(l.bairro || '').replace(/"/g, '""')}"`,
-            l.totalActions,
-            l.isMultiAction ? 'SIM' : 'NÃO',
-            l.isSuperSupporter ? 'SIM' : 'NÃO',
-            `"${l.distinctCampaigns.join(' | ').replace(/"/g, '""')}"`,
-            `"${l.firstDate ? new Date(l.firstDate).toLocaleDateString('pt-BR') : ''}"`,
-            `"${l.lastDate ? new Date(l.lastDate).toLocaleDateString('pt-BR') : ''}"`,
-            `"${extraFieldsStr.replace(/"/g, '""')}"`
-          ];
-          res.write(row.join(',') + '\n');
-        }
-        res.end();
+        res.flushHeaders();
+        await leadsConsolidator.streamCsvExport(req.query as any, res);
         return;
       }
 
-      const result = leadsConsolidator.exportLeads(req.query as any, format);
+      const result = await leadsConsolidator.exportLeads(req.query as any, format);
       
       if (result.type === 'zip') {
         const zipFilename = `leads_consolidados_${new Date().toISOString().slice(0, 10)}.zip`;
@@ -901,7 +845,7 @@ async function startServer() {
     try {
       // Returns high-performance summary & page 1 to prevent client crashes
       const summary = leadsConsolidator.getSummary();
-      const page1 = leadsConsolidator.getPaginatedLeads({ page: 1, pageSize: 100 });
+      const page1 = await leadsConsolidator.getPaginatedLeads({ page: 1, pageSize: 100 });
       return res.json({
         summary,
         leads: page1.leads,
@@ -1327,6 +1271,9 @@ async function startServer() {
 
   app.listen(PORT as number, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+    leadsConsolidator.initializeInBackground().catch(err => {
+      console.warn('Background leads consolidation notice:', err);
+    });
   });
 }
 
