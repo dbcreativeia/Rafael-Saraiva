@@ -377,25 +377,6 @@ export const NinaPassadore = () => {
 
                 <button
                   type="button"
-                  onClick={() => handleTipoMaterialSelect('impresso')}
-                  className={`flex-1 p-6 rounded-2xl border-4 transition-all ${
-                    tipoMaterial === 'impresso'
-                      ? 'border-[#ebb430] bg-[#ebb430]/10 scale-105 shadow-lg'
-                      : 'border-gray-200 hover:border-[#ebb430]/40 hover:bg-gray-50'
-                  }`}
-                >
-                  <Box className={`w-12 h-12 mx-auto mb-4 ${tipoMaterial === 'impresso' ? 'text-[#ebb430]' : 'text-[#102b31]/40'}`} />
-                  <h3 className={`text-xl font-black uppercase mb-1 ${tipoMaterial === 'impresso' ? 'text-[#ebb430]' : 'text-[#102b31]/80'}`}>Material Impresso</h3>
-                  <div className="mb-2">
-                    <span className="bg-[#102b31] text-[#ebb430] text-[10px] sm:text-xs font-black px-2 py-1 rounded uppercase tracking-wider animate-pulse">
-                      Receba em Casa
-                    </span>
-                  </div>
-                  <p className="text-[#102b31]/60 text-sm font-medium">O kit campanha contém colinha, adesivo, santinho e santão. Disponível apenas para SP.</p>
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => handleTipoMaterialSelect('digital')}
                   className={`flex-1 p-6 rounded-2xl border-4 transition-all ${
                     tipoMaterial === 'digital'
