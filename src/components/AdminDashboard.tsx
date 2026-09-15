@@ -21,6 +21,7 @@ import { MaterialDobradaTab } from './admin/MaterialDobradaTab';
 import { JogoTab } from './admin/JogoTab';
 import { ProtocolosTab } from './admin/ProtocolosTab';
 import { CentralLeadsTab } from './admin/CentralLeadsTab';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export type AdminTab = 'LEADS' | 'APOIO' | 'MATERIAL' | 'MATERIAL_DOBRADA' | 'JOGO' | 'PROTOCOLOS';
 
@@ -287,7 +288,9 @@ export const AdminDashboard: React.FC = () => {
         {/* Conteúdo Dinâmico da Aba Selecionada */}
         <div className="transition-opacity duration-200">
           {activeTab === 'LEADS' && (
-            <CentralLeadsTab refreshTrigger={refreshTrigger} />
+            <ErrorBoundary fallbackTitle="Erro ao carregar a Central de Leads">
+              <CentralLeadsTab refreshTrigger={refreshTrigger} />
+            </ErrorBoundary>
           )}
 
           {activeTab === 'APOIO' && (

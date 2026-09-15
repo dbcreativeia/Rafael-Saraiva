@@ -137,7 +137,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     stateOptions: [],
     cityOptions: [],
     campaignOptions: [],
-    spHeatmapPoints: []
+    spHeatmapPoints: [],
+    isReady: true
   });
 
   const [serverLeads, setServerLeads] = useState<ConsolidatedLead[]>([]);
@@ -234,7 +235,16 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
-        setSummary(data);
+        if (data && typeof data === 'object' && !data.error) {
+          setSummary(prev => ({
+            ...prev,
+            ...data,
+            stateOptions: Array.isArray(data.stateOptions) ? data.stateOptions : prev.stateOptions,
+            cityOptions: Array.isArray(data.cityOptions) ? data.cityOptions : prev.cityOptions,
+            campaignOptions: Array.isArray(data.campaignOptions) ? data.campaignOptions : prev.campaignOptions,
+            spHeatmapPoints: Array.isArray(data.spHeatmapPoints) ? data.spHeatmapPoints : prev.spHeatmapPoints
+          }));
+        }
       }
     } catch (err) {
       console.warn("Erro ao buscar resumo de leads:", err);
@@ -258,11 +268,18 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       const res = await fetch(`/api/leads/paginated?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setServerLeads(data.leads || []);
-        setTotalFiltered(data.totalFiltered || 0);
-        setTotalPages(data.totalPages || 1);
-        if (data.summary && (!summary.totalUniqueLeads || summary.totalUniqueLeads === 0)) {
-          setSummary(data.summary);
+        setServerLeads(Array.isArray(data.leads) ? data.leads : []);
+        setTotalFiltered(Number(data.totalFiltered) || 0);
+        setTotalPages(Number(data.totalPages) || 1);
+        if (data.summary && typeof data.summary === 'object' && !data.summary.error) {
+          setSummary(prev => ({
+            ...prev,
+            ...data.summary,
+            stateOptions: Array.isArray(data.summary.stateOptions) ? data.summary.stateOptions : prev.stateOptions,
+            cityOptions: Array.isArray(data.summary.cityOptions) ? data.summary.cityOptions : prev.cityOptions,
+            campaignOptions: Array.isArray(data.summary.campaignOptions) ? data.summary.campaignOptions : prev.campaignOptions,
+            spHeatmapPoints: Array.isArray(data.summary.spHeatmapPoints) ? data.summary.spHeatmapPoints : prev.spHeatmapPoints
+          }));
         }
       }
     } catch (err) {
@@ -891,19 +908,19 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   };
 
   // Synchronized variables connected directly to server state
-  const totalUniqueLeads = summary.totalUniqueLeads;
-  const totalSubmissions = summary.totalSubmissions;
-  const multiActionLeadsCount = summary.multiActionLeadsCount;
-  const superSupportersCount = summary.superSupportersCount;
-  const spLeadsCount = summary.spLeadsCount;
-  const stateOptions = summary.stateOptions || [];
-  const cityOptions = summary.cityOptions || [];
-  const campaignOptions = summary.campaignOptions || [];
-  const spHeatmapPoints = summary.spHeatmapPoints || [];
-  const paginatedLeads = serverLeads;
-  const filteredPhysicalMaterials = physicalMaterials;
-  const filteredLeads = serverLeads;
-  const consolidatedLeads = serverLeads;
+  const totalUniqueLeads = summary?.totalUniqueLeads ?? 0;
+  const totalSubmissions = summary?.totalSubmissions ?? 0;
+  const multiActionLeadsCount = summary?.multiActionLeadsCount ?? 0;
+  const superSupportersCount = summary?.superSupportersCount ?? 0;
+  const spLeadsCount = summary?.spLeadsCount ?? 0;
+  const stateOptions = Array.isArray(summary?.stateOptions) ? summary.stateOptions : [];
+  const cityOptions = Array.isArray(summary?.cityOptions) ? summary.cityOptions : [];
+  const campaignOptions = Array.isArray(summary?.campaignOptions) ? summary.campaignOptions : [];
+  const spHeatmapPoints = Array.isArray(summary?.spHeatmapPoints) ? summary.spHeatmapPoints : [];
+  const paginatedLeads = Array.isArray(serverLeads) ? serverLeads : [];
+  const filteredPhysicalMaterials = Array.isArray(physicalMaterials) ? physicalMaterials : [];
+  const filteredLeads = Array.isArray(serverLeads) ? serverLeads : [];
+  const consolidatedLeads = Array.isArray(serverLeads) ? serverLeads : [];
 
   const previousIsRefreshing = useRef(summary?.isRefreshing);
   useEffect(() => {
@@ -1562,7 +1579,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
                   <option value="">Todos os Estados ({stateOptions.length})</option>
-                  {stateOptions.map(st => (
+                  {(stateOptions || []).map(st => (
                     <option key={st} value={st}>
                       {st === 'SP' ? 'São Paulo (SP) ⭐️' : st}
                     </option>
@@ -1581,11 +1598,16 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
                   <option value="">Todas as Cidades</option>
-                  {cityOptions.map(c => (
-                    <option key={c.name} value={c.name}>
-                      {c.name} ({c.count})
-                    </option>
-                  ))}
+                  {(cityOptions || []).map((c: any, idx: number) => {
+                    const cName = typeof c === 'string' ? c : (c?.name || '');
+                    const cCount = typeof c === 'object' && c?.count !== undefined ? ` (${c.count})` : '';
+                    if (!cName) return null;
+                    return (
+                      <option key={cName + '_' + idx} value={cName}>
+                        {cName}{cCount}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1617,7 +1639,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
                   <option value="all">Todos os Canais / Campanhas</option>
-                  {campaignOptions.map(camp => (
+                  {(campaignOptions || []).map(camp => (
                     <option key={camp} value={camp}>{camp}</option>
                   ))}
                 </select>
@@ -1751,35 +1773,39 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {paginatedLeads.map((lead) => {
-                      const cleanPhone = lead.whatsapp.replace(/\D/g, '');
+                    {paginatedLeads.map((lead, leadIdx) => {
+                      if (!lead) return null;
+                      const rawPhone = lead.whatsapp ? String(lead.whatsapp) : '';
+                      const cleanPhone = rawPhone.replace(/\D/g, '');
                       const waLink = cleanPhone ? `https://wa.me/55${cleanPhone.startsWith('55') ? cleanPhone.substring(2) : cleanPhone}` : null;
+                      const campaigns = Array.isArray(lead.distinctCampaigns) ? lead.distinctCampaigns : [];
+                      const otherPhones = Array.isArray(lead.otherPhones) ? lead.otherPhones : [];
 
                       return (
                         <tr 
-                          key={lead.id} 
+                          key={lead.id || leadIdx} 
                           className="hover:bg-blue-50/40 transition-colors group cursor-pointer"
                           onClick={() => setSelectedLead(lead)}
                         >
                           {/* Coluna 1: Nome & Badges de Engajamento */}
                           <td className="py-3.5 px-4">
                             <div className="font-black text-gray-900 text-sm group-hover:text-blue-600 transition-colors">
-                              {lead.nome}
+                              {lead.nome || 'Sem nome'}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1">
                               {lead.isSuperSupporter ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
                                   <Sparkles className="w-3 h-3 text-purple-600" />
-                                  Super Apoiador ({lead.totalActions})
+                                  Super Apoiador ({lead.totalActions || 1})
                                 </span>
                               ) : lead.isMultiAction ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
                                   <Flame className="w-3 h-3 text-amber-600" />
-                                  Multi-Campanha ({lead.totalActions})
+                                  Multi-Campanha ({lead.totalActions || 1})
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100">
-                                  1 ação
+                                  {lead.totalActions || 1} ação
                                 </span>
                               )}
                             </div>
@@ -1814,9 +1840,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                                 </div>
                               ) : null}
 
-                              {lead.otherPhones && lead.otherPhones.length > 0 && (
-                                <div className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 inline-block font-bold" title={`Outros telefones: ${lead.otherPhones.join(', ')}`}>
-                                  +{lead.otherPhones.length} {lead.otherPhones.length === 1 ? 'outro fone' : 'outros fones'}
+                              {otherPhones.length > 0 && (
+                                <div className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 inline-block font-bold" title={`Outros telefones: ${otherPhones.join(', ')}`}>
+                                  +{otherPhones.length} {otherPhones.length === 1 ? 'outro fone' : 'outros fones'}
                                 </div>
                               )}
 
@@ -1844,7 +1870,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                           {/* Coluna 4: Badges de Campanhas */}
                           <td className="py-3.5 px-4">
                             <div className="flex flex-wrap gap-1.5 max-w-[280px]">
-                              {lead.distinctCampaigns.map((cat, idx) => (
+                              {campaigns.map((cat, idx) => (
                                 <span
                                   key={idx}
                                   className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${getCampaignBadgeStyle(cat)}`}
@@ -1863,7 +1889,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                                 ? 'bg-amber-500 text-white shadow-xs'
                                 : 'bg-gray-100 text-gray-700'
                             }`}>
-                              {lead.totalActions}
+                              {lead.totalActions || 1}
                             </span>
                           </td>
 
@@ -1872,7 +1898,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                             <div className="font-bold text-gray-800 text-[11px]">
                               {formatDate(lead.lastDate)}
                             </div>
-                            {lead.firstDate !== lead.lastDate && (
+                            {lead.firstDate && lead.lastDate && lead.firstDate !== lead.lastDate && (
                               <div className="text-[10px] text-gray-400 font-medium">
                                 1ª ação: {formatDate(lead.firstDate).split(' ')[0]}
                               </div>
@@ -2010,7 +2036,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   </div>
                   {selectedLead.whatsapp && (
                     <a
-                      href={`https://wa.me/55${selectedLead.whatsapp.replace(/\D/g, '')}`}
+                      href={`https://wa.me/55${String(selectedLead.whatsapp).replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-[11px] transition-colors"
@@ -2056,7 +2082,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   </div>
                 )}
 
-                {selectedLead.otherPhones && selectedLead.otherPhones.length > 0 && (
+                {Array.isArray(selectedLead.otherPhones) && selectedLead.otherPhones.length > 0 && (
                   <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
                     <div className="text-gray-400 font-bold uppercase text-[10px]">Outros Telefones</div>
                     <div className="space-y-1 mt-1">
@@ -2064,7 +2090,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                         <div key={pIdx} className="text-xs font-bold text-gray-800 flex items-center justify-between">
                           <span>{p}</span>
                           <a
-                            href={`https://wa.me/55${p.replace(/\D/g, '')}`}
+                            href={`https://wa.me/55${String(p).replace(/\D/g, '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[10px] text-green-600 hover:text-green-800 font-bold ml-2"
@@ -2099,7 +2125,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               <div className="flex items-center justify-between gap-2 mb-4">
                 <h3 className="text-sm font-black uppercase tracking-tight text-gray-900 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-blue-600" />
-                  Histórico de Participações & Formulários ({selectedLead.actions.length})
+                  Histórico de Participações & Formulários ({selectedLead.actions?.length || 0})
                 </h3>
                 <span className="text-xs font-bold text-gray-400">
                   Ordenado por data mais recente
@@ -2107,7 +2133,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </div>
 
               <div className="space-y-3 relative before:absolute before:left-5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gray-200">
-                {selectedLead.actions.map((action, idx) => {
+                {(selectedLead.actions || []).map((action, idx) => {
+                  if (!action) return null;
+                  const details = action.details || {};
                   return (
                     <div 
                       key={action.id || idx}
@@ -2122,10 +2150,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                           <div className="flex items-center gap-2">
                             <span className="font-black text-gray-900 text-sm">
-                              {action.sourceName}
+                              {action.sourceName || 'Ação'}
                             </span>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getCampaignBadgeStyle(action.sourceCategory)}`}>
-                              {action.sourceCategory}
+                              {action.sourceCategory || '-'}
                             </span>
                           </div>
                           <span className="text-xs font-bold text-gray-500 flex items-center gap-1">
@@ -2136,29 +2164,29 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
                         {/* Detalhes específicos dessa submissão */}
                         <div className="mt-2.5 pt-2.5 border-t border-gray-200/60 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
-                          {action.details.tipoMaterial && (
+                          {details.tipoMaterial && (
                             <div>
-                              <strong className="text-gray-800">Tipo de Material:</strong> {action.details.tipoMaterial === 'impresso' ? '📦 Material Impresso' : '📱 Material Digital'}
+                              <strong className="text-gray-800">Tipo de Material:</strong> {details.tipoMaterial === 'impresso' ? '📦 Material Impresso' : '📱 Material Digital'}
                             </div>
                           )}
-                          {action.details.adesivoPerfurado && (
+                          {details.adesivoPerfurado && (
                             <div className="text-purple-700 font-bold">
                               ✨ Solicitou Adesivo Perfurado de Carro
                             </div>
                           )}
-                          {action.details.usuario && (
+                          {details.usuario && (
                             <div>
-                              <strong className="text-gray-800">Usuário no Jogo:</strong> @{action.details.usuario}
+                              <strong className="text-gray-800">Usuário no Jogo:</strong> @{details.usuario}
                             </div>
                           )}
-                          {action.details.score !== undefined && action.details.score > 0 && (
+                          {details.score !== undefined && details.score > 0 && (
                             <div>
-                              <strong className="text-gray-800">Pontuação Máxima:</strong> {action.details.score} pts
+                              <strong className="text-gray-800">Pontuação Máxima:</strong> {details.score} pts
                             </div>
                           )}
-                          {action.details.endereco && (
+                          {details.endereco && (
                             <div className="sm:col-span-2">
-                              <strong className="text-gray-800">Endereço Informado Nesta Ação:</strong> {action.details.endereco}, {action.details.numero || 'S/N'} {action.details.bairro ? `(${action.details.bairro})` : ''} - {action.details.cidade}/{action.details.estado} {action.details.cep ? `• CEP: ${action.details.cep}` : ''}
+                              <strong className="text-gray-800">Endereço Informado Nesta Ação:</strong> {details.endereco}, {details.numero || 'S/N'} {details.bairro ? `(${details.bairro})` : ''} - {details.cidade || ''}/{details.estado || ''} {details.cep ? `• CEP: ${details.cep}` : ''}
                             </div>
                           )}
                         </div>
@@ -2235,7 +2263,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
-                            {new Date(base.lastImport).toLocaleDateString('pt-BR')}
+                            {base.lastImport ? formatDate(base.lastImport) : '-'}
                           </span>
                         </div>
                       </div>
