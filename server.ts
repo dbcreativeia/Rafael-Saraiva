@@ -1,3 +1,4 @@
+import { getCrmSummary, getCrmPaginated } from "./crmService.ts";
 import express from "express";
 import compression from "compression";
 import path from "path";
@@ -619,36 +620,13 @@ async function startServer() {
   const deletingCampaigns = new Set<string>();
 
   app.get('/api/imported-leads/campaigns', async (req, res) => {
-    if (db) {
-      try {
-        const [rows]: any = await db.query('SELECT campanha, COUNT(*) as count, MAX(createdAt) as lastImport FROM imported_leads GROUP BY campanha ORDER BY lastImport DESC');
-        const activeRows = (rows as any[]).filter(r => !deletingCampaigns.has(r.campanha));
-        return res.json(activeRows);
-      } catch (err) {
-        return res.status(500).json({ error: "DB erro" });
-      }
+    try {
+      const db = await getDbConnection();
+      const [rows] = await db.query('SELECT campaign_name as campanha, COUNT(*) as count, MAX(created_at) as lastImport FROM crm_actions GROUP BY campaign_name ORDER BY lastImport DESC');
+      return res.json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: "DB erro" });
     }
-    
-    // In-memory fallback
-    const campaignsMap = new Map();
-    importedLeadsData.forEach(lead => {
-      if (!campaignsMap.has(lead.campanha)) {
-        campaignsMap.set(lead.campanha, { count: 0, lastImport: lead.createdAt });
-      }
-      const c = campaignsMap.get(lead.campanha);
-      c.count += 1;
-      if (new Date(lead.createdAt) > new Date(c.lastImport)) {
-        c.lastImport = lead.createdAt;
-      }
-    });
-    const result = Array.from(campaignsMap.entries())
-      .filter(([campanha]) => !deletingCampaigns.has(campanha))
-      .map(([campanha, data]) => ({
-        campanha,
-        count: data.count,
-        lastImport: data.lastImport
-      }));
-    return res.json(result);
   });
 
   app.delete('/api/imported-leads/campaign/:campaignName', async (req, res) => {
@@ -724,19 +702,19 @@ async function startServer() {
   });
 
   // High-performance Consolidated Leads Endpoints
-  app.get('/api/leads/summary', (req, res) => {
+  app.get('/api/leads/summary', async (req, res) => {
     try {
-      const summary = leadsConsolidator.getSummary();
+      const summary = await getCrmSummary();
       return res.json(summary);
     } catch (err) {
       console.error("Error in /api/leads/summary:", err);
-      return res.status(500).json({ error: "Erro ao obter resumo de leads" });
+      return res.status(500).json({ error: "Erro ao obter resumo de leads", details: String(err) });
     }
   });
 
   app.get('/api/leads/paginated', async (req, res) => {
     try {
-      const result = await leadsConsolidator.getPaginatedLeads(req.query as any);
+      const result = await getCrmPaginated(req.query);
       return res.json(result);
     } catch (err) {
       console.error("Error in /api/leads/paginated:", err);
@@ -783,6 +761,34 @@ async function startServer() {
       console.error("Error in /api/leads/export:", err);
       if (!res.headersSent) {
         return res.status(500).json({ error: "Erro ao exportar leads" });
+      } else {
+        res.end();
+      }
+    }
+  });
+
+  app.get('/api/leads/export-materials', async (req, res) => {
+    try {
+      const adesivoFilter = (req.query.adesivoFilter as any) || 'ALL';
+      const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
+      const filename = `materiais_fisicos_${adesivoFilter.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.${format}`;
+
+      if (format === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.flushHeaders();
+        await leadsConsolidator.streamCsvExportMaterials(adesivoFilter, res);
+        return;
+      }
+
+      const buffer = await leadsConsolidator.exportMaterialsXlsx(adesivoFilter);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(buffer);
+    } catch (err) {
+      console.error("Error in /api/leads/export-materials:", err);
+      if (!res.headersSent) {
+        return res.status(500).json({ error: "Erro ao exportar materiais" });
       } else {
         res.end();
       }
