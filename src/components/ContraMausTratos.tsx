@@ -654,7 +654,7 @@ const AdminView = () => {
           </div>
           
           <div className="flex gap-4">
-            <button onClick={fetchData} className="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-xl font-bold border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm">
+            <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-xl font-bold border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm">
               Atualizar
             </button>
             <button onClick={exportDataExcel} className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-sm">

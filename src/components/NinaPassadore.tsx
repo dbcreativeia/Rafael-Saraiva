@@ -254,7 +254,8 @@ export const NinaPassadore = () => {
     const files = [
       'Fechado-Com-Eles.png',
       'Santao-Dobrada.jpg',
-      'Colinha_Dobrada.jpeg'
+      'Colinha_Dobrada.jpeg',
+      'StoriesDobrada.jpeg'
     ];
 
     for (let i = 0; i < files.length; i++) {
@@ -673,13 +674,23 @@ export const NinaPassadore = () => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={triggerDownload}
-                    className="bg-[#ebb430] hover:bg-[#d4a22b] text-[#102b31] font-black py-3.5 px-8 rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-xl mb-10 transform hover:-translate-y-0.5"
-                  >
-                    <Download className="w-5 h-5" />
-                    Caso o download não inicie automaticamente, clique aqui para baixar a arte!
-                  </button>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10 w-full max-w-xl">
+                    <a
+                      href="/material-digital-dobrada-rafael-nina.zip"
+                      download="material-digital-dobrada-rafael-nina.zip"
+                      className="w-full sm:w-auto flex-1 bg-[#ebb430] hover:bg-[#d4a22b] text-[#102b31] font-black py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center text-sm"
+                    >
+                      <Download className="w-5 h-5" />
+                      Baixar Pacote Completo (.ZIP)
+                    </a>
+                    <button
+                      onClick={triggerDownload}
+                      className="w-full sm:w-auto flex-1 bg-[#102b31] hover:bg-[#183d46] text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md text-center text-sm cursor-pointer"
+                    >
+                      <Download className="w-4 h-4 text-[#ebb430]" />
+                      Baixar Imagens Soltas
+                    </button>
+                  </div>
                   
                   {/* Galeria de Miniaturas das Artes */}
                   <div ref={thumbnailsRef} className="w-full max-w-2xl bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-200 text-left">
@@ -694,11 +705,12 @@ export const NinaPassadore = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
                       {[
                         { name: 'Fechado-Com-Eles.png', label: 'Fechado com Eles' },
                         { name: 'Santao-Dobrada.jpg', label: 'Santão' },
-                        { name: 'Colinha_Dobrada.jpeg', label: 'Colinha Dobrada' }
+                        { name: 'Colinha_Dobrada.jpeg', label: 'Colinha Dobrada' },
+                        { name: 'StoriesDobrada.jpeg', label: 'Stories Dobrada' }
                       ].map((file) => (
                         <div
                           key={file.name}

@@ -15,6 +15,8 @@ import { ContraMausTratos } from './components/ContraMausTratos';
 import { MaterialCampanha } from './components/MaterialCampanha';
 import { NinaPassadore } from './components/NinaPassadore';
 import { Jogo } from './components/Jogo';
+import { MaterialDigitalDirect } from './components/MaterialDigitalDirect';
+import { MaterialDigitalDobradaDirect } from './components/MaterialDigitalDobradaDirect';
 
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Navbar } from './components/Navbar';
@@ -251,6 +253,8 @@ function App() {
         <Route path="/codigoanimal" element={<CodigoAnimal />} />
         <Route path="/contramaustratos" element={<ContraMausTratos />} />
         <Route path="/material" element={<MaterialCampanha />} />
+        <Route path="/digital" element={<MaterialDigitalDirect />} />
+        <Route path="/digitaldobrada" element={<MaterialDigitalDobradaDirect />} />
         <Route path="/ninapassadore" element={<NinaPassadore />} />
         <Route path="/jogo" element={<Jogo />} />
         <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />

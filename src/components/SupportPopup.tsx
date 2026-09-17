@@ -64,65 +64,64 @@ export const SupportPopup: React.FC = () => {
     // Não exibir dentro do painel administrativo ou na página do jogo
     if (location.pathname === '/jogo' || location.pathname === '/admin' || location.hash === '#admin') return;
 
-    // Verificar se a pessoa já preencheu ou já fechou na sessão atual
+    // Apenas modo de teste se expressamente solicitado via parâmetro (?testpopup ou #testpopup)
+    const isExplicitTestMode = 
+      location.search.includes('testpopup') || 
+      location.hash.includes('testpopup');
+
+    // Se o usuário já enviou o formulário, bloqueio permanente (nunca mais reabre)
     const hasSubmitted = localStorage.getItem('popup_apoio_submitted');
-    const hasDismissed = sessionStorage.getItem('popup_apoio_dismissed');
-    if (hasSubmitted === 'true' || hasDismissed === 'true') {
+    if (hasSubmitted === 'true' && !isExplicitTestMode) {
       return;
     }
 
-    let triggered = false;
+    // Respeito ao Fechamento: Se fechou na sessão atual OU nas últimas 24 horas, não exibir
+    const isDismissedSession = sessionStorage.getItem('popup_apoio_dismissed') === 'true';
+    const dismissedUntil = localStorage.getItem('popup_apoio_dismissed_until');
+    const isDismissed24h = dismissedUntil ? Date.now() < parseInt(dismissedUntil, 10) : false;
+    if ((isDismissedSession || isDismissed24h) && !isExplicitTestMode) {
+      return;
+    }
+
+    const pageLoadTime = Date.now();
 
     const triggerPopup = () => {
-      if (triggered) return;
-      const isSub = localStorage.getItem('popup_apoio_submitted');
-      const isDism = sessionStorage.getItem('popup_apoio_dismissed');
-      if (isSub === 'true' || isDism === 'true') return;
+      // Só abre se o usuário estiver há pelo menos 8 segundos navegando na página
+      if (Date.now() - pageLoadTime < 8000) return;
+      if (isOpen) return;
 
-      triggered = true;
+      if (!isExplicitTestMode) {
+        if (sessionStorage.getItem('popup_apoio_dismissed') === 'true') return;
+        const until = localStorage.getItem('popup_apoio_dismissed_until');
+        if (until && Date.now() < parseInt(until, 10)) return;
+        if (localStorage.getItem('popup_apoio_submitted') === 'true') return;
+      }
+
       setIsOpen(true);
     };
 
-    // 1. Detecção de intenção de saída no Desktop (Cursor do mouse se movendo para fora do topo da janela)
-    const handleMouseLeave = (e: MouseEvent) => {
-      // Quando o cursor sobe para a barra de navegação/fechar aba
-      if (e.clientY <= 25 || e.clientY === 0 || !e.relatedTarget) {
+    // Gatilho suave de saída (Exit-Intent real): cursor saindo pelo topo da janela do navegador
+    const handleDocMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 0) {
         triggerPopup();
       }
     };
 
-    // 2. Detecção no Mobile e Desktop: Scroll rápido para cima após navegar na página
-    let lastScrollY = window.scrollY;
-    let maxScrollY = window.scrollY;
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY > maxScrollY) {
-        maxScrollY = currentScrollY;
-      }
-      // Se rolou pelo menos 400px para baixo e agora subiu rapidamente mais de 150px
-      if (maxScrollY > 400 && lastScrollY - currentScrollY > 150) {
-        triggerPopup();
-      }
-      lastScrollY = currentScrollY;
-    };
-
-    // 3. Detecção de mudança de aba / visibilidade (quando o usuário vai trocar de aba/sair)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && maxScrollY > 200) {
+    const handleMouseOut = (e: MouseEvent) => {
+      const to = e.relatedTarget || (e as any).toElement;
+      if (!to && e.clientY <= 0) {
         triggerPopup();
       }
     };
 
-    document.addEventListener('mouseleave', handleMouseLeave);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('mouseleave', handleDocMouseLeave);
+    document.addEventListener('mouseout', handleMouseOut);
 
     return () => {
-      document.removeEventListener('mouseleave', handleMouseLeave);
-      window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('mouseleave', handleDocMouseLeave);
+      document.removeEventListener('mouseout', handleMouseOut);
     };
-  }, [location.hash, location.pathname]);
+  }, [location.hash, location.pathname, location.search]);
 
   const formatPhone = (val: string) => {
     const nums = val.replace(/\D/g, '');
@@ -245,8 +244,11 @@ export const SupportPopup: React.FC = () => {
         throw new Error('Falha ao enviar cadastro.');
       }
 
-      // Marcar como preenchido no localStorage para não aparecer mais
+      // Marcar como preenchido no localStorage (bloqueio permanente)
       localStorage.setItem('popup_apoio_submitted', 'true');
+      localStorage.setItem('popup_apoio_submitted_at', Date.now().toString());
+      sessionStorage.setItem('popup_apoio_dismissed', 'true');
+      localStorage.setItem('popup_apoio_dismissed_until', (Date.now() + 365 * 24 * 60 * 60 * 1000).toString());
 
       // Salvar dados no perfil local para auto-completar na página de Material Impresso ou Digital
       const nameParts = nome.trim().split(/\s+/);
@@ -287,22 +289,23 @@ export const SupportPopup: React.FC = () => {
   };
 
   const handleClose = () => {
+    // Não reabre durante toda a sessão atual de navegação E pelas próximas 24 horas
     sessionStorage.setItem('popup_apoio_dismissed', 'true');
+    localStorage.setItem('popup_apoio_dismissed_until', (Date.now() + 24 * 60 * 60 * 1000).toString());
     setIsOpen(false);
   };
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div 
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 pt-24 sm:pt-28 md:pt-32 pb-6 sm:pb-8 overflow-y-auto bg-dark/80 backdrop-blur-sm"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            handleClose();
-          }
-        }}
-      >
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 pt-24 sm:pt-28 md:pt-32 pb-6 sm:pb-8 overflow-y-auto bg-dark/80 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleClose();
+            }
+          }}
+        >
         <motion.div
           initial={{ opacity: 0, scale: 0.92, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -547,7 +550,8 @@ export const SupportPopup: React.FC = () => {
             )}
           </div>
         </motion.div>
-      </div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };

@@ -36,11 +36,11 @@ export const Jogo = () => {
   const [authError, setAuthError] = useState('');
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number | undefined>(undefined);
   const audioCtxRef = useRef<AudioContext | null>(null);
   
   const gameStateRef = useRef({
-    status: 'HOME',
+    status: 'HOME' as 'HOME' | 'PLAYING' | 'GAMEOVER' | 'WIN',
     playerX: 150,
     targetX: 150,
     distance: 0,
@@ -608,7 +608,8 @@ export const Jogo = () => {
       ctx.textAlign = 'right';
       ctx.fillText(`Pts: ${state.score}`, width - 15, 15);
 
-      if (state.status === 'GAMEOVER' || state.status === 'WIN') {
+      const currentStatus: string = state.status;
+      if (currentStatus === 'GAMEOVER' || currentStatus === 'WIN') {
         setFinalScore(state.score);
         setResultType(state.status as 'WIN' | 'GAMEOVER');
         setEndGameFact(MANDATE_FACTS[Math.floor(Math.random() * MANDATE_FACTS.length)]);
