@@ -1,4 +1,5 @@
 import { getDbConnection, queryWithRetry } from "./db.ts";
+import { sanitizeGeo } from "./geoSanitizer.ts";
 
 let cachedSummary: any = null;
 let cachedSummaryTime = 0;
@@ -257,6 +258,9 @@ export const recordLeadAction = async (data: {
     const cep = (data.cep || '').trim();
     const createdAt = data.createdAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+    // Sanitizar estritamente cidade e estado (regras IBGE / normalização oficial)
+    const { cidade: cleanCidade, estado: cleanEstado } = sanitizeGeo(data.cidade, data.estado, cep);
+
     // 1. Procurar lead existente pela hierarquia estrita:
     // 1º WhatsApp (chave primária)
     // 2º E-mail (chave secundária)
@@ -303,13 +307,13 @@ export const recordLeadAction = async (data: {
           numero = CASE WHEN numero = '' OR numero IS NULL THEN ? ELSE numero END,
           complemento = CASE WHEN complemento = '' OR complemento IS NULL THEN ? ELSE complemento END,
           bairro = CASE WHEN bairro = '' OR bairro IS NULL THEN ? ELSE bairro END,
-          cidade = CASE WHEN cidade = '' OR cidade IS NULL THEN ? ELSE cidade END,
-          estado = CASE WHEN estado = '' OR estado IS NULL THEN ? ELSE estado END
+          cidade = CASE WHEN cidade = '' OR cidade IS NULL OR cidade = 'São Paulo' THEN ? ELSE cidade END,
+          estado = ?
         WHERE id = ?
       `, [
         nome, whatsapp, email, cep,
         data.endereco || '', data.numero || '', data.complemento || '',
-        data.bairro || '', data.cidade || '', data.estado || '',
+        data.bairro || '', cleanCidade, cleanEstado,
         leadId
       ]);
     } else {
@@ -321,7 +325,7 @@ export const recordLeadAction = async (data: {
       `, [
         leadId, nome, whatsapp, email, cep,
         data.endereco || '', data.numero || '', data.complemento || '',
-        data.bairro || '', data.cidade || '', data.estado || '',
+        data.bairro || '', cleanCidade, cleanEstado,
         createdAt
       ]);
     }
