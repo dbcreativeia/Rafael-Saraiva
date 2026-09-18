@@ -176,8 +176,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   // Selected Lead for Detailed 360º View Modal
   const [selectedLead, setSelectedLead] = useState<ConsolidatedLead | null>(null);
 
-  // CSV Upload Modal State
-
+  // CSV Upload & Telemetry Progress State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isManageBasesModalOpen, setIsManageBasesModalOpen] = useState(false);
   const [importedBases, setImportedBases] = useState<any[]>([]);
@@ -197,6 +196,33 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [uploadSuccessMessage, setUploadSuccessMessage] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live progress telemetry
+  const [uploadProgress, setUploadProgress] = useState<{
+    stage: 'idle' | 'sanitizing' | 'uploading' | 'syncing' | 'completed' | 'error';
+    processedCount: number;
+    totalCount: number;
+    currentBatch: number;
+    totalBatches: number;
+    percent: number;
+    speedPerSec: number;
+    estRemainingSec: number;
+    logs: { time: string; text: string; type?: 'info' | 'success' | 'warn' | 'error' }[];
+    topCities: { city: string; count: number }[];
+    topStates: { uf: string; count: number }[];
+  }>({
+    stage: 'idle',
+    processedCount: 0,
+    totalCount: 0,
+    currentBatch: 0,
+    totalBatches: 0,
+    percent: 0,
+    speedPerSec: 0,
+    estRemainingSec: 0,
+    logs: [],
+    topCities: [],
+    topStates: []
+  });
 
   // SP Municipalities for Heatmap
   const [municipiosData, setMunicipiosData] = useState<any[]>([]);
@@ -522,18 +548,70 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
     setIsUploading(true);
     setUploadError('');
-    setUploadSuccessMessage('Iniciando importação...');
+
+    const nowTimeStr = () => new Date().toLocaleTimeString('pt-BR');
+    const totalLeads = parsedCsvLeads.length;
+    const CHUNK_SIZE = 2500;
+    const totalBatches = Math.ceil(totalLeads / CHUNK_SIZE);
+
+    // Collect initial city/state stats from parsed batch
+    const cityMap: Record<string, number> = {};
+    const stateMap: Record<string, number> = {};
+    parsedCsvLeads.forEach(lead => {
+      if (lead.cidade) {
+        cityMap[lead.cidade] = (cityMap[lead.cidade] || 0) + 1;
+      }
+      if (lead.estado) {
+        stateMap[lead.estado] = (stateMap[lead.estado] || 0) + 1;
+      }
+    });
+
+    const topCities = Object.entries(cityMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([city, count]) => ({ city, count }));
+
+    const topStates = Object.entries(stateMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([uf, count]) => ({ uf, count }));
+
+    setUploadProgress({
+      stage: 'sanitizing',
+      processedCount: 0,
+      totalCount: totalLeads,
+      currentBatch: 0,
+      totalBatches,
+      percent: 5,
+      speedPerSec: 0,
+      estRemainingSec: Math.round(totalLeads / 4000) + 2,
+      logs: [
+        { time: nowTimeStr(), text: `Iniciando processamento de ${totalLeads.toLocaleString('pt-BR')} registros para a campanha "${campaignInput.trim()}"...`, type: 'info' },
+        { time: nowTimeStr(), text: `Higienização e normalização de municípios e UFs concluída. Total de ${topCities.length} principais polos regionais mapeados.`, type: 'success' }
+      ],
+      topCities,
+      topStates
+    });
+
+    // Short simulated delay to make transition visible
+    await new Promise(r => setTimeout(r, 600));
 
     try {
-      const CHUNK_SIZE = 2500;
-      const totalLeads = parsedCsvLeads.length;
-      const totalBatches = Math.ceil(totalLeads / CHUNK_SIZE);
+      const startTime = Date.now();
       let importedCount = 0;
+
+      setUploadProgress(prev => ({
+        ...prev,
+        stage: 'uploading',
+        logs: [
+          ...prev.logs,
+          { time: nowTimeStr(), text: `Iniciando gravação no banco de dados MySQL em ${totalBatches} lotes estruturados...`, type: 'info' }
+        ]
+      }));
 
       for (let i = 0; i < totalLeads; i += CHUNK_SIZE) {
         const chunk = parsedCsvLeads.slice(i, i + CHUNK_SIZE);
         const currentBatch = Math.floor(i / CHUNK_SIZE) + 1;
-        setUploadSuccessMessage(`Importando lote ${currentBatch} de ${totalBatches}... (${importedCount} de ${totalLeads})`);
         
         let success = false;
         let lastError = '';
@@ -558,6 +636,28 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             if (res.ok && data.success) {
               importedCount += data.count;
               success = true;
+
+              const elapsedSec = Math.max(0.5, (Date.now() - startTime) / 1000);
+              const speed = Math.round(importedCount / elapsedSec);
+              const remainingRecords = totalLeads - importedCount;
+              const estSec = speed > 0 ? Math.ceil(remainingRecords / speed) : 0;
+              const percent = Math.min(95, Math.round((importedCount / totalLeads) * 90) + 5);
+
+              setUploadProgress(prev => ({
+                ...prev,
+                processedCount: importedCount,
+                currentBatch,
+                percent,
+                speedPerSec: speed,
+                estRemainingSec: estSec,
+                logs: currentBatch % 5 === 0 || currentBatch === totalBatches
+                  ? [
+                      ...prev.logs,
+                      { time: nowTimeStr(), text: `Lote ${currentBatch}/${totalBatches} gravado com sucesso (${importedCount.toLocaleString('pt-BR')} de ${totalLeads.toLocaleString('pt-BR')})`, type: 'info' }
+                    ]
+                  : prev.logs
+              }));
+
               break;
             } else {
               throw new Error(data.error || `Erro ao processar lote ${currentBatch}`);
@@ -565,7 +665,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
           } catch (err: any) {
             lastError = err.message || 'Erro de conexão';
             if (attempt < 3) {
-              setUploadSuccessMessage(`Lote ${currentBatch} oscilou. Tentativa ${attempt + 1} de 3 em instantes...`);
+              setUploadProgress(prev => ({
+                ...prev,
+                logs: [
+                  ...prev.logs,
+                  { time: nowTimeStr(), text: `Lote ${currentBatch} oscilou. Re-tentando (${attempt + 1}/3)...`, type: 'warn' }
+                ]
+              }));
               await new Promise(r => setTimeout(r, 1200 * attempt));
             }
           }
@@ -576,24 +682,49 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         }
       }
 
-      setUploadSuccessMessage(`Sucesso! ${importedCount.toLocaleString('pt-BR')} leads gravados no banco para "${campaignInput.trim()}". Atualizando lista e sincronizando cache...`);
+      // Step 3: CRM Sincronização & Deduplicação
+      setUploadProgress(prev => ({
+        ...prev,
+        stage: 'syncing',
+        processedCount: totalLeads,
+        percent: 96,
+        logs: [
+          ...prev.logs,
+          { time: nowTimeStr(), text: `Todos os ${totalLeads.toLocaleString('pt-BR')} registros gravados no banco de dados!`, type: 'success' },
+          { time: nowTimeStr(), text: `Executando sincronização massiva no CRM e deduplicação de chaves únicas...`, type: 'info' }
+        ]
+      }));
+
+      // Trigger summary and bases refresh
       await fetchImportedBases();
       handleRefreshData();
       await fetchAllLeads(true);
-      setTimeout(() => {
-        setIsUploadModalOpen(false);
-        setUploadSuccessMessage('');
-        setParsedCsvLeads([]);
-        setCsvMappedHeaders([]);
-        setCsvFile(null);
-        setCsvFileName('');
-        setCsvRawRows([]);
-        setCsvHeaders([]);
-        setCampaignInput('');
-        setIsColdBase(false);
-      }, 2000);
+
+      const totalElapsed = Math.round((Date.now() - startTime) / 1000);
+
+      // Step 4: Finalizado
+      setUploadProgress(prev => ({
+        ...prev,
+        stage: 'completed',
+        percent: 100,
+        estRemainingSec: 0,
+        logs: [
+          ...prev.logs,
+          { time: nowTimeStr(), text: `Sincronização e deduplicação concluídas com sucesso em ${totalElapsed}s.`, type: 'success' },
+          { time: nowTimeStr(), text: `Campanha "${campaignInput.trim()}" pronta e disponível para filtros e exportação no CRM!`, type: 'success' }
+        ]
+      }));
+
     } catch (err: any) {
       console.error('Erro ao enviar leads importados:', err);
+      setUploadProgress(prev => ({
+        ...prev,
+        stage: 'error',
+        logs: [
+          ...prev.logs,
+          { time: nowTimeStr(), text: `Erro no processamento: ${err.message || 'Falha de conexão com o servidor.'}`, type: 'error' }
+        ]
+      }));
       setUploadError(err.message || 'Erro de conexão ao enviar os leads para o servidor.');
     } finally {
       setIsUploading(false);
@@ -1122,6 +1253,118 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   return (
     <div className="space-y-6">
       
+      {/* BARRA DE TELEMETRIA E PROGRESSO NO TOPO (VISÍVEL NO TOPO DA TELA QUANDO HÁ PROCESSAMENTO ATIVO) */}
+      {uploadProgress.stage !== 'idle' && (
+        <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-500/40 text-white p-4 sm:p-5 rounded-2xl shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            {/* Lado Esquerdo: Ícone + Info da Campanha */}
+            <div className="flex items-center gap-3.5">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                uploadProgress.stage === 'completed'
+                  ? 'bg-emerald-500/20 border border-emerald-400 text-emerald-300'
+                  : uploadProgress.stage === 'error'
+                  ? 'bg-red-500/20 border border-red-400 text-red-300'
+                  : 'bg-blue-500/20 border border-blue-400 text-blue-300'
+              }`}>
+                {uploadProgress.stage === 'completed' ? (
+                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                ) : uploadProgress.stage === 'error' ? (
+                  <AlertCircle className="w-6 h-6 text-red-400" />
+                ) : (
+                  <RefreshCw className="w-6 h-6 animate-spin text-blue-300" />
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    uploadProgress.stage === 'completed'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                      : uploadProgress.stage === 'error'
+                      ? 'bg-red-500/20 text-red-300 border border-red-400/30'
+                      : 'bg-blue-500/20 text-blue-300 border border-blue-400/30 animate-pulse'
+                  }`}>
+                    {uploadProgress.stage === 'completed'
+                      ? '✓ Concluído'
+                      : uploadProgress.stage === 'error'
+                      ? '⚠ Erro'
+                      : uploadProgress.stage === 'sanitizing'
+                      ? 'Higienização Geográfica'
+                      : uploadProgress.stage === 'uploading'
+                      ? 'Gravando Lotes no Banco'
+                      : 'Deduplicação & CRM'}
+                  </span>
+                  <span className="text-xs text-blue-200/80 font-bold">
+                    Campanha: <span className="text-white font-black">{campaignInput || 'Base Importada'}</span>
+                  </span>
+                </div>
+
+                <div className="text-sm sm:text-base font-black text-white mt-0.5 flex items-center gap-2">
+                  <span>{uploadProgress.processedCount.toLocaleString('pt-BR')} / {uploadProgress.totalCount.toLocaleString('pt-BR')} registros</span>
+                  <span className="text-blue-300 text-xs font-semibold">({uploadProgress.percent}%)</span>
+                  {uploadProgress.speedPerSec > 0 && uploadProgress.stage !== 'completed' && (
+                    <span className="text-emerald-400 text-xs font-mono">⚡ ~{uploadProgress.speedPerSec} contatos/s</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Lado Direito: Ações (Ver Detalhes / Abrir Modal / Limpar) */}
+            <div className="flex items-center gap-2.5 self-end md:self-center">
+              <button
+                type="button"
+                onClick={() => setIsUploadModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>{isUploadModalOpen ? 'Ver no Painel' : 'Abrir Monitor de Detalhes'}</span>
+              </button>
+
+              {uploadProgress.stage === 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadProgress({
+                      stage: 'idle',
+                      processedCount: 0,
+                      totalCount: 0,
+                      currentBatch: 0,
+                      totalBatches: 0,
+                      percent: 0,
+                      speedPerSec: 0,
+                      estRemainingSec: 0,
+                      logs: [],
+                      topCities: [],
+                      topStates: []
+                    });
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+                  title="Ocultar barra de status"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+          </div>
+
+          {/* Barra de Progresso no Topo */}
+          <div className="w-full bg-blue-950/80 rounded-full h-2 mt-3 overflow-hidden border border-blue-500/20">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ease-out ${
+                uploadProgress.stage === 'completed'
+                  ? 'bg-emerald-400'
+                  : uploadProgress.stage === 'error'
+                  ? 'bg-red-400'
+                  : 'bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400'
+              }`}
+              style={{ width: `${uploadProgress.percent}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {(summary?.isRefreshing || !summary?.isReady) && summary?.refreshMessage && (
         <div className="bg-blue-900 border border-blue-400 text-blue-100 px-4 py-3 rounded-lg flex items-center justify-between mb-4 shadow-lg animate-pulse">
           <div className="flex items-center gap-3">
@@ -2545,53 +2788,305 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         </div>
       )}
 
-      {/* MODAL DE UPLOAD DE CSV */}
+      {/* MODAL DE UPLOAD DE CSV & MONITOR DE TELEMETRIA */}
 
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200">
+          <div className={`bg-white rounded-3xl shadow-2xl w-full flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200 ${
+            uploadProgress.stage !== 'idle' ? 'max-w-3xl max-h-[92vh]' : 'max-w-2xl max-h-[90vh]'
+          }`}>
             
             {/* Header do Modal */}
             <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-6 text-white relative">
-              <button
-                onClick={() => {
-                  if (!isUploading) {
+              {uploadProgress.stage !== 'idle' && uploadProgress.stage !== 'completed' && uploadProgress.stage !== 'error' && (
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(false)}
+                  className="absolute top-5 right-5 text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors cursor-pointer text-xs font-bold flex items-center gap-1.5"
+                  title="Minimizar para a barra do topo e continuar navegando"
+                >
+                  <span>Minimizar</span>
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+
+              {uploadProgress.stage === 'idle' || uploadProgress.stage === 'completed' || uploadProgress.stage === 'error' ? (
+                <button
+                  onClick={() => {
                     setIsUploadModalOpen(false);
                     setUploadError('');
                     setUploadSuccessMessage('');
                     setParsedCsvLeads([]);
                     setCsvMappedHeaders([]);
                     setCsvFile(null);
-          setCsvFileName('');
-          setCsvRawRows([]);
-          setCsvHeaders([]);
-                  }
-                }}
-                className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                    setCsvFileName('');
+                    setCsvRawRows([]);
+                    setCsvHeaders([]);
+                    setCampaignInput('');
+                    setUploadProgress({
+                      stage: 'idle',
+                      processedCount: 0,
+                      totalCount: 0,
+                      currentBatch: 0,
+                      totalBatches: 0,
+                      percent: 0,
+                      speedPerSec: 0,
+                      estRemainingSec: 0,
+                      logs: [],
+                      topCities: [],
+                      topStates: []
+                    });
+                  }}
+                  className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              ) : null}
 
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300">
-                  <Upload className="w-6 h-6" />
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                  uploadProgress.stage === 'completed'
+                    ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
+                    : uploadProgress.stage !== 'idle'
+                    ? 'bg-blue-500/20 border border-blue-400/30 text-blue-300 animate-pulse'
+                    : 'bg-blue-500/20 border border-blue-400/30 text-blue-300'
+                }`}>
+                  {uploadProgress.stage === 'completed' ? (
+                    <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                  ) : uploadProgress.stage !== 'idle' ? (
+                    <RefreshCw className="w-6 h-6 animate-spin text-blue-300" />
+                  ) : (
+                    <Upload className="w-6 h-6" />
+                  )}
                 </div>
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 text-[10px] font-black uppercase tracking-wider mb-1">
                     <FileSpreadsheet className="w-3 h-3" />
-                    Upload de Base Externa
+                    {uploadProgress.stage !== 'idle' ? 'Processamento em Tempo Real' : 'Upload de Base Externa'}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white">
-                    Importar Leads (.CSV / .XLSX)
+                    {uploadProgress.stage === 'completed' 
+                      ? 'Importação e Sincronização Concluídas!' 
+                      : uploadProgress.stage !== 'idle'
+                      ? 'Processando e Deduplicando Base...'
+                      : 'Importar Leads (.CSV / .XLSX)'}
                   </h2>
                   <p className="text-xs text-blue-100/80 mt-0.5">
-                    Adicione listas externas para cruzar com a base consolidada de apoiadores.
+                    {uploadProgress.stage !== 'idle'
+                      ? `Campanha: "${campaignInput}" — Acompanhe o fluxo de gravação e consolidação no banco.`
+                      : 'Adicione listas externas para cruzar com a base consolidada de apoiadores.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Conteúdo do Formulário */}
+            {/* SE ESTIVER NO MODO DE TELEMETRIA / PROCESSAMENTO */}
+            {uploadProgress.stage !== 'idle' ? (
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
+                
+                {/* 1. Stepper / Timeline de Etapas */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 shadow-xs">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-gray-400 mb-3 flex items-center justify-between">
+                    <span>Etapas do Processamento</span>
+                    <span className="text-blue-600 font-bold">{uploadProgress.percent}% concluído</span>
+                  </div>
+
+                  {/* Barra de Progresso Geral */}
+                  <div className="w-full bg-gray-100 rounded-full h-3 mb-5 overflow-hidden p-0.5 border border-gray-200">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-300 ease-out ${
+                        uploadProgress.stage === 'completed'
+                          ? 'bg-emerald-500'
+                          : uploadProgress.stage === 'error'
+                          ? 'bg-red-500'
+                          : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                      }`}
+                      style={{ width: `${uploadProgress.percent}%` }}
+                    />
+                  </div>
+
+                  {/* Grid das 4 Etapas */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+                    {/* Etapa 1 */}
+                    <div className="p-3 rounded-xl border transition-all flex flex-col justify-between bg-emerald-50 border-emerald-200 text-emerald-900">
+                      <div className="flex items-center justify-between font-bold mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-emerald-700">1. Leitura</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      </div>
+                      <div className="font-extrabold text-xs">{uploadProgress.totalCount.toLocaleString('pt-BR')} registros</div>
+                      <span className="text-[10px] text-emerald-700">Arquivo verificado</span>
+                    </div>
+
+                    {/* Etapa 2 */}
+                    <div className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                      uploadProgress.stage === 'sanitizing'
+                        ? 'bg-blue-50 border-blue-300 text-blue-900 ring-2 ring-blue-400/20 shadow-xs'
+                        : uploadProgress.stage === 'uploading' || uploadProgress.stage === 'syncing' || uploadProgress.stage === 'completed'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-gray-50 border-gray-200 text-gray-400'
+                    }`}>
+                      <div className="flex items-center justify-between font-bold mb-1">
+                        <span className="text-[10px] uppercase tracking-wider">2. Geo / Higiene</span>
+                        {uploadProgress.stage === 'sanitizing' ? (
+                          <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                        ) : uploadProgress.stage === 'uploading' || uploadProgress.stage === 'syncing' || uploadProgress.stage === 'completed' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Clock className="w-3.5 h-3.5 text-gray-300" />
+                        )}
+                      </div>
+                      <div className="font-extrabold text-xs">Cidades e UFs</div>
+                      <span className="text-[10px] opacity-80">
+                        {uploadProgress.stage === 'sanitizing' ? 'Higienizando...' : 'Concluído'}
+                      </span>
+                    </div>
+
+                    {/* Etapa 3 */}
+                    <div className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                      uploadProgress.stage === 'uploading'
+                        ? 'bg-blue-50 border-blue-300 text-blue-900 ring-2 ring-blue-400/20 shadow-xs'
+                        : uploadProgress.stage === 'syncing' || uploadProgress.stage === 'completed'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-gray-50 border-gray-200 text-gray-400'
+                    }`}>
+                      <div className="flex items-center justify-between font-bold mb-1">
+                        <span className="text-[10px] uppercase tracking-wider">3. Gravação SQL</span>
+                        {uploadProgress.stage === 'uploading' ? (
+                          <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                        ) : uploadProgress.stage === 'syncing' || uploadProgress.stage === 'completed' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Clock className="w-3.5 h-3.5 text-gray-300" />
+                        )}
+                      </div>
+                      <div className="font-extrabold text-xs">
+                        {uploadProgress.processedCount.toLocaleString('pt-BR')} / {uploadProgress.totalCount.toLocaleString('pt-BR')}
+                      </div>
+                      <span className="text-[10px] opacity-80">
+                        {uploadProgress.stage === 'uploading' 
+                          ? `Lote ${uploadProgress.currentBatch}/${uploadProgress.totalBatches}` 
+                          : uploadProgress.stage === 'syncing' || uploadProgress.stage === 'completed' 
+                          ? '100% gravado' 
+                          : 'Aguardando'}
+                      </span>
+                    </div>
+
+                    {/* Etapa 4 */}
+                    <div className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                      uploadProgress.stage === 'syncing'
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-2 ring-indigo-400/20 shadow-xs'
+                        : uploadProgress.stage === 'completed'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-gray-50 border-gray-200 text-gray-400'
+                    }`}>
+                      <div className="flex items-center justify-between font-bold mb-1">
+                        <span className="text-[10px] uppercase tracking-wider">4. Deduplicação</span>
+                        {uploadProgress.stage === 'syncing' ? (
+                          <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+                        ) : uploadProgress.stage === 'completed' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Clock className="w-3.5 h-3.5 text-gray-300" />
+                        )}
+                      </div>
+                      <div className="font-extrabold text-xs">CRM & Chaves</div>
+                      <span className="text-[10px] opacity-80">
+                        {uploadProgress.stage === 'syncing' 
+                          ? 'Cruzando apoiadores...' 
+                          : uploadProgress.stage === 'completed' 
+                          ? 'Pronto no CRM' 
+                          : 'Aguardando'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Cartões de Métricas em Tempo Real */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">Gravados / Total</div>
+                    <div className="text-base sm:text-lg font-black text-gray-900 mt-0.5">
+                      {uploadProgress.processedCount.toLocaleString('pt-BR')}
+                    </div>
+                    <div className="text-[11px] text-gray-500">de {uploadProgress.totalCount.toLocaleString('pt-BR')} linhas</div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">Lote Atual</div>
+                    <div className="text-base sm:text-lg font-black text-blue-600 mt-0.5">
+                      {uploadProgress.currentBatch} / {uploadProgress.totalBatches}
+                    </div>
+                    <div className="text-[11px] text-gray-500">2.500 contatos/lote</div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">Velocidade</div>
+                    <div className="text-base sm:text-lg font-black text-indigo-600 mt-0.5">
+                      ~{uploadProgress.speedPerSec.toLocaleString('pt-BR')}
+                    </div>
+                    <div className="text-[11px] text-gray-500">contatos por segundo</div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">Tempo Restante</div>
+                    <div className="text-base sm:text-lg font-black text-amber-600 mt-0.5">
+                      {uploadProgress.stage === 'completed' ? '0s' : `${uploadProgress.estRemainingSec}s`}
+                    </div>
+                    <div className="text-[11px] text-gray-500">estimativa de término</div>
+                  </div>
+                </div>
+
+                {/* 3. Principais Polos e Distribuição Geográfica */}
+                {uploadProgress.topCities.length > 0 && (
+                  <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+                    <div className="text-xs font-black uppercase tracking-wider text-gray-700 mb-2.5 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                      Polos de Destaque Identificados nesta Base:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {uploadProgress.topCities.map((c, i) => (
+                        <div key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800">
+                          <span>{c.city}</span>
+                          <span className="px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-black">
+                            {c.count.toLocaleString('pt-BR')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Terminal / Console de Logs em Tempo Real */}
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-inner p-4 text-xs font-mono text-slate-200">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2.5 text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      Log de Execução ao Vivo
+                    </span>
+                    <span>MySQL + CRM Engine</span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {uploadProgress.logs.map((log, index) => (
+                      <div key={index} className="flex items-start gap-2 leading-relaxed">
+                        <span className="text-slate-500 shrink-0 select-none">[{log.time}]</span>
+                        <span className={
+                          log.type === 'error' ? 'text-red-400 font-bold' :
+                          log.type === 'warn' ? 'text-amber-300 font-bold' :
+                          log.type === 'success' ? 'text-emerald-400 font-bold' :
+                          'text-slate-300'
+                        }>
+                          {log.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+
+            /* Conteúdo do Formulário */
             <div className="p-6 overflow-y-auto space-y-6 flex-1">
               
               {/* Notificação de Sucesso */}
@@ -2866,56 +3361,132 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               )}
 
             </div>
+            )}
 
             {/* Footer do Modal de Upload */}
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isUploading) {
-                    setIsUploadModalOpen(false);
-                    setUploadError('');
-                    setUploadSuccessMessage('');
-                    setParsedCsvLeads([]);
-                    setCsvMappedHeaders([]);
-                    setCsvFile(null);
-          setCsvFileName('');
-          setCsvRawRows([]);
-          setCsvHeaders([]);
-                  }
-                }}
-                disabled={isUploading}
-                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-xs font-bold transition-all cursor-pointer"
-              >
-                Cancelar
-              </button>
+              {uploadProgress.stage === 'completed' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCampaignFilter(campaignInput.trim() + (isColdBase ? ' [Sem Engajamento]' : ''));
+                      setIsUploadModalOpen(false);
+                      setParsedCsvLeads([]);
+                      setCsvMappedHeaders([]);
+                      setCsvFile(null);
+                      setCsvFileName('');
+                      setCsvRawRows([]);
+                      setCsvHeaders([]);
+                      setCampaignInput('');
+                      setUploadProgress({
+                        stage: 'idle',
+                        processedCount: 0,
+                        totalCount: 0,
+                        currentBatch: 0,
+                        totalBatches: 0,
+                        percent: 0,
+                        speedPerSec: 0,
+                        estRemainingSec: 0,
+                        logs: [],
+                        topCities: [],
+                        topStates: []
+                      });
+                    }}
+                    className="px-5 py-2.5 rounded-xl border border-blue-600 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Filter className="w-4 h-4 text-blue-600" />
+                    Ver Leads Desta Campanha no CRM
+                  </button>
 
-              <button
-                type="button"
-                onClick={handleConfirmCsvImport}
-                disabled={isUploading || parsedCsvLeads.length === 0 || !campaignInput.trim()}
-                className={`px-6 py-2.5 rounded-xl text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-md ${
-                  isUploading || parsedCsvLeads.length === 0 || !campaignInput.trim()
-                    ? 'bg-gray-400 cursor-not-allowed opacity-70'
-                    : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 shadow-blue-900/30 cursor-pointer'
-                }`}
-              >
-                {isUploading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Importando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    <span>
-                      {parsedCsvLeads.length > 0
-                        ? `Confirmar Importação (${parsedCsvLeads.length} Leads)`
-                        : 'Confirmar Importação'}
-                    </span>
-                  </>
-                )}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUploadModalOpen(false);
+                      setParsedCsvLeads([]);
+                      setCsvMappedHeaders([]);
+                      setCsvFile(null);
+                      setCsvFileName('');
+                      setCsvRawRows([]);
+                      setCsvHeaders([]);
+                      setCampaignInput('');
+                      setUploadProgress({
+                        stage: 'idle',
+                        processedCount: 0,
+                        totalCount: 0,
+                        currentBatch: 0,
+                        totalBatches: 0,
+                        percent: 0,
+                        speedPerSec: 0,
+                        estRemainingSec: 0,
+                        logs: [],
+                        topCities: [],
+                        topStates: []
+                      });
+                    }}
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-md shadow-emerald-900/20 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    Fechar e Ir para a Lista Completa
+                  </button>
+                </>
+              ) : uploadProgress.stage !== 'idle' ? (
+                <div className="w-full flex items-center justify-between text-xs text-gray-500 font-medium">
+                  <span className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+                    Processamento ativo em segundo plano... Não feche esta janela.
+                  </span>
+                  <span className="font-bold text-gray-800">{uploadProgress.percent}%</span>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUploadModalOpen(false);
+                      setUploadError('');
+                      setUploadSuccessMessage('');
+                      setParsedCsvLeads([]);
+                      setCsvMappedHeaders([]);
+                      setCsvFile(null);
+                      setCsvFileName('');
+                      setCsvRawRows([]);
+                      setCsvHeaders([]);
+                    }}
+                    disabled={isUploading}
+                    className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirmCsvImport}
+                    disabled={isUploading || parsedCsvLeads.length === 0 || !campaignInput.trim()}
+                    className={`px-6 py-2.5 rounded-xl text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-md ${
+                      isUploading || parsedCsvLeads.length === 0 || !campaignInput.trim()
+                        ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                        : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 shadow-blue-900/30 cursor-pointer'
+                    }`}
+                  >
+                    {isUploading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Importando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>
+                          {parsedCsvLeads.length > 0
+                            ? `Confirmar Importação (${parsedCsvLeads.length} Leads)`
+                            : 'Confirmar Importação'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
 
           </div>

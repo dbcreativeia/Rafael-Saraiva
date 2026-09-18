@@ -1,4 +1,4 @@
-import { getCrmSummary, getCrmPaginated, recordLeadAction } from "./crmService.ts";
+import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm } from "./crmService.ts";
 import { sanitizeGeo, sanitizeCity, sanitizeState } from "./geoSanitizer.ts";
 import express from "express";
 import compression from "compression";
@@ -722,12 +722,13 @@ async function startServer() {
       saveImportedLeadsToDisk();
     }
 
-    // Debounce consolidation: só executa 15 segundos após o término de todos os lotes
+    // Debounce consolidation: sincroniza com o CRM e consolidador após término dos lotes
     if (importRefreshTimer) clearTimeout(importRefreshTimer);
-    importRefreshTimer = setTimeout(() => {
-      console.log('🔄 Disparando consolidação após término dos lotes de importação...');
+    importRefreshTimer = setTimeout(async () => {
+      console.log(`🔄 Disparando sincronização no CRM para campanha "${campaignName}"...`);
+      await syncCampaignToCrm(campaignName);
       leadsConsolidator.refresh().catch(err => console.error("Erro ao atualizar consolidador após importação:", err));
-    }, 15000);
+    }, 5000);
 
     return res.json({
       success: true,
