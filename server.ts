@@ -1,4 +1,5 @@
 import { getCrmSummary, getCrmPaginated, recordLeadAction } from "./crmService.ts";
+import { sanitizeGeo, sanitizeCity, sanitizeState } from "./geoSanitizer.ts";
 import express from "express";
 import compression from "compression";
 import path from "path";
@@ -88,7 +89,8 @@ async function startServer() {
   app.post('/api/material', async (req, res) => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const data = { ...req.body, id, createdAt };
+    const rawGeo = sanitizeGeo(req.body.cidade, req.body.estado, req.body.cep);
+    const data = { ...req.body, id, createdAt, cidade: rawGeo.cidade, estado: rawGeo.estado };
     
     // Validação estrita de SP para material impresso (CEPs entre 01000-000 e 19999-999)
     if (data.tipoMaterial === 'impresso') {
@@ -188,7 +190,8 @@ async function startServer() {
   app.post('/api/ninapassadore', async (req, res) => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const data = { ...req.body, id, createdAt };
+    const rawGeo = sanitizeGeo(req.body.cidade, req.body.estado, req.body.cep);
+    const data = { ...req.body, id, createdAt, cidade: rawGeo.cidade, estado: rawGeo.estado };
     
     // Validação estrita de SP para material impresso (CEPs entre 01000-000 e 19999-999)
     if (data.tipoMaterial === 'impresso') {
@@ -356,7 +359,8 @@ async function startServer() {
   });
 
   app.post('/api/contra-maus-tratos', async (req, res) => {
-    const data = req.body;
+    const rawGeo = sanitizeGeo(req.body.cidade, req.body.estado, req.body.cep);
+    const data = { ...req.body, cidade: rawGeo.cidade, estado: rawGeo.estado };
     if (db) {
       try {
         await db.query(
@@ -424,7 +428,8 @@ async function startServer() {
   app.post('/api/citizens', async (req, res) => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const data = { ...req.body, id, createdAt };
+    const rawGeo = sanitizeGeo(req.body.cidade, req.body.estado, req.body.cep);
+    const data = { ...req.body, id, createdAt, cidade: rawGeo.cidade, estado: rawGeo.estado };
     
     if (db) {
       try {
@@ -441,8 +446,8 @@ async function startServer() {
             data.numero || '',
             data.complemento || '',
             data.bairro || '',
-            data.cidade || 'São Paulo',
-            data.estado || 'SP',
+            data.cidade,
+            data.estado,
             createdAt
           ]
         );
@@ -457,8 +462,8 @@ async function startServer() {
           numero: data.numero,
           complemento: data.complemento,
           bairro: data.bairro,
-          cidade: data.cidade || 'São Paulo',
-          estado: data.estado || 'SP',
+          cidade: data.cidade,
+          estado: data.estado,
           campaignName: 'Projeto de Lei',
           source: 'CITIZEN',
           createdAt
@@ -517,6 +522,10 @@ async function startServer() {
       }
     }
 
+    const rawGeo = sanitizeGeo(data.cidade, data.estado, data.cep);
+    data.cidade = rawGeo.cidade;
+    data.estado = rawGeo.estado;
+
     if (db) {
       try {
         await db.query(
@@ -530,8 +539,8 @@ async function startServer() {
             data.cep || '',
             data.endereco || '',
             data.bairro || '',
-            data.cidade || 'São Paulo',
-            data.estado || 'SP',
+            data.cidade,
+            data.estado,
             createdAt
           ]
         );
@@ -544,8 +553,8 @@ async function startServer() {
           cep: data.cep,
           endereco: data.endereco,
           bairro: data.bairro,
-          cidade: data.cidade || 'São Paulo',
-          estado: data.estado || 'SP',
+          cidade: data.cidade,
+          estado: data.estado,
           campaignName: 'Apoio Capital',
           source: 'POPUP',
           createdAt
@@ -648,18 +657,23 @@ async function startServer() {
     for (const item of leads) {
       const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
       const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const rawCity = (item.cidade || item.municipio || 'São Paulo').trim();
+      const rawState = (item.estado || item.uf || 'SP').trim();
+      const rawCep = (item.cep || '').trim();
+      const { cidade: cleanCidade, estado: cleanEstado } = sanitizeGeo(rawCity, rawState, rawCep);
+
       const record = {
         id,
         nome: (item.nome || item.name || item.nomeCompleto || 'Sem Nome').trim(),
         whatsapp: (item.whatsapp || item.telefone || item.celular || item.phone || '').trim(),
         email: (item.email || item.mail || '').trim(),
-        cep: (item.cep || '').trim(),
+        cep: rawCep,
         endereco: (item.endereco || item.logradouro || item.rua || '').trim(),
         numero: (item.numero || '').trim(),
         complemento: (item.complemento || '').trim(),
         bairro: (item.bairro || '').trim(),
-        cidade: (item.cidade || item.municipio || 'São Paulo').trim(),
-        estado: ((item.estado || item.uf || 'SP').toUpperCase()).trim().substring(0, 2),
+        cidade: cleanCidade,
+        estado: cleanEstado,
         campanha: campaignName,
         origem: 'Importação CSV',
         createdAt,
@@ -999,11 +1013,15 @@ async function startServer() {
       return res.status(400).json({ error: "O nome de usuário não pode ser um e-mail" });
     }
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    const rawGeo = sanitizeGeo(cidade, estado, cep);
+    const cleanCidade = rawGeo.cidade;
+    const cleanEstado = rawGeo.estado;
+
     if (db) {
       try {
         await db.query(
           'INSERT INTO jogo_users (id, nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [id, nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado]
+          [id, nomeCompleto, usuario, senha, email, whatsapp, cep, cleanCidade, cleanEstado]
         );
 
         // Atualiza imediatamente o CRM com deduplicação e contagem
@@ -1012,14 +1030,14 @@ async function startServer() {
           whatsapp: whatsapp,
           email: email,
           cep: cep,
-          cidade: cidade,
-          estado: estado,
+          cidade: cleanCidade,
+          estado: cleanEstado,
           campaignName: 'Jogo Resgate',
           source: 'JOGO',
           createdAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
         }).catch(err => console.error("Erro ao sincronizar Jogo no CRM:", err));
 
-        return res.json({ success: true, data: { id, nomeCompleto, usuario, email, whatsapp, cep, cidade, estado } });
+        return res.json({ success: true, data: { id, nomeCompleto, usuario, email, whatsapp, cep, cidade: cleanCidade, estado: cleanEstado } });
       } catch (err) {
         console.error(err);
         return res.status(400).json({ error: "Usuário já existe ou erro no DB" });
