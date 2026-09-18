@@ -1515,7 +1515,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   Logística de Materiais Físicos
                 </h2>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                  Lista unificada de apoiadores que solicitaram material impresso (Oficial ou Dobrada Nina).
+                  Lista unificada de apoiadores que solicitaram material impresso (Oficial Rafael, Dobrada Nina e Importados Nina).
                 </p>
               </div>
               <div className="w-full mt-4 flex items-center gap-4">
@@ -1590,7 +1590,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                         </td>
                         <td className="p-3">
                           <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase whitespace-nowrap ${
-                            item.source === 'Oficial Rafael' ? 'bg-blue-100 text-blue-700' : item.source === 'Dobrada Nina' ? 'bg-pink-100 text-pink-700' : 'bg-purple-100 text-purple-700'
+                            item.source === 'Oficial Rafael' ? 'bg-blue-100 text-blue-700' : 
+                            item.source === 'Dobrada Nina' ? 'bg-pink-100 text-pink-700' : 
+                            item.source.includes('Nina') ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'
                           }`}>
                             {item.source}
                           </span>

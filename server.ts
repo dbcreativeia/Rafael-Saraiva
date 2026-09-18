@@ -1,4 +1,4 @@
-import { getCrmSummary, getCrmPaginated } from "./crmService.ts";
+import { getCrmSummary, getCrmPaginated, recordLeadAction } from "./crmService.ts";
 import express from "express";
 import compression from "compression";
 import path from "path";
@@ -106,6 +106,24 @@ async function startServer() {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, data.nome, data.sobrenome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento || '', data.bairro, data.cidade, data.estado, data.tipoMaterial, data.adesivoPerfurado ? 1 : 0, createdAt]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: `${data.nome || ''} ${data.sobrenome || ''}`.trim() || 'Apoiador Material',
+          whatsapp: data.whatsapp,
+          email: data.email,
+          cep: data.cep,
+          endereco: data.endereco,
+          numero: data.numero,
+          complemento: data.complemento,
+          bairro: data.bairro,
+          cidade: data.cidade,
+          estado: data.estado,
+          campaignName: 'Material Oficial',
+          source: 'MATERIAL',
+          createdAt
+        }).catch(err => console.error("Erro ao sincronizar Material no CRM:", err));
+
         return res.json({ success: true, data });
       } catch (err) {
         console.error("DB Insert error:", err);
@@ -188,6 +206,24 @@ async function startServer() {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, data.nome, data.sobrenome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento || '', data.bairro, data.cidade, data.estado, data.tipoMaterial, data.adesivoPerfurado ? 1 : 0, createdAt]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: `${data.nome || ''} ${data.sobrenome || ''}`.trim() || 'Apoiador Nina',
+          whatsapp: data.whatsapp,
+          email: data.email,
+          cep: data.cep,
+          endereco: data.endereco,
+          numero: data.numero,
+          complemento: data.complemento,
+          bairro: data.bairro,
+          cidade: data.cidade,
+          estado: data.estado,
+          campaignName: 'Maus-Tratos (Nina)',
+          source: 'NINA',
+          createdAt
+        }).catch(err => console.error("Erro ao sincronizar Nina no CRM:", err));
+
         return res.json({ success: true, data });
       } catch (err) {
         console.error("DB Insert error:", err);
@@ -262,6 +298,24 @@ async function startServer() {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, data.nome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento, data.bairro, data.cidade, data.estado, createdAt]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: data.nome,
+          whatsapp: data.whatsapp,
+          email: data.email,
+          cep: data.cep,
+          endereco: data.endereco,
+          numero: data.numero,
+          complemento: data.complemento,
+          bairro: data.bairro,
+          cidade: data.cidade,
+          estado: data.estado,
+          campaignName: 'Abaixo-Assinado',
+          source: 'PETITION',
+          createdAt
+        }).catch(err => console.error("Erro ao sincronizar Abaixo-Assinado no CRM:", err));
+
         return res.json({ success: true, data });
       } catch (err) {
         console.error(err);
@@ -309,6 +363,24 @@ async function startServer() {
           'INSERT INTO contra_maus_tratos (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [data.id, data.nome, data.whatsapp, data.email, data.cep, data.endereco, data.numero, data.complemento, data.bairro, data.cidade, data.estado]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: data.nome,
+          whatsapp: data.whatsapp,
+          email: data.email,
+          cep: data.cep,
+          endereco: data.endereco,
+          numero: data.numero,
+          complemento: data.complemento,
+          bairro: data.bairro,
+          cidade: data.cidade,
+          estado: data.estado,
+          campaignName: 'Contra Maus-Tratos',
+          source: 'MAUS_TRATOS',
+          createdAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
+        }).catch(err => console.error("Erro ao sincronizar Contra Maus-Tratos no CRM:", err));
+
         return res.json({ success: true, data });
       } catch (err) {
         return res.status(500).json({ error: "DB erro", details: err });
@@ -374,6 +446,24 @@ async function startServer() {
             createdAt
           ]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: data.nome,
+          whatsapp: data.whatsapp,
+          email: data.email,
+          cep: data.cep,
+          endereco: data.endereco,
+          numero: data.numero,
+          complemento: data.complemento,
+          bairro: data.bairro,
+          cidade: data.cidade || 'São Paulo',
+          estado: data.estado || 'SP',
+          campaignName: 'Projeto de Lei',
+          source: 'CITIZEN',
+          createdAt
+        }).catch(err => console.error("Erro ao sincronizar Projeto de Lei no CRM:", err));
+
         return res.json({ success: true, data });
       } catch (err) {
         console.error(err);
@@ -445,6 +535,22 @@ async function startServer() {
             createdAt
           ]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: data.nome,
+          whatsapp: data.whatsapp,
+          email: data.email,
+          cep: data.cep,
+          endereco: data.endereco,
+          bairro: data.bairro,
+          cidade: data.cidade || 'São Paulo',
+          estado: data.estado || 'SP',
+          campaignName: 'Apoio Capital',
+          source: 'POPUP',
+          createdAt
+        }).catch(err => console.error("Erro ao sincronizar Apoio Capital no CRM:", err));
+
         return res.json({ success: true, data });
       } catch (err) {
         console.error(err);
@@ -899,6 +1005,20 @@ async function startServer() {
           'INSERT INTO jogo_users (id, nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [id, nomeCompleto, usuario, senha, email, whatsapp, cep, cidade, estado]
         );
+
+        // Atualiza imediatamente o CRM com deduplicação e contagem
+        recordLeadAction({
+          nome: nomeCompleto,
+          whatsapp: whatsapp,
+          email: email,
+          cep: cep,
+          cidade: cidade,
+          estado: estado,
+          campaignName: 'Jogo Resgate',
+          source: 'JOGO',
+          createdAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
+        }).catch(err => console.error("Erro ao sincronizar Jogo no CRM:", err));
+
         return res.json({ success: true, data: { id, nomeCompleto, usuario, email, whatsapp, cep, cidade, estado } });
       } catch (err) {
         console.error(err);
