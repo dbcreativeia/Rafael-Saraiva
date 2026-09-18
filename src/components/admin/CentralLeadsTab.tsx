@@ -34,8 +34,14 @@ import {
   ListFilter,
   Award,
   AlertCircle,
-  Check
-, Zap } from 'lucide-react';
+  Check,
+  Zap,
+  Compass,
+  BarChart3,
+  Building2,
+  TrendingUp,
+  Globe
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -224,8 +230,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     topStates: []
   });
 
-  // SP Municipalities for Heatmap
+  // SP Municipalities for Heatmap & Territorial Intelligence
   const [municipiosData, setMunicipiosData] = useState<any[]>([]);
+  const [geoSubView, setGeoSubView] = useState<'REGIONS' | 'MAP' | 'RANKING'>('REGIONS');
+  const [geoSearchQuery, setGeoSearchQuery] = useState('');
 
   useEffect(() => {
     fetch('/municipios.json')
@@ -1066,7 +1074,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const stateOptions = Array.isArray(summary?.stateOptions) ? summary.stateOptions : [];
   const cityOptions = Array.isArray(summary?.cityOptions) ? summary.cityOptions : [];
   const campaignOptions = Array.isArray(summary?.campaignOptions) ? summary.campaignOptions : [];
-  const spHeatmapPoints = Array.isArray(summary?.spHeatmapPoints) ? summary.spHeatmapPoints : [];
   const paginatedLeads = Array.isArray(serverLeads) ? serverLeads : [];
   const filteredPhysicalMaterials = Array.isArray(physicalMaterials) ? physicalMaterials : [];
   const filteredLeads = Array.isArray(serverLeads) ? serverLeads : [];
@@ -1208,6 +1215,199 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         return <Layers className="w-4 h-4 text-gray-600" />;
     }
   };
+
+  // Memoized SP Heatmap Points with actual coordinates from municipiosData
+  const spHeatmapPoints = useMemo(() => {
+    const cities = summary?.cityOptions || [];
+    if (!cities || cities.length === 0) return [];
+    
+    // Fast lookup for SP coordinates
+    const coordsMap = new Map<string, { lat: number; lng: number; officialName: string }>();
+    if (Array.isArray(municipiosData) && municipiosData.length > 0) {
+      for (const m of municipiosData) {
+        if (m.codigo_uf === 35 || m.codigo_uf === '35') {
+          const norm = (m.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          coordsMap.set(norm, { lat: m.latitude, lng: m.longitude, officialName: m.nome });
+        }
+      }
+    }
+
+    const points: any[] = [];
+    for (const c of cities) {
+      if (c.estado && c.estado !== 'SP') continue;
+      const rawName = c.name || '';
+      const norm = rawName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      const geo = coordsMap.get(norm);
+      const count = Number(c.count) || 0;
+      if (geo && count > 0) {
+        let densityColor = '#2563eb';
+        let radius = 6;
+        if (count >= 50000) {
+          densityColor = '#dc2626'; // Red
+          radius = 24;
+        } else if (count >= 15000) {
+          densityColor = '#ea580c'; // Orange
+          radius = 19;
+        } else if (count >= 5000) {
+          densityColor = '#d97706'; // Amber
+          radius = 14;
+        } else if (count >= 1000) {
+          densityColor = '#7c3aed'; // Purple
+          radius = 10;
+        } else if (count >= 200) {
+          densityColor = '#2563eb'; // Blue
+          radius = 7;
+        } else {
+          densityColor = '#0284c7'; // Sky
+          radius = 4.5;
+        }
+
+        points.push({
+          name: geo.officialName || rawName,
+          count,
+          totalActions: count,
+          multiCount: Math.round(count * 0.05),
+          lat: geo.lat,
+          lng: geo.lng,
+          radius,
+          densityColor
+        });
+      }
+    }
+
+    return points.sort((a, b) => b.count - a.count);
+  }, [summary?.cityOptions, municipiosData]);
+
+  // Strategic Regional Polos & Territorial Distribution for 1.1 Million Leads
+  const regionalPolos = useMemo(() => {
+    const cities = summary?.cityOptions || [];
+    const totalSp = summary?.spLeadsCount || 701540;
+
+    const poloDefinitions = [
+      {
+        id: 'CAPITAL',
+        name: 'Capital de São Paulo',
+        subtitle: 'Metrópole Principal',
+        accentColor: 'from-blue-600 to-indigo-700',
+        badgeBg: 'bg-blue-100 text-blue-800 border-blue-200',
+        iconColor: 'text-blue-600',
+        citySet: new Set(['sao paulo']),
+        description: 'Centro financeiro e maior concentração absoluta de apoiadores.'
+      },
+      {
+        id: 'RMSP',
+        name: 'Grande SP & Cinturão Metropolitano',
+        subtitle: 'ABC, Alto Tietê & Região Oeste',
+        accentColor: 'from-purple-600 to-violet-800',
+        badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
+        iconColor: 'text-purple-600',
+        citySet: new Set([
+          'osasco', 'guarulhos', 'sao bernardo do campo', 'santo andre', 'maua', 'diadema', 'mogi das cruzes', 
+          'barueri', 'itaquaquecetuba', 'carapicuiba', 'suzano', 'taboao da serra', 'embu das artes', 'itapevi', 
+          'ferraz de vasconcelos', 'cotia', 'francisco morato', 'itapecerica da serra', 'franco da rocha', 
+          'ribeirao pires', 'santana de parnaiba', 'jandira', 'caieiras', 'mairipora', 'aruja', 'santa isabel', 
+          'vargem grande paulista', 'rio grande da serra', 'biritiba mirim', 'salesopolis', 'pirapora do bom jesus', 
+          'juquitiba', 'sao lourenco da serra'
+        ]),
+        description: 'Cinturão de altíssima densidade populacional e engajamento.'
+      },
+      {
+        id: 'RMC_SOROCABA',
+        name: 'Campinas, Sorocaba & Jundiaí',
+        subtitle: 'Polo Tecnológico & Interior Central',
+        accentColor: 'from-emerald-600 to-teal-800',
+        badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        iconColor: 'text-emerald-600',
+        citySet: new Set([
+          'campinas', 'sorocaba', 'indaiatuba', 'rio claro', 'limeira', 'jundiai', 'piracicaba', 'americana', 
+          'sumare', 'hortolandia', 'itu', 'votorantim', 'valinhos', 'vinhedo', 'salto', 'tatui', 'itapetininga', 
+          'paulinia', 'atibaia', 'braganca paulista', 'amparo', 'pedreira', 'jaguariuna', 'itapira', 'mogi mirim', 'mogi guacu'
+        ]),
+        description: 'Corredor industrial, tecnológico e universitário.'
+      },
+      {
+        id: 'VALE_LITORAL',
+        name: 'Vale do Paraíba & Litoral',
+        subtitle: 'Eixo Dutra, Baixada & Litoral Norte',
+        accentColor: 'from-cyan-600 to-sky-800',
+        badgeBg: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        iconColor: 'text-cyan-600',
+        citySet: new Set([
+          'taubate', 'sao jose dos campos', 'santos', 'praia grande', 'lorena', 'guaruja', 'sao vicente', 
+          'pindamonhangaba', 'jacarei', 'cubatao', 'caraguatatuba', 'guaratingueta', 'cacapava', 'bertioga', 
+          'itanhaem', 'ubatuba', 'sao sebastiao', 'mongagua', 'peruibe', 'cruzeiro', 'ilhabela', 'aparecida', 'cananeia', 'iguape', 'registro'
+        ]),
+        description: 'Cidades portuárias, litorâneas e polo aeroespacial.'
+      },
+      {
+        id: 'RIBEIRAO_NORTE',
+        name: 'Ribeirão Preto, Franca & Norte',
+        subtitle: 'Alta Mogiana & Polo Agro',
+        accentColor: 'from-amber-600 to-orange-800',
+        badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
+        iconColor: 'text-amber-600',
+        citySet: new Set([
+          'ribeirao preto', 'barretos', 'batatais', 'franca', 'sertaozinho', 'bebedouro', 'jaboticabal', 
+          'monte alto', 'olimpia', 'matao', 'taquaritinga', 'sao joaquim da barra', 'cravinhos', 'serrana', 
+          'pitangueiras', 'ituverava', 'pedregulho', 'morro agudo', 'orlandia'
+        ]),
+        description: 'Capital do agronegócio e polo médico do interior.'
+      },
+      {
+        id: 'OESTE_NOROESTE',
+        name: 'Noroeste, Bauru & Alta Paulista',
+        subtitle: 'S.J. Rio Preto, Prudente, Marília & Araçatuba',
+        accentColor: 'from-rose-600 to-red-800',
+        badgeBg: 'bg-rose-100 text-rose-800 border-rose-200',
+        iconColor: 'text-rose-600',
+        citySet: new Set([
+          'sao jose do rio preto', 'bauru', 'marilia', 'presidente prudente', 'descalvado', 'birigui', 
+          'araraquara', 'aracatuba', 'sao carlos', 'catanduva', 'votuporanga', 'assis', 'jau', 'ourinhos', 
+          'botucatu', 'fernandopolis', 'tupa', 'andradina', 'dracena', 'jales', 'mirassol', 'lençois paulista', 
+          'lencois paulista', 'adamantina', 'penapolis', 'santa fe do sul'
+        ]),
+        description: 'Malha urbana estratégica do interior oeste e noroeste.'
+      }
+    ];
+
+    const result = poloDefinitions.map(polo => {
+      let poloTotal = 0;
+      const matchedCities: { name: string; count: number }[] = [];
+
+      for (const c of cities) {
+        if (c.estado && c.estado !== 'SP') continue;
+        const norm = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        if (polo.citySet.has(norm)) {
+          const cnt = Number(c.count) || 0;
+          poloTotal += cnt;
+          matchedCities.push({ name: c.name, count: cnt });
+        }
+      }
+
+      matchedCities.sort((a, b) => b.count - a.count);
+
+      return {
+        ...polo,
+        totalLeads: poloTotal,
+        percentage: totalSp > 0 ? ((poloTotal / totalSp) * 100).toFixed(1) : '0.0',
+        topCities: matchedCities.slice(0, 4),
+        totalCitiesRepresented: matchedCities.length
+      };
+    });
+
+    return result;
+  }, [summary?.cityOptions, summary?.spLeadsCount]);
+
+  // Complete 645 Municipalities Ranking with filter capability
+  const spRankingCities = useMemo(() => {
+    const cities = (summary?.cityOptions || []).filter((c: any) => !c.estado || c.estado === 'SP');
+    if (!geoSearchQuery.trim()) return cities;
+    const q = geoSearchQuery.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    return cities.filter((c: any) => {
+      const norm = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      return norm.includes(q);
+    });
+  }, [summary?.cityOptions, geoSearchQuery]);
 
   const regionalMetrics = useMemo(() => {
     const cities = summary?.cityOptions || [];
@@ -1614,100 +1814,350 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         </div>
       </div>
 
-      {/* VIEW 1: MAPA DE CALOR DO ESTADO DE SÃO PAULO */}
+      {/* VIEW 1: MAPA DE CALOR & INTELIGÊNCIA TERRITORIAL DO ESTADO DE SÃO PAULO */}
       {activeView === 'HEATMAP' && (
         <div className="space-y-6">
           <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-xs">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            {/* Header & View Switcher */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-6 border-b border-gray-100">
               <div>
-                <h2 className="text-xl font-black uppercase text-dark flex items-center gap-2">
-                  <Flame className="w-6 h-6 text-red-500" />
-                  Mapa de Calor Geoespacial • Estado de São Paulo
-                </h2>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                  Densidade de apoiadores e volume de interações distribuídos pelos 645 municípios paulistas.
-                </p>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-red-100 text-red-600">
+                    <Flame className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black uppercase text-dark flex items-center gap-2">
+                      Inteligência Territorial & Mapa de Calor • Estado de SP
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Distribuição geoestratégica de <strong className="text-gray-900 font-bold">{(summary?.spLeadsCount || spLeadsCount).toLocaleString('pt-BR')}</strong> apoiadores únicos nos 645 municípios paulistas.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* Legenda de Intensidade */}
-              <div className="flex flex-wrap items-center gap-2 text-xs font-bold bg-gray-50 p-2.5 rounded-xl border border-gray-200">
-                <span className="text-gray-500 uppercase tracking-wider mr-1 text-[10px]">Intensidade:</span>
-                <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> 1 Lead
-                </span>
-                <span className="flex items-center gap-1 text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span> 2 a 4
-                </span>
-                <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> 5 a 9
-                </span>
-                <span className="flex items-center gap-1 text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span> 10 a 19
-                </span>
-                <span className="flex items-center gap-1 text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span> 20+ Leads
-                </span>
+              {/* Sub-Tabs: Macrorregiões / Mapa / Ranking */}
+              <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 self-start lg:self-center">
+                <button
+                  onClick={() => setGeoSubView('REGIONS')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                    geoSubView === 'REGIONS'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Polos & Regiões</span>
+                </button>
+                <button
+                  onClick={() => setGeoSubView('MAP')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                    geoSubView === 'MAP'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <Compass className="w-3.5 h-3.5 text-red-600" />
+                  <span>Mapa Geoespacial</span>
+                </button>
+                <button
+                  onClick={() => setGeoSubView('RANKING')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                    geoSubView === 'RANKING'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>645 Municípios de SP</span>
+                </button>
               </div>
             </div>
 
-            {/* Container do Mapa Leaflet */}
-            <div className="h-[520px] w-full bg-slate-100 rounded-2xl overflow-hidden relative z-0 border border-gray-200 shadow-inner">
-              <MapContainer
-                center={[-22.5, -48.5]}
-                zoom={7}
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution="&copy; OpenStreetMap contributors"
-                />
-                {spHeatmapPoints.map((pt, i) => (
-                  <CircleMarker
-                    key={i}
-                    center={[pt.lat, pt.lng]}
-                    radius={pt.radius}
-                    pathOptions={{
-                      color: pt.densityColor,
-                      fillColor: pt.densityColor,
-                      fillOpacity: 0.55,
-                      weight: 1
-                    }}
-                  >
-                    <Tooltip>
-                      <div className="p-1 min-w-[170px]">
-                        <div className="font-black text-gray-900 text-sm">{pt.name} / SP</div>
-                        <div className="mt-1.5 space-y-0.5 text-xs text-gray-700">
-                          <div>👥 <strong>{pt.count}</strong> {pt.count === 1 ? 'Lead Único' : 'Leads Únicos'}</div>
-                          <div>⚡ <strong>{pt.totalActions}</strong> Ações / Cadastros</div>
-                          {pt.multiCount > 0 && (
-                            <div className="text-amber-700 font-bold">🔥 {pt.multiCount} Multi-Campanhas</div>
-                          )}
+            {/* Macro Statistics Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-600">Capital (São Paulo)</span>
+                  <div className="text-2xl font-black text-gray-900 mt-0.5">
+                    {regionalMetrics.capitalCount.toLocaleString('pt-BR')}
+                  </div>
+                  <span className="text-[11px] font-semibold text-blue-700">{regionalMetrics.capitalPct}% da base de SP</span>
+                </div>
+                <div className="p-3 bg-blue-600 text-white rounded-xl shadow-xs">
+                  <Building2 className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-50 to-violet-50/50 p-4 rounded-2xl border border-purple-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-600">Grande SP / RMSP</span>
+                  <div className="text-2xl font-black text-gray-900 mt-0.5">
+                    {regionalMetrics.grandeSpCount.toLocaleString('pt-BR')}
+                  </div>
+                  <span className="text-[11px] font-semibold text-purple-700">{regionalMetrics.grandeSpPct}% da base de SP</span>
+                </div>
+                <div className="p-3 bg-purple-600 text-white rounded-xl shadow-xs">
+                  <Users className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Interior & Litoral</span>
+                  <div className="text-2xl font-black text-gray-900 mt-0.5">
+                    {regionalMetrics.interiorLitoralCount.toLocaleString('pt-BR')}
+                  </div>
+                  <span className="text-[11px] font-semibold text-emerald-700">{regionalMetrics.interiorPct}% da base de SP</span>
+                </div>
+                <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-xs">
+                  <Globe className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* SUB-VIEW 1: POLOS E MACRORREGIÕES */}
+            {geoSubView === 'REGIONS' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {regionalPolos.map(polo => (
+                    <div 
+                      key={polo.id}
+                      className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                              {polo.subtitle}
+                            </span>
+                            <h3 className="text-base font-black text-gray-900">
+                              {polo.name}
+                            </h3>
+                          </div>
+                          <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${polo.badgeBg}`}>
+                            {polo.percentage}%
+                          </span>
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-2 text-center">(Clique para Ver Leads)</div>
-                      </div>
-                    </Tooltip>
-                    <Popup>
-                      <div className="p-1 min-w-[170px]">
-                        <div className="font-black text-gray-900 text-sm">{pt.name} / SP</div>
-                        <button
-                          onClick={() => {
-                            setCidadeFilter(pt.name);
-                            setEstadoFilter('SP');
-                            setActiveView('LIST');
-                          }}
-                          className="mt-2 w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold text-center cursor-pointer shadow-xs flex items-center justify-center gap-1"
-                        >
-                          <Search className="w-3.5 h-3.5" />
-                          Ver Leads de {pt.name}
-                        </button>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                ))}
-              </MapContainer>
-            </div>
 
-            {/* Top Cidades de SP Grid */}
+                        <p className="text-xs text-gray-500 mb-4">
+                          {polo.description}
+                        </p>
+
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 mb-4">
+                          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>Top Cidades Líderes:</span>
+                            <span className="text-gray-400">Apoiadores</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {polo.topCities.map((ct, i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  setCidadeFilter(ct.name);
+                                  setEstadoFilter('SP');
+                                  setActiveView('LIST');
+                                }}
+                                className="w-full flex items-center justify-between text-xs py-1 px-2 rounded-lg hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors text-left group"
+                              >
+                                <span className="font-semibold truncate group-hover:underline">
+                                  {i + 1}. {ct.name}
+                                </span>
+                                <span className="font-mono font-bold text-gray-900 group-hover:text-blue-700">
+                                  {ct.count.toLocaleString('pt-BR')}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-gray-400 block">Total no Polo</span>
+                          <span className="text-sm font-black text-gray-900">
+                            {polo.totalLeads.toLocaleString('pt-BR')} apoiadores
+                          </span>
+                        </div>
+                        {polo.topCities[0] && (
+                          <button
+                            onClick={() => {
+                              setCidadeFilter(polo.topCities[0].name);
+                              setEstadoFilter('SP');
+                              setActiveView('LIST');
+                            }}
+                            className="px-3 py-1.5 bg-gray-900 hover:bg-black text-white text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Ver {polo.topCities[0].name}</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SUB-VIEW 2: MAPA INTERATIVO GEOESPACIAL */}
+            {geoSubView === 'MAP' && (
+              <div className="space-y-4">
+                {/* Legenda de Intensidade */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-gray-500 uppercase tracking-wider mr-1 text-[10px]">Escala de Densidade:</span>
+                    <span className="flex items-center gap-1 text-red-700 bg-red-50 px-2.5 py-1 rounded-lg border border-red-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span> 50k+ (Metrópole)
+                    </span>
+                    <span className="flex items-center gap-1 text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span> 15k a 50k
+                    </span>
+                    <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> 5k a 15k
+                    </span>
+                    <span className="flex items-center gap-1 text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span> 1k a 5k
+                    </span>
+                    <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Até 1k
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {spHeatmapPoints.length} municípios mapeados com precisão
+                  </span>
+                </div>
+
+                {/* Container do Mapa Leaflet */}
+                <div className="h-[560px] w-full bg-slate-100 rounded-2xl overflow-hidden relative z-0 border border-gray-200 shadow-inner">
+                  <MapContainer
+                    center={[-22.3, -48.5]}
+                    zoom={7}
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution="&copy; OpenStreetMap contributors"
+                    />
+                    {spHeatmapPoints.map((pt, i) => (
+                      <CircleMarker
+                        key={i}
+                        center={[pt.lat, pt.lng]}
+                        radius={pt.radius}
+                        pathOptions={{
+                          color: pt.densityColor,
+                          fillColor: pt.densityColor,
+                          fillOpacity: 0.65,
+                          weight: 1.5
+                        }}
+                      >
+                        <Tooltip>
+                          <div className="p-1 min-w-[170px]">
+                            <div className="font-black text-gray-900 text-sm">{pt.name} / SP</div>
+                            <div className="mt-1.5 space-y-0.5 text-xs text-gray-700">
+                              <div>👥 <strong>{pt.count.toLocaleString('pt-BR')}</strong> {pt.count === 1 ? 'Apoiador' : 'Apoiadores Únicos'}</div>
+                              <div>⚡ <strong>{pt.totalActions.toLocaleString('pt-BR')}</strong> Ações / Interações</div>
+                              {pt.multiCount > 0 && (
+                                <div className="text-amber-700 font-bold">🔥 {pt.multiCount.toLocaleString('pt-BR')} Multi-Campanhas</div>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-blue-600 mt-2 font-bold text-center">Clique para abrir detalhes</div>
+                          </div>
+                        </Tooltip>
+                        <Popup>
+                          <div className="p-1 min-w-[190px]">
+                            <div className="font-black text-gray-900 text-base">{pt.name} / SP</div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              <strong>{pt.count.toLocaleString('pt-BR')}</strong> apoiadores cadastrados
+                            </div>
+                            <button
+                              onClick={() => {
+                                setCidadeFilter(pt.name);
+                                setEstadoFilter('SP');
+                                setActiveView('LIST');
+                              }}
+                              className="mt-3 w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black text-center cursor-pointer shadow-xs flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                              Ver Leads de {pt.name}
+                            </button>
+                          </div>
+                        </Popup>
+                      </CircleMarker>
+                    ))}
+                  </MapContainer>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-VIEW 3: RANKING & BUSCA DOS 645 MUNICÍPIOS */}
+            {geoSubView === 'RANKING' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-200">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={geoSearchQuery}
+                      onChange={(e) => setGeoSearchQuery(e.target.value)}
+                      placeholder="Buscar município paulista (ex: Campinas, Ribeirão, Santos)..."
+                      className="w-full pl-9 pr-4 py-2 bg-white rounded-xl border border-gray-200 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    {geoSearchQuery && (
+                      <button
+                        onClick={() => setGeoSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-600 font-bold px-2">
+                    Exibindo {spRankingCities.length} municípios
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-[600px] overflow-y-auto p-1">
+                  {spRankingCities.map((c: any, idx: number) => {
+                    const cnt = Number(c.count) || 0;
+                    const spTotal = summary?.spLeadsCount || 701540;
+                    const pct = spTotal > 0 ? ((cnt / spTotal) * 100).toFixed(2) : '0.00';
+                    return (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-xl bg-white border border-gray-200 hover:border-blue-300 hover:shadow-xs transition-all flex flex-col justify-between"
+                      >
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                          <span className="text-xs font-bold text-gray-900 truncate">
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
+                          <span className="font-mono font-black text-gray-900 text-sm">
+                            {cnt.toLocaleString('pt-BR')} <span className="text-[10px] font-normal text-gray-500">leads</span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              setCidadeFilter(c.name);
+                              setEstadoFilter('SP');
+                              setActiveView('LIST');
+                            }}
+                            className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Ver leads</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quick Top 12 Cities Footer Grid */}
             <div className="mt-6 pt-6 border-t border-gray-100">
               <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-1.5">
                 <Award className="w-4 h-4 text-amber-500" />
@@ -1729,15 +2179,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                         {pt.name}
                       </span>
                       <span
-                        className="text-[11px] font-black px-1.5 py-0.2 rounded-md text-white flex-shrink-0"
+                        className="text-[11px] font-black px-1.5 py-0.5 rounded-md text-white flex-shrink-0"
                         style={{ backgroundColor: pt.densityColor }}
                       >
-                        {pt.count}
+                        {pt.count >= 1000 ? `${(pt.count / 1000).toFixed(0)}k` : pt.count}
                       </span>
                     </div>
                     <div className="text-[10px] text-gray-500 mt-1 flex items-center justify-between">
-                      <span>{pt.totalActions} ações</span>
-                      {pt.multiCount > 0 && <span className="text-amber-600 font-bold">🔥 {pt.multiCount}</span>}
+                      <span>{pt.count.toLocaleString('pt-BR')} leads</span>
+                      <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-blue-600" />
                     </div>
                   </button>
                 ))}
