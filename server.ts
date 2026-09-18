@@ -667,7 +667,20 @@ async function startServer() {
             if (affected === 0) break;
             await new Promise(r => setTimeout(r, 40));
           }
-          console.log(`🗑️ Exclusão concluída: ${totalDeleted} leads da campanha "${campaignName}" removidos do MySQL em ${Date.now() - start}ms.`);
+
+          // Also remove from crm_actions and recount crm_leads so deleted campaigns are automatically discarded
+          await db.query('DELETE FROM crm_actions WHERE campaign_name = ?', [campaignName]);
+          await db.query(`
+            UPDATE crm_leads l
+            LEFT JOIN (
+              SELECT lead_id, COUNT(DISTINCT campaign_name) as real_count
+              FROM crm_actions
+              GROUP BY lead_id
+            ) a ON l.id = a.lead_id
+            SET l.campaign_count = COALESCE(a.real_count, 0)
+          `);
+
+          console.log(`🗑️ Exclusão concluída: ${totalDeleted} leads da campanha "${campaignName}" removidos do MySQL e CRM em ${Date.now() - start}ms.`);
         } catch (err) {
           console.error(`Erro ao deletar registros da campanha "${campaignName}" no MySQL:`, err);
         } finally {
@@ -716,9 +729,18 @@ async function startServer() {
     try {
       const result = await getCrmPaginated(req.query);
       return res.json(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error in /api/leads/paginated:", err);
-      return res.status(500).json({ error: "Erro ao paginar leads" });
+      if (err?.code === 'ECONNRESET' || err?.message?.includes('ECONNRESET')) {
+        try {
+          console.log("Retrying /api/leads/paginated after ECONNRESET...");
+          const retryResult = await getCrmPaginated(req.query);
+          return res.json(retryResult);
+        } catch (retryErr) {
+          console.error("Retry failed in /api/leads/paginated:", retryErr);
+        }
+      }
+      return res.status(500).json({ error: "Erro ao paginar leads", details: String(err) });
     }
   });
 

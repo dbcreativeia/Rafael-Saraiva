@@ -1638,7 +1638,7 @@ class LeadsConsolidationManager {
         bairro: row.bairro || '',
         cidade: rowCidade,
         estado: rowEstado,
-        totalActions: distinctCampaigns.length || 1,
+        totalActions: (row.is_super_supporter ? 3 : row.is_multi_action ? 2 : 1),
         isFrequent: !!row.is_frequent,
         isMultiAction: !!row.is_multi_action,
         isSuperSupporter: !!row.is_super_supporter,

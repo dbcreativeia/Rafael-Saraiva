@@ -108,7 +108,7 @@ const UF_MAP: Record<number, string> = {
     }
   }
 
-  console.log(`Found ${correctionsFound} distinct typo versions to fix out of ${rows.length} pairs.`);
+  console.log(`Found ${correctionsFound} distinct typo versions to fix out of ${(rows as any[]).length} pairs.`);
 
   if (correctionMap.size > 0) {
     const updates = Array.from(correctionMap.entries());
