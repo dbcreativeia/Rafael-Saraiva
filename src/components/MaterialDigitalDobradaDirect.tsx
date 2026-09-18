@@ -55,19 +55,6 @@ export const MaterialDigitalDobradaDirect = () => {
     trackEvent('PageView_MaterialDigitalDobradaDirect');
   }, []);
 
-  // Download direto do pacote ZIP completo
-  const handleDownloadZip = () => {
-    trackEvent('Download_MaterialDigitalDobrada_Zip');
-    const link = document.createElement('a');
-    link.href = '/material-digital-dobrada-rafael-nina.zip';
-    link.download = 'material-digital-dobrada-rafael-nina.zip';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 5000);
-  };
-
   // Download de todos os arquivos individualmente em sequência
   const handleDownloadAllSeparately = async () => {
     if (downloadingAll) return;
@@ -207,32 +194,22 @@ export const MaterialDigitalDobradaDirect = () => {
                   </div>
 
                   <h2 className="text-2xl md:text-3xl font-black text-[#102b31] uppercase tracking-tight mb-2">
-                    Baixar Pacote Completo da Dobrada
+                    Baixar Todas as Artes da Dobrada
                   </h2>
                   <p className="text-sm md:text-base text-gray-600 font-medium mb-6">
-                    Arquivo compacto contendo as 4 artes oficiais: arte de apoio "Fechado com Eles", Santão da Dobrada, Colinha Eleitoral e Stories da Dobrada em alta resolução.
+                    Baixe todas as 4 artes oficiais: arte de apoio "Fechado com Eles", Santão da Dobrada, Colinha Eleitoral e Stories da Dobrada em alta resolução diretamente no seu dispositivo.
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-                    {/* Botão ZIP Direto */}
-                    <button
-                      id="btn-download-dobrada-zip"
-                      onClick={handleDownloadZip}
-                      className="px-8 py-4 bg-[#ebb430] hover:bg-[#d4a22b] active:scale-95 text-[#102b31] font-black text-base md:text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 group"
-                    >
-                      <Download className="w-6 h-6 group-hover:translate-y-0.5 transition-transform" />
-                      <span>Baixar Todas em ZIP</span>
-                    </button>
-
-                    {/* Botão Baixar Separadas */}
+                    {/* Botão Baixar Todas as Imagens */}
                     <button
                       id="btn-download-dobrada-individual"
                       onClick={handleDownloadAllSeparately}
                       disabled={downloadingAll}
-                      className="px-6 py-4 bg-white hover:bg-gray-100 active:scale-95 text-[#102b31] font-bold text-sm md:text-base rounded-2xl border-2 border-gray-300 hover:border-[#ebb430] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="px-8 py-4 bg-[#ebb430] hover:bg-[#d4a22b] active:scale-95 text-[#102b31] font-black text-base md:text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
                     >
-                      <Layers className="w-5 h-5 text-[#ebb430]" />
-                      <span>{downloadingAll ? 'Baixando...' : 'Baixar Imagens Soltas'}</span>
+                      <Download className="w-6 h-6" />
+                      <span>{downloadingAll ? 'Baixando Imagens...' : 'Baixar Todas as Artes'}</span>
                     </button>
                   </div>
 

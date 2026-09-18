@@ -78,7 +78,9 @@ export interface ConsolidatedLead {
   totalActions: number;
   distinctCampaigns: string[];
   isMultiAction: boolean;
+  isFrequent?: boolean;
   isSuperSupporter?: boolean;
+  isVip?: boolean;
   firstDate: string;
   lastDate: string;
   actions: LeadAction[];
@@ -161,7 +163,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const deferredSearch = useDeferredValue(search);
   const [estadoFilter, setEstadoFilter] = useState('');
   const [cidadeFilter, setCidadeFilter] = useState('');
-  const [multiActionFilter, setMultiActionFilter] = useState<'all' | 'multi' | 'super' | 'single'>('all');
+  const [multiActionFilter, setMultiActionFilter] = useState<'all' | 'multi' | 'super' | 'single' | 'frequent' | 'vip'>('all');
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [leadTypeFilter, setLeadTypeFilter] = useState<'all' | 'organic' | 'imported'>('all');
   const [qualityTierFilter, setQualityTierFilter] = useState<'all' | 'diamante' | 'ouro' | 'prata' | 'bronze' | 'high'>('all');
@@ -1243,7 +1245,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </div>
             </div>
             <div className="text-xs text-amber-200/80 mt-3 flex items-center gap-1.5 font-medium border-t border-white/10 pt-2">
-              <span className="truncate">{totalUniqueLeads > 0 ? ((frequentLeadsCount / totalUniqueLeads) * 100).toFixed(1) : "0"}% da base com múltiplas ações</span>
+              <span className="truncate">{totalUniqueLeads > 0 ? ((frequentLeadsCount / totalUniqueLeads) * 100).toFixed(2) : "0"}% da base com múltiplas ações</span>
             </div>
           </div>
 
@@ -1256,11 +1258,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   <span>Super Apoiadores</span>
                 </div>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-400/30 whitespace-nowrap">
-                  5+ Ações
+                  3+ Ações
                 </span>
               </div>
               <div className="text-3xl font-black text-yellow-300 mt-2 tracking-tight">
-                {(summary?.superSupportersCount || 0).toLocaleString('pt-BR')}
+                {superSupportersCount.toLocaleString('pt-BR')}
               </div>
             </div>
             <div className="text-xs text-yellow-200/80 mt-3 flex items-center gap-1.5 font-medium border-t border-white/10 pt-2">
@@ -1800,9 +1802,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
                   <option value="all">Todas as Ações</option>
-                  <option value="frequent">⚡ Apoiador Frequente (2+)</option>
-                  <option value="multi">🔥 Multi-Campanhas (3+)</option>
-                  <option value="super">⭐ Super Apoiadores (5+)</option>
+                  <option value="frequent">⚡ Apoiadores Frequentes (2+)</option>
+                  <option value="super">⭐ Super Apoiadores (3+)</option>
+                  <option value="vip">🌟 Mobilizadores / VIP (5+)</option>
                   <option value="single">Apenas 1 Ação</option>
                 </select>
               </div>
@@ -1862,18 +1864,6 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </button>
 
               <button
-                onClick={() => setMultiActionFilter(multiActionFilter === 'multi' ? 'all' : 'multi')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  multiActionFilter === 'multi'
-                    ? 'bg-red-500 text-white shadow-xs'
-                    : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
-                }`}
-              >
-                <Flame className="w-3.5 h-3.5" />
-                <span>Multi-Campanhas 3+ ({multiActionLeadsCount.toLocaleString('pt-BR')})</span>
-              </button>
-
-              <button
                 onClick={() => setMultiActionFilter(multiActionFilter === 'super' ? 'all' : 'super')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   multiActionFilter === 'super'
@@ -1882,7 +1872,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Super Apoiadores 5+ ({superSupportersCount.toLocaleString('pt-BR')})</span>
+                <span>Super Apoiadores 3+ ({superSupportersCount.toLocaleString('pt-BR')})</span>
               </button>
 
               <button

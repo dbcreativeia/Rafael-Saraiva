@@ -675,20 +675,12 @@ export const NinaPassadore = () => {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10 w-full max-w-xl">
-                    <a
-                      href="/material-digital-dobrada-rafael-nina.zip"
-                      download="material-digital-dobrada-rafael-nina.zip"
-                      className="w-full sm:w-auto flex-1 bg-[#ebb430] hover:bg-[#d4a22b] text-[#102b31] font-black py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center text-sm"
-                    >
-                      <Download className="w-5 h-5" />
-                      Baixar Pacote Completo (.ZIP)
-                    </a>
                     <button
                       onClick={triggerDownload}
-                      className="w-full sm:w-auto flex-1 bg-[#102b31] hover:bg-[#183d46] text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md text-center text-sm cursor-pointer"
+                      className="w-full sm:w-auto flex-1 bg-[#ebb430] hover:bg-[#d4a22b] text-[#102b31] font-black py-4 px-8 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center text-base cursor-pointer"
                     >
-                      <Download className="w-4 h-4 text-[#ebb430]" />
-                      Baixar Imagens Soltas
+                      <Download className="w-5 h-5 text-[#102b31]" />
+                      Baixar Todas as Imagens Oficiais
                     </button>
                   </div>
                   

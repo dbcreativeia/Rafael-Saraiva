@@ -22,8 +22,12 @@ export async function getDbConnection() {
       database: DB_NAME,
       port: DB_PORT ? parseInt(DB_PORT) : 3306,
       waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
+      connectionLimit: 25,
+      maxIdle: 10,
+      idleTimeout: 60000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
+      connectTimeout: 30000
     });
 
     // Create tables if they don't exist
@@ -222,5 +226,30 @@ export async function getDbConnection() {
     console.error("Erro ao conectar ao MySQL:", err);
     pool = null;
     return null;
+  }
+}
+
+export async function queryWithRetry<T = any>(sql: string, params?: any[]): Promise<T> {
+  const currentPool = await getDbConnection();
+  if (!currentPool) throw new Error("Sem conexão com banco de dados");
+
+  try {
+    return await currentPool.query(sql, params) as unknown as T;
+  } catch (err: any) {
+    const isConnError = 
+      err?.code === 'ECONNRESET' ||
+      err?.code === 'PROTOCOL_CONNECTION_LOST' ||
+      err?.code === 'ETIMEDOUT' ||
+      err?.message?.includes('ECONNRESET') ||
+      err?.message?.includes('closed');
+
+    if (isConnError) {
+      console.warn(`[MySQL] Conexão resetada (${err.message || err.code}), reconectando e retentando query...`);
+      await new Promise(r => setTimeout(r, 400));
+      const retryPool = await getDbConnection();
+      if (!retryPool) throw err;
+      return await retryPool.query(sql, params) as unknown as T;
+    }
+    throw err;
   }
 }

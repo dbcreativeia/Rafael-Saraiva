@@ -83,20 +83,7 @@ export const MaterialDigitalDirect = () => {
     trackEvent('PageView_MaterialDigitalDirect');
   }, []);
 
-  // Download direto do pacote ZIP completo
-  const handleDownloadZip = () => {
-    trackEvent('Download_MaterialDigital_Zip');
-    const link = document.createElement('a');
-    link.href = '/material-digital-rafael-saraiva.zip';
-    link.download = 'material-digital-rafael-saraiva.zip';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 5000);
-  };
-
-  // Download de todos os arquivos individualmente (caso prefira as imagens soltas)
+  // Download de todos os arquivos individualmente (imagens em alta qualidade)
   const handleDownloadAllSeparately = async () => {
     if (downloadingAll) return;
     setDownloadingAll(true);
@@ -219,32 +206,22 @@ export const MaterialDigitalDirect = () => {
                   </div>
 
                   <h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight mb-2">
-                    Baixar Pacote Completo (8 Artes)
+                    Baixar Todas as Artes Oficiais
                   </h2>
                   <p className="text-sm md:text-base text-gray-600 font-medium mb-6">
-                    Arquivo compacto com todas as artes em alta qualidade prontas para uso: posts de feed, stories, capa do Facebook, santão e colinha.
+                    Baixe todas as artes em alta qualidade prontas para uso: posts de feed, stories, capa do Facebook, santão e colinha diretamente no seu dispositivo.
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-                    {/* Botão ZIP Direto */}
-                    <button
-                      id="btn-download-zip"
-                      onClick={handleDownloadZip}
-                      className="px-8 py-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-base md:text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 group"
-                    >
-                      <Download className="w-6 h-6 group-hover:translate-y-0.5 transition-transform" />
-                      <span>Baixar Todas em ZIP</span>
-                    </button>
-
-                    {/* Botão Baixar Separadas */}
+                    {/* Botão Baixar Todas as Imagens */}
                     <button
                       id="btn-download-all-individual"
                       onClick={handleDownloadAllSeparately}
                       disabled={downloadingAll}
-                      className="px-6 py-4 bg-white hover:bg-gray-100 active:scale-95 text-gray-800 font-bold text-sm md:text-base rounded-2xl border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="px-8 py-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-base md:text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
                     >
-                      <Layers className="w-5 h-5 text-orange-500" />
-                      <span>{downloadingAll ? 'Baixando...' : 'Baixar Imagens Soltas'}</span>
+                      <Download className="w-6 h-6" />
+                      <span>{downloadingAll ? 'Baixando Imagens...' : 'Baixar Todas as Artes'}</span>
                     </button>
                   </div>
 
