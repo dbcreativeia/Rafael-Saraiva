@@ -225,3 +225,133 @@ export const getCrmPaginated = async (query: any) => {
   return { leads, totalFiltered: total, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
 };
 
+/**
+ * Registra ou atualiza um lead vindo de cadastros nativos do site (Apoio Capital, Material, Petição, etc.)
+ * seguindo a hierarquia estrita:
+ * 1. WhatsApp (chave primária)
+ * 2. E-mail (chave secundária)
+ * Garante unicidade de lead e registra 1 ação por campanha.
+ */
+export const recordLeadAction = async (data: {
+  nome: string;
+  whatsapp?: string;
+  email?: string;
+  cep?: string;
+  endereco?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+  campaignName: string;
+  source: string;
+  createdAt?: string;
+}) => {
+  try {
+    const db = await getDbConnection();
+    if (!db) return;
+
+    const whatsapp = (data.whatsapp || '').trim();
+    const email = (data.email || '').trim().toLowerCase();
+    const nome = (data.nome || 'Apoiador').trim();
+    const cep = (data.cep || '').trim();
+    const createdAt = data.createdAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    // 1. Procurar lead existente pela hierarquia estrita:
+    // 1º WhatsApp (chave primária)
+    // 2º E-mail (chave secundária)
+    // 3º Nome + CEP (chave terciária / desempate se não encontrar por WhatsApp e E-mail)
+    let existingLead: any = null;
+
+    if (whatsapp) {
+      const [rowsW]: any = await db.query(
+        "SELECT id, campaign_count, whatsapp, email FROM crm_leads WHERE whatsapp = ? LIMIT 1",
+        [whatsapp]
+      );
+      if (rowsW.length > 0) existingLead = rowsW[0];
+    }
+
+    if (!existingLead && email && !email.includes('@fake') && !email.includes('@sememail')) {
+      const [rowsE]: any = await db.query(
+        "SELECT id, campaign_count, whatsapp, email FROM crm_leads WHERE email = ? LIMIT 1",
+        [email]
+      );
+      if (rowsE.length > 0) existingLead = rowsE[0];
+    }
+
+    if (!existingLead && nome && nome !== 'Apoiador' && nome !== 'Sem Nome' && cep) {
+      const cleanCep = cep.replace(/\D/g, '');
+      const [rowsNC]: any = await db.query(
+        "SELECT id, campaign_count, whatsapp, email FROM crm_leads WHERE REPLACE(REPLACE(cep, '-', ''), ' ', '') = ? AND LOWER(TRIM(nome)) = LOWER(TRIM(?)) LIMIT 1",
+        [cleanCep, nome]
+      );
+      if (rowsNC.length > 0) existingLead = rowsNC[0];
+    }
+
+    let leadId: string;
+
+    if (existingLead) {
+      leadId = existingLead.id;
+      // Atualizar dados cadastrais se vieram novos campos mais completos
+      await db.query(`
+        UPDATE crm_leads SET 
+          nome = CASE WHEN nome = '' OR nome = 'Sem Nome' OR nome = 'Apoiador' THEN ? ELSE nome END,
+          whatsapp = CASE WHEN whatsapp = '' OR whatsapp IS NULL THEN ? ELSE whatsapp END,
+          email = CASE WHEN email = '' OR email IS NULL THEN ? ELSE email END,
+          cep = CASE WHEN cep = '' OR cep IS NULL THEN ? ELSE cep END,
+          endereco = CASE WHEN endereco = '' OR endereco IS NULL THEN ? ELSE endereco END,
+          numero = CASE WHEN numero = '' OR numero IS NULL THEN ? ELSE numero END,
+          complemento = CASE WHEN complemento = '' OR complemento IS NULL THEN ? ELSE complemento END,
+          bairro = CASE WHEN bairro = '' OR bairro IS NULL THEN ? ELSE bairro END,
+          cidade = CASE WHEN cidade = '' OR cidade IS NULL THEN ? ELSE cidade END,
+          estado = CASE WHEN estado = '' OR estado IS NULL THEN ? ELSE estado END
+        WHERE id = ?
+      `, [
+        nome, whatsapp, email, cep,
+        data.endereco || '', data.numero || '', data.complemento || '',
+        data.bairro || '', data.cidade || '', data.estado || '',
+        leadId
+      ]);
+    } else {
+      // Criar novo lead único
+      leadId = "lead_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
+      await db.query(`
+        INSERT INTO crm_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campaign_count, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      `, [
+        leadId, nome, whatsapp, email, cep,
+        data.endereco || '', data.numero || '', data.complemento || '',
+        data.bairro || '', data.cidade || '', data.estado || '',
+        createdAt
+      ]);
+    }
+
+    // 2. Registrar a ação (se ainda não participou dessa mesma campanha)
+    const [existingAction]: any = await db.query(
+      "SELECT id FROM crm_actions WHERE lead_id = ? AND campaign_name = ? LIMIT 1",
+      [leadId, data.campaignName]
+    );
+
+    if (existingAction.length === 0) {
+      await db.query(
+        "INSERT INTO crm_actions (lead_id, campaign_name, source, created_at) VALUES (?, ?, ?, ?)",
+        [leadId, data.campaignName, data.source, createdAt]
+      );
+
+      // Recalcular campaign_count do lead
+      const [countRes]: any = await db.query(
+        "SELECT COUNT(DISTINCT campaign_name) as total FROM crm_actions WHERE lead_id = ?",
+        [leadId]
+      );
+      const newCount = countRes[0]?.total || 1;
+      await db.query("UPDATE crm_leads SET campaign_count = ? WHERE id = ?", [newCount, leadId]);
+    }
+
+    // Invalida cache de métricas para refletir no resumo imediatamente
+    cachedSummary = null;
+  } catch (err) {
+    console.error("Erro ao registrar ação no CRM:", err);
+  }
+};
+
+

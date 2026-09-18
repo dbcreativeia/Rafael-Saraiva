@@ -2039,30 +2039,51 @@ class LeadsConsolidationManager {
     try {
       const db = await getDbConnection();
       if (db) {
+        // 1. Material Oficial Rafael (apenas material impresso)
         const [materials] = await db.query<any[]>(`
-          SELECT id, nome, whatsapp, email, cidade, estado, endereco, numero, cep, materialTipo, data
+          SELECT id, nome, sobrenome, whatsapp, email, cidade, estado, endereco, numero, complemento, bairro, cep, adesivoPerfurado, createdAt
           FROM material_campaign
+          WHERE tipoMaterial = 'impresso'
           ORDER BY id DESC
-          LIMIT 1000
-        `).catch(() => [[]]);
+        `).catch((e) => {
+          console.error("Erro ao buscar material_campaign:", e);
+          return [[]];
+        });
 
+        // 2. Dobrada Nina Passadore (apenas material impresso)
         const [nina] = await db.query<any[]>(`
-          SELECT id, nome, whatsapp, email, cidade, estado, endereco, numero, cep, materialTipo, data
+          SELECT id, nome, sobrenome, whatsapp, email, cidade, estado, endereco, numero, complemento, bairro, cep, adesivoPerfurado, createdAt
           FROM ninapassadore_campaign
+          WHERE tipoMaterial = 'impresso'
           ORDER BY id DESC
-          LIMIT 1000
-        `).catch(() => [[]]);
+        `).catch((e) => {
+          console.error("Erro ao buscar ninapassadore_campaign:", e);
+          return [[]];
+        });
+
+        // 3. Base importada: Material Impresso Nina
+        const [imported] = await db.query<any[]>(`
+          SELECT id, nome, whatsapp, email, cidade, estado, endereco, numero, complemento, bairro, cep, campanha, createdAt
+          FROM imported_leads
+          WHERE campanha = 'Material Impresso Nina'
+          ORDER BY id DESC
+        `).catch((e) => {
+          console.error("Erro ao buscar imported_leads Material Impresso Nina:", e);
+          return [[]];
+        });
 
         const combined: PhysicalMaterialItem[] = [];
-        for (const m of [...(materials || []), ...(nina || [])]) {
-          const rawMat = (m.materialTipo || '').toLowerCase();
-          const isAdesivo = rawMat.includes('adesivo') || rawMat.includes('perfurado');
+
+        // Adiciona Oficial Rafael
+        for (const m of (materials || [])) {
+          const isAdesivo = Boolean(m.adesivoPerfurado === 1 || m.adesivoPerfurado === true || m.adesivoPerfurado === '1');
           if (adesivoFilter === 'YES' && !isAdesivo) continue;
           if (adesivoFilter === 'NO' && isAdesivo) continue;
 
           combined.push({
             id: `mat_${m.id}`,
             nome: formatDisplayTitleName(m.nome),
+            sobrenome: formatDisplayTitleName(m.sobrenome || ''),
             whatsapp: normalizePhone(m.whatsapp),
             email: normalizeEmail(m.email),
             cidade: m.cidade || 'São Paulo',
@@ -2073,10 +2094,62 @@ class LeadsConsolidationManager {
             bairro: m.bairro || '',
             cep: m.cep || '',
             adesivoPerfurado: isAdesivo,
-            date: m.data ? new Date(m.data).toISOString() : new Date().toISOString(),
-            source: m.materialTipo || 'Campanha de Material'
+            date: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
+            source: 'Oficial Rafael'
           });
         }
+
+        // Adiciona Dobrada Nina
+        for (const m of (nina || [])) {
+          const isAdesivo = Boolean(m.adesivoPerfurado === 1 || m.adesivoPerfurado === true || m.adesivoPerfurado === '1');
+          if (adesivoFilter === 'YES' && !isAdesivo) continue;
+          if (adesivoFilter === 'NO' && isAdesivo) continue;
+
+          combined.push({
+            id: `nina_${m.id}`,
+            nome: formatDisplayTitleName(m.nome),
+            sobrenome: formatDisplayTitleName(m.sobrenome || ''),
+            whatsapp: normalizePhone(m.whatsapp),
+            email: normalizeEmail(m.email),
+            cidade: m.cidade || 'São Paulo',
+            estado: m.estado || 'SP',
+            endereco: m.endereco || '',
+            numero: m.numero || '',
+            complemento: m.complemento || '',
+            bairro: m.bairro || '',
+            cep: m.cep || '',
+            adesivoPerfurado: isAdesivo,
+            date: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
+            source: 'Dobrada Nina'
+          });
+        }
+
+        // Adiciona Material Impresso Nina (Importado)
+        for (const m of (imported || [])) {
+          // Na base importada de material impresso, todos solicitaram material impresso.
+          const isAdesivo = false;
+          if (adesivoFilter === 'YES' && !isAdesivo) continue;
+          if (adesivoFilter === 'NO' && isAdesivo) continue;
+
+          combined.push({
+            id: `imp_${m.id}`,
+            nome: formatDisplayTitleName(m.nome),
+            sobrenome: '',
+            whatsapp: normalizePhone(m.whatsapp),
+            email: normalizeEmail(m.email),
+            cidade: m.cidade || 'São Paulo',
+            estado: m.estado || 'SP',
+            endereco: m.endereco || '',
+            numero: m.numero || '',
+            complemento: m.complemento || '',
+            bairro: m.bairro || '',
+            cep: m.cep || '',
+            adesivoPerfurado: isAdesivo,
+            date: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
+            source: 'Material Impresso Nina (Importado)'
+          });
+        }
+
         return {
           materials: combined,
           total: combined.length
