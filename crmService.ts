@@ -44,7 +44,7 @@ export const getCrmSummary = async (forceRefresh = false) => {
   const [camps]: any = await queryWithRetry("SELECT DISTINCT campaign_name FROM crm_actions WHERE campaign_name != '' AND campaign_name IS NOT NULL ORDER BY campaign_name");
   const campaignOptions = camps.map((r: any) => r.campaign_name);
 
-  const [cities]: any = await queryWithRetry("SELECT cidade as name, estado, COUNT(*) as count FROM crm_leads WHERE cidade != '' AND cidade IS NOT NULL GROUP BY cidade, estado ORDER BY count DESC LIMIT 500");
+  const [cities]: any = await queryWithRetry("SELECT cidade as name, estado, COUNT(*) as count FROM crm_leads WHERE cidade != '' AND cidade IS NOT NULL GROUP BY cidade, estado ORDER BY count DESC");
   const cityOptions = cities.map((r: any) => ({ name: r.name, estado: r.estado, count: Number(r.count) }));
 
   const qualityCounts = {
