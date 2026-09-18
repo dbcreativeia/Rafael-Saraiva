@@ -5,6 +5,11 @@ let cachedSummary: any = null;
 let cachedSummaryTime = 0;
 const SUMMARY_CACHE_TTL = 30000; // 30 seconds
 
+export const invalidateCrmSummaryCache = () => {
+  cachedSummary = null;
+  cachedSummaryTime = 0;
+};
+
 export const getCrmSummary = async (forceRefresh = false) => {
   const now = Date.now();
   if (!forceRefresh && cachedSummary && (now - cachedSummaryTime < SUMMARY_CACHE_TTL)) {
@@ -357,5 +362,68 @@ export const recordLeadAction = async (data: {
     console.error("Erro ao registrar ação no CRM:", err);
   }
 };
+
+/**
+ * Sincroniza uma campanha importada para as tabelas do CRM (crm_leads e crm_actions)
+ * de forma massiva e ultra-rápida via SQL, atualizando contagens e métricas imediatamente.
+ */
+export const syncCampaignToCrm = async (campaignName: string) => {
+  try {
+    const db = await getDbConnection();
+    if (!db) return;
+
+    console.log(`⚡ Sincronizando campanha "${campaignName}" para o CRM com deduplicação avançada...`);
+    const start = Date.now();
+
+    // 1. Criar tabela temporária com os leads da campanha higienizados
+    // 2. Para contatos que já existem por WhatsApp ou E-mail, vincular a ação ao lead_id existente
+    // 3. Para contatos 100% novos, criar o registro em crm_leads e depois inserir em crm_actions
+
+    // Inserir novos leads que não existem por WhatsApp nem por E-mail
+    await db.query(`
+      INSERT INTO crm_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campaign_count, created_at)
+      SELECT il.id, il.nome, il.whatsapp, il.email, il.cep, il.endereco, il.numero, il.complemento, il.bairro, il.cidade, il.estado, 1, il.createdAt
+      FROM imported_leads il
+      LEFT JOIN crm_leads cl_w ON (il.whatsapp != '' AND il.whatsapp IS NOT NULL AND il.whatsapp = cl_w.whatsapp)
+      LEFT JOIN crm_leads cl_e ON (il.email != '' AND il.email IS NOT NULL AND il.email NOT LIKE '%@fake%' AND il.email = cl_e.email)
+      WHERE il.campanha = ?
+        AND cl_w.id IS NULL
+        AND cl_e.id IS NULL
+      ON DUPLICATE KEY UPDATE nome = VALUES(nome)
+    `, [campaignName]);
+
+    // Inserir ações apontando para o lead consolidado (existente ou novo)
+    await db.query(`
+      INSERT IGNORE INTO crm_actions (lead_id, campaign_name, source, created_at)
+      SELECT 
+        COALESCE(cl_w.id, cl_e.id, il.id) AS lead_id,
+        il.campanha,
+        'Importação CSV',
+        il.createdAt
+      FROM imported_leads il
+      LEFT JOIN crm_leads cl_w ON (il.whatsapp != '' AND il.whatsapp IS NOT NULL AND il.whatsapp = cl_w.whatsapp)
+      LEFT JOIN crm_leads cl_e ON (il.email != '' AND il.email IS NOT NULL AND il.email NOT LIKE '%@fake%' AND il.email = cl_e.email)
+      WHERE il.campanha = ?
+    `, [campaignName]);
+
+    // Recalcular contagem de campanhas
+    await db.query(`
+      UPDATE crm_leads l
+      INNER JOIN (
+        SELECT lead_id, COUNT(DISTINCT campaign_name) as cnt
+        FROM crm_actions
+        GROUP BY lead_id
+      ) act ON l.id = act.lead_id
+      SET l.campaign_count = act.cnt
+    `);
+
+    // Invalida cache do sumário para refletir no painel imediatamente
+    invalidateCrmSummaryCache();
+    console.log(`✅ Campanha "${campaignName}" sincronizada no CRM em ${Date.now() - start}ms.`);
+  } catch (err) {
+    console.error(`Erro ao sincronizar campanha "${campaignName}" no CRM:`, err);
+  }
+};
+
 
 
