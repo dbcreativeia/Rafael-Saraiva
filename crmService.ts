@@ -425,5 +425,80 @@ export const syncCampaignToCrm = async (campaignName: string) => {
   }
 };
 
+/**
+ * Exclui completamente um lead de todas as tabelas e registros SQL em definitivo.
+ */
+export const deleteLeadById = async (leadId: string) => {
+  const db = await getDbConnection();
+  if (!db) throw new Error("Sem conexão com o banco de dados");
+
+  // 1. Buscar os identificadores do lead antes da exclusão
+  const [leads]: any = await db.query(
+    "SELECT id, whatsapp, email, cep, nome FROM crm_leads WHERE id = ? LIMIT 1",
+    [leadId]
+  );
+
+  let whatsapp = '';
+  let email = '';
+  let cleanPhone = '';
+
+  if (leads && leads.length > 0) {
+    whatsapp = (leads[0].whatsapp || '').trim();
+    email = (leads[0].email || '').trim().toLowerCase();
+    cleanPhone = whatsapp.replace(/\D/g, '');
+  }
+
+  // 2. Excluir histórico de ações do CRM
+  await db.query("DELETE FROM crm_actions WHERE lead_id = ?", [leadId]);
+
+  // 3. Excluir registro mestre de crm_leads
+  await db.query("DELETE FROM crm_leads WHERE id = ?", [leadId]);
+
+  // 4. Excluir de imported_leads
+  if (cleanPhone || (email && email.includes('@') && !email.includes('@fake'))) {
+    await db.query(
+      `DELETE FROM imported_leads WHERE id = ? 
+       OR (whatsapp != '' AND (whatsapp = ? OR REPLACE(REPLACE(REPLACE(REPLACE(whatsapp, ' ', ''), '-', ''), '(', ''), ')', '') = ?))
+       OR (email != '' AND email NOT LIKE '%@fake%' AND LOWER(email) = ?)`,
+      [leadId, whatsapp, cleanPhone, email]
+    );
+  } else {
+    await db.query("DELETE FROM imported_leads WHERE id = ?", [leadId]);
+  }
+
+  // 5. Excluir de todas as tabelas operacionais onde esse lead possa constar
+  const tables = [
+    'material_campaign',
+    'ninapassadore_campaign',
+    'popup_apoio',
+    'citizens',
+    'petitions',
+    'contra_maus_tratos',
+    'jogo_users'
+  ];
+
+  for (const table of tables) {
+    try {
+      if (cleanPhone || (email && email.includes('@') && !email.includes('@fake'))) {
+        await db.query(
+          `DELETE FROM ${table} WHERE id = ? 
+           OR (whatsapp != '' AND (whatsapp = ? OR REPLACE(REPLACE(REPLACE(REPLACE(whatsapp, ' ', ''), '-', ''), '(', ''), ')', '') = ?))
+           OR (email != '' AND email NOT LIKE '%@fake%' AND LOWER(email) = ?)`,
+          [leadId, whatsapp, cleanPhone, email]
+        );
+      } else {
+        await db.query(`DELETE FROM ${table} WHERE id = ?`, [leadId]);
+      }
+    } catch (e) {
+      console.warn(`Aviso ao excluir de ${table}:`, e);
+    }
+  }
+
+  // 6. Invalidar o cache do sumário para recalcular instantaneamente as métricas
+  invalidateCrmSummaryCache();
+
+  return { success: true, leadId };
+};
+
 
 

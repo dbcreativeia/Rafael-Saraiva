@@ -181,6 +181,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   // Selected Lead for Detailed 360º View Modal
   const [selectedLead, setSelectedLead] = useState<ConsolidatedLead | null>(null);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<ConsolidatedLead | null>(null);
 
   // CSV Upload & Telemetry Progress State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -782,6 +784,39 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       await fetchImportedBases();
     } finally {
       setIsDeletingBase('');
+    }
+  };
+
+  const handleConfirmDeleteLead = async () => {
+    if (!leadToDelete || !leadToDelete.id) return;
+    setIsDeletingLead(true);
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(leadToDelete.id)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        // Remover imediatamente da listagem na tela
+        setServerLeads(prev => prev.filter(l => l.id !== leadToDelete.id));
+        setTotalFiltered(prev => Math.max(0, prev - 1));
+        
+        // Se a Ficha 360 estiver aberta para esse lead, fecha
+        if (selectedLead?.id === leadToDelete.id) {
+          setSelectedLead(null);
+        }
+        
+        setLeadToDelete(null);
+        
+        // Atualiza os números e estatísticas de forma fluida
+        fetchSummary();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Erro ao excluir o lead.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao excluir lead:', err);
+      alert('Erro de comunicação com o servidor ao tentar excluir o lead.');
+    } finally {
+      setIsDeletingLead(false);
     }
   };
 
@@ -2839,18 +2874,32 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                             )}
                           </td>
 
-                          {/* Coluna 7: Ação de Ver Ficha */}
+                          {/* Coluna 7: Ações (Ver Ficha e Apagar) */}
                           <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedLead(lead);
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Ver Ficha</span>
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedLead(lead);
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                title="Ver ficha cadastral completa 360º"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Ver Ficha</span>
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLeadToDelete(lead);
+                                }}
+                                className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 font-bold text-xs transition-colors inline-flex items-center justify-center cursor-pointer border border-red-200/50"
+                                title="Excluir este lead em definitivo de todos os registros"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -3134,7 +3183,21 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             </div>
 
             {/* Footer do Modal */}
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedLead) {
+                    setLeadToDelete(selectedLead);
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200/80 text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                title="Excluir permanentemente este lead de todo o banco de dados"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir Lead em Definitivo</span>
+              </button>
+
               <button
                 onClick={() => setSelectedLead(null)}
                 className="px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
@@ -3143,6 +3206,79 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DEFINITIVA DO LEAD */}
+      {leadToDelete && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          onClick={() => !isDeletingLead && setLeadToDelete(null)}
+        >
+          <div 
+            className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-red-100 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 border border-red-200 flex items-center justify-center shrink-0 text-red-600">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-red-950 uppercase tracking-tight">
+                  Excluir Lead em Definitivo?
+                </h3>
+                <p className="text-xs text-red-700 mt-1">
+                  Esta ação é irreversível e removerá todos os registros associados.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-3 text-xs text-gray-600">
+              <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200">
+                <div className="text-[11px] text-gray-400 font-bold uppercase">Lead a ser excluído:</div>
+                <div className="font-black text-gray-900 text-sm mt-0.5">{leadToDelete.nome || 'Sem Nome'}</div>
+                <div className="text-gray-500 text-[11px] mt-0.5">
+                  {leadToDelete.whatsapp && <span>WhatsApp: {leadToDelete.whatsapp} • </span>}
+                  {leadToDelete.email && <span>Email: {leadToDelete.email} • </span>}
+                  <span>{leadToDelete.cidade || 'Não informada'}/{leadToDelete.estado || 'SP'}</span>
+                </div>
+              </div>
+
+              <p className="text-gray-600 text-[11px] leading-relaxed">
+                Ao confirmar, este apoiador será apagado <strong>completamente de todas as tabelas SQL, campanhas, formulários e memória do servidor</strong>, em definitivo.
+              </p>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingLead}
+                onClick={() => setLeadToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeletingLead}
+                onClick={handleConfirmDeleteLead}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isDeletingLead ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Apagando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Sim, Apagar em Definitivo</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
