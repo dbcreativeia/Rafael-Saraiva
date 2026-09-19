@@ -1,4 +1,4 @@
-import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm } from "./crmService.ts";
+import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm, deleteLeadById } from "./crmService.ts";
 import { sanitizeGeo, sanitizeCity, sanitizeState } from "./geoSanitizer.ts";
 import express from "express";
 import compression from "compression";
@@ -862,6 +862,39 @@ async function startServer() {
         }
       }
       return res.status(500).json({ error: "Erro ao paginar leads", details: String(err) });
+    }
+  });
+
+  // Exclusão definitiva de lead de todo o banco de dados e servidor
+  app.delete('/api/leads/:id', async (req, res) => {
+    const leadId = req.params.id;
+    if (!leadId) {
+      return res.status(400).json({ error: "ID do lead é obrigatório" });
+    }
+
+    try {
+      const result = await deleteLeadById(leadId);
+
+      // Limpar de fallbacks em memória se existirem
+      const pIdx = popupApoioData.findIndex(p => p.id === leadId);
+      if (pIdx !== -1) popupApoioData.splice(pIdx, 1);
+
+      const mIdx = materialData.findIndex(m => m.id === leadId);
+      if (mIdx !== -1) materialData.splice(mIdx, 1);
+
+      const nIdx = ninapassadoreData.findIndex(n => n.id === leadId);
+      if (nIdx !== -1) ninapassadoreData.splice(nIdx, 1);
+
+      const impIdx = importedLeadsData.findIndex(i => i.id === leadId);
+      if (impIdx !== -1) {
+        importedLeadsData.splice(impIdx, 1);
+        saveImportedLeadsToDisk();
+      }
+
+      return res.json({ success: true, message: "Lead excluído em definitivo de todos os registros." });
+    } catch (err: any) {
+      console.error("Erro ao excluir lead:", err);
+      return res.status(500).json({ error: "Erro ao excluir lead: " + (err?.message || 'Falha no servidor') });
     }
   });
 
