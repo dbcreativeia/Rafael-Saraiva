@@ -17,6 +17,7 @@ import { NinaPassadore } from './components/NinaPassadore';
 import { Jogo } from './components/Jogo';
 import { MaterialDigitalDirect } from './components/MaterialDigitalDirect';
 import { MaterialDigitalDobradaDirect } from './components/MaterialDigitalDobradaDirect';
+import { ColinhaEleitoral } from './components/ColinhaEleitoral';
 
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Navbar } from './components/Navbar';
@@ -257,6 +258,7 @@ function App() {
         <Route path="/digitaldobrada" element={<MaterialDigitalDobradaDirect />} />
         <Route path="/ninapassadore" element={<NinaPassadore />} />
         <Route path="/jogo" element={<Jogo />} />
+        <Route path="/colinha" element={<ColinhaEleitoral />} />
         <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>

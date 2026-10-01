@@ -61,8 +61,8 @@ export const SupportPopup: React.FC = () => {
   }, [isOpen]);
 
   useEffect(() => {
-    // Não exibir dentro do painel administrativo ou na página do jogo
-    if (location.pathname === '/jogo' || location.pathname === '/admin' || location.hash === '#admin') return;
+    // Não exibir dentro do painel administrativo, na página do jogo ou na colinha
+    if (location.pathname === '/jogo' || location.pathname === '/admin' || location.pathname === '/colinha' || location.hash === '#admin') return;
 
     // Apenas modo de teste se expressamente solicitado via parâmetro (?testpopup ou #testpopup)
     const isExplicitTestMode = 

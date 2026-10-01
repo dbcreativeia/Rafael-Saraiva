@@ -7,7 +7,7 @@ import { trackEvent } from '../analytics';
 export function FloatingWhatsApp() {
   const location = useLocation();
 
-  if (location.pathname === '/jogo' || location.pathname === '/admin' || location.hash === '#admin') {
+  if (location.pathname === '/jogo' || location.pathname === '/admin' || location.pathname === '/colinha' || location.hash === '#admin') {
     return null;
   }
 
