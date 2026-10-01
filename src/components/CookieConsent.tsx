@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, Check, X, Settings, ChevronDown, ChevronUp } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 export const initializeTracking = () => {
   // Initialize Google Analytics
@@ -45,6 +45,7 @@ export const initializeTracking = () => {
 };
 
 export const CookieConsent: React.FC = () => {
+  const location = useLocation();
   const [isVisible, setIsVisible] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   
@@ -55,6 +56,18 @@ export const CookieConsent: React.FC = () => {
   });
 
   useEffect(() => {
+    // Na página /colinha, ativa os cookies por padrão e não exibe o banner
+    if (location.pathname === '/colinha') {
+      const consent = localStorage.getItem('cookieConsent');
+      if (consent !== 'declined') {
+        localStorage.setItem('cookieConsent', 'accepted');
+        localStorage.setItem('cookiePrefs', JSON.stringify({ necessary: true, analytics: true, marketing: true }));
+        initializeTracking();
+      }
+      setIsVisible(false);
+      return;
+    }
+
     const consent = localStorage.getItem('cookieConsent');
     if (consent === 'accepted' || consent === 'custom') {
       const storedPrefs = localStorage.getItem('cookiePrefs');
@@ -70,7 +83,11 @@ export const CookieConsent: React.FC = () => {
       const timer = setTimeout(() => setIsVisible(true), 1500);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [location.pathname]);
+
+  if (location.pathname === '/colinha') {
+    return null;
+  }
 
   const handleAcceptAll = () => {
     const allOn = { necessary: true, analytics: false, marketing: false };
