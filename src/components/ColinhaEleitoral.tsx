@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Check, MessageCircle, Instagram, Facebook } from 'lucide-react';
+import { Download, Check, MessageCircle, Instagram, Facebook, Loader2 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { toPng, toBlob } from 'html-to-image';
 import { trackEvent } from '../analytics';
@@ -43,8 +43,10 @@ export const ColinhaEleitoral: React.FC = () => {
   });
 
   const [isExporting, setIsExporting] = useState(false);
+  const [loadingText, setLoadingText] = useState('Gerando Colinha...');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const printableCardRef = useRef<HTMLDivElement>(null);
+  const storiesCardRef = useRef<HTMLDivElement>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -74,12 +76,11 @@ export const ColinhaEleitoral: React.FC = () => {
 
   const handleDownload = async () => {
     if (!printableCardRef.current || isExporting) return;
+    setLoadingText('Baixando imagem da colinha...');
     setIsExporting(true);
     trackEvent('Download_Colinha_Image');
 
     try {
-      await new Promise(r => setTimeout(r, 150));
-
       const dataUrl = await toPng(printableCardRef.current, {
         quality: 0.98,
         pixelRatio: 3,
@@ -110,6 +111,7 @@ export const ColinhaEleitoral: React.FC = () => {
   // Compartilhar no WhatsApp a imagem da colinha pronta anexada junto com a mensagem
   const handleShareWhatsApp = async () => {
     if (!printableCardRef.current || isExporting) return;
+    setLoadingText('Preparando para o WhatsApp...');
     setIsExporting(true);
     trackEvent('Share_Colinha_WhatsApp');
 
@@ -157,31 +159,35 @@ export const ColinhaEleitoral: React.FC = () => {
 
       // Fallback sem popup blocker (redireciona na mesma aba para abrir o app do WhatsApp no celular)
       window.location.href = whatsappUrl;
-    } catch (e) {
-      console.warn('Share WhatsApp fallback:', e);
-      window.location.href = whatsappUrl;
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.warn('Share WhatsApp fallback:', e);
+        window.location.href = whatsappUrl;
+      }
     } finally {
       setIsExporting(false);
     }
   };
 
-  // Compartilhar nos Stories do Instagram com imagem já gerada e anexada
+  // Compartilhar nos Stories do Instagram com imagem 9:16 que encaixa perfeitamente na tela
   const handleShareInstagramStories = async () => {
-    if (!printableCardRef.current || isExporting) return;
+    const targetEl = storiesCardRef.current || printableCardRef.current;
+    if (!targetEl || isExporting) return;
+    setLoadingText('Preparando Stories do Instagram...');
     setIsExporting(true);
     trackEvent('Share_Colinha_Instagram_Stories');
 
     try {
-      const blob = await toBlob(printableCardRef.current, {
+      const blob = await toBlob(targetEl, {
         quality: 0.95,
         pixelRatio: 2.5,
         skipFonts: true
       });
 
       if (blob) {
-        const file = new File([blob], 'minha-colinha-instagram.png', { type: 'image/png' });
+        const file = new File([blob], 'minha-colinha-stories.png', { type: 'image/png' });
 
-        // No mobile, abre a bandeja nativa com a imagem carregada para ir direto aos Stories do Instagram
+        // No mobile, abre a bandeja nativa com a imagem 9:16 carregada para ir direto aos Stories do Instagram
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: 'Minha Colinha',
@@ -191,14 +197,14 @@ export const ColinhaEleitoral: React.FC = () => {
         }
       }
 
-      // Fallback: Faz download da imagem e abre o app do Instagram
-      const dataUrl = await toPng(printableCardRef.current, {
+      // Fallback: Faz download da imagem 9:16 e abre o app do Instagram
+      const dataUrl = await toPng(targetEl, {
         quality: 0.95,
         pixelRatio: 2.5,
         skipFonts: true
       });
       const a = document.createElement('a');
-      a.download = `minha-colinha-instagram.png`;
+      a.download = `minha-colinha-stories.png`;
       a.href = dataUrl;
       document.body.appendChild(a);
       a.click();
@@ -206,38 +212,41 @@ export const ColinhaEleitoral: React.FC = () => {
 
       showToast('Imagem salva! Abrindo o Instagram para você postar nos Stories.');
       
-      // Abre o app do Instagram no celular diretamente
       setTimeout(() => {
         window.location.href = 'instagram://camera';
         setTimeout(() => {
           window.location.href = 'https://www.instagram.com/';
-        }, 1000);
+        }, 1200);
       }, 300);
-    } catch (e) {
-      console.warn('Share Instagram fallthrough:', e);
-      window.location.href = 'instagram://app';
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.warn('Share Instagram fallthrough:', e);
+        window.location.href = 'instagram://app';
+      }
     } finally {
       setIsExporting(false);
     }
   };
 
-  // Compartilhar nos Stories do Facebook com imagem já gerada e anexada
+  // Compartilhar nos Stories do Facebook com imagem 9:16 que encaixa perfeitamente na tela
   const handleShareFacebookStories = async () => {
-    if (!printableCardRef.current || isExporting) return;
+    const targetEl = storiesCardRef.current || printableCardRef.current;
+    if (!targetEl || isExporting) return;
+    setLoadingText('Preparando Stories do Facebook...');
     setIsExporting(true);
     trackEvent('Share_Colinha_Facebook_Stories');
 
     try {
-      const blob = await toBlob(printableCardRef.current, {
+      const blob = await toBlob(targetEl, {
         quality: 0.95,
         pixelRatio: 2.5,
         skipFonts: true
       });
 
       if (blob) {
-        const file = new File([blob], 'minha-colinha-facebook.png', { type: 'image/png' });
+        const file = new File([blob], 'minha-colinha-stories.png', { type: 'image/png' });
 
-        // No mobile, abre a bandeja nativa com a imagem carregada para ir direto aos Stories do Facebook
+        // No mobile, abre a bandeja nativa com a imagem 9:16 carregada para ir direto aos Stories do Facebook
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: 'Minha Colinha Eleitoral',
@@ -248,14 +257,14 @@ export const ColinhaEleitoral: React.FC = () => {
         }
       }
 
-      // Fallback: Faz download da imagem e abre o app do Facebook
-      const dataUrl = await toPng(printableCardRef.current, {
+      // Fallback: Faz download da imagem 9:16 e abre o app do Facebook
+      const dataUrl = await toPng(targetEl, {
         quality: 0.95,
         pixelRatio: 2.5,
         skipFonts: true
       });
       const a = document.createElement('a');
-      a.download = `minha-colinha-facebook.png`;
+      a.download = `minha-colinha-stories.png`;
       a.href = dataUrl;
       document.body.appendChild(a);
       a.click();
@@ -263,16 +272,17 @@ export const ColinhaEleitoral: React.FC = () => {
 
       showToast('Imagem salva! Abrindo o Facebook para você postar nos Stories.');
 
-      // Abre o app do Facebook no celular diretamente
       setTimeout(() => {
         window.location.href = 'fb://';
         setTimeout(() => {
           window.location.href = 'https://www.facebook.com/';
-        }, 1000);
+        }, 1200);
       }, 300);
-    } catch (e) {
-      console.warn('Share Facebook fallthrough:', e);
-      window.location.href = 'fb://';
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.warn('Share Facebook fallthrough:', e);
+        window.location.href = 'fb://';
+      }
     } finally {
       setIsExporting(false);
     }
@@ -625,6 +635,162 @@ export const ColinhaEleitoral: React.FC = () => {
             💡 Salve a imagem no seu celular para conferir antes de votar ou compartilhe com amigos e familiares.
           </p>
 
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* LOADING OVERLAY VISÍVEL NA TELA NO 1º CLIQUE */}
+      {/* ========================================================= */}
+      {isExporting && (
+        <div className="fixed inset-0 z-[9999] bg-black/65 backdrop-blur-xs flex flex-col items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-3 text-center max-w-[290px] border border-gray-100">
+            <Loader2 className="w-10 h-10 text-[#00823c] animate-spin" />
+            <span className="text-sm font-bold text-black uppercase tracking-wider">
+              {loadingText}
+            </span>
+            <span className="text-xs text-gray-500">
+              Gerando imagem em alta resolução para seu celular...
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 9:16 STORIES TEMPLATE (ENCAIXE 100% PERFEITO NOS STORIES) */}
+      {/* ========================================================= */}
+      <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none opacity-0 select-none overflow-hidden">
+        <div
+          ref={storiesCardRef}
+          className="w-[420px] h-[746px] bg-white text-black flex flex-col justify-between p-4 font-sans border-2 border-black"
+          style={{ width: '420px', height: '746px' }}
+        >
+          {/* Header Stories */}
+          <div className="bg-black text-white px-4 py-2.5 text-center rounded-xl">
+            <h2 className="text-xl font-bold uppercase tracking-wider text-white">
+              MINHA COLINHA
+            </h2>
+          </div>
+
+          {/* Candidatos Formatados */}
+          <div className="flex flex-col gap-3.5 my-auto divide-y divide-gray-100">
+            {/* 1. DEPUTADA FEDERAL */}
+            <div className="flex flex-col gap-1.5 pt-0 first:pt-0">
+              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
+                1. DEPUTADA FEDERAL
+              </span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-12 h-12 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
+                  <img
+                    src={NINA_PHOTO}
+                    alt="NINA PASSADORE"
+                    className="w-full h-full object-cover object-top"
+                    crossOrigin="anonymous"
+                  />
+                </div>
+                <span className="text-base font-bold text-black flex-1">
+                  NINA PASSADORE
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                {renderFixedNumberBoxes("4407")}
+                {renderConfirmaButton()}
+              </div>
+            </div>
+
+            {/* 2. DEPUTADO ESTADUAL */}
+            <div className="flex flex-col gap-1.5 pt-3">
+              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
+                2. DEPUTADO ESTADUAL
+              </span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-12 h-12 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
+                  <img
+                    src={RAFAEL_PHOTO}
+                    alt="RAFAEL SARAIVA"
+                    className="w-full h-full object-cover object-top"
+                    crossOrigin="anonymous"
+                  />
+                </div>
+                <span className="text-base font-bold text-black flex-1">
+                  RAFAEL SARAIVA
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                {renderFixedNumberBoxes("44077")}
+                {renderConfirmaButton()}
+              </div>
+            </div>
+
+            {/* 3. 1º SENADOR */}
+            <div className="flex flex-col gap-1.5 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
+                  3. 1º SENADOR
+                </span>
+                <span className="text-xs font-bold text-black truncate max-w-[200px]">
+                  {data.senador1Nome || '---'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                {renderFixedNumberBoxes(data.senador1Num ? data.senador1Num.padEnd(3, ' ') : '   ')}
+                {renderConfirmaButton()}
+              </div>
+            </div>
+
+            {/* 4. 2º SENADOR */}
+            <div className="flex flex-col gap-1.5 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
+                  4. 2º SENADOR
+                </span>
+                <span className="text-xs font-bold text-black truncate max-w-[200px]">
+                  {data.senador2Nome || '---'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                {renderFixedNumberBoxes(data.senador2Num ? data.senador2Num.padEnd(3, ' ') : '   ')}
+                {renderConfirmaButton()}
+              </div>
+            </div>
+
+            {/* 5. GOVERNADOR */}
+            <div className="flex flex-col gap-1.5 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
+                  5. GOVERNADOR
+                </span>
+                <span className="text-xs font-bold text-black truncate max-w-[200px]">
+                  {data.governadorNome || '---'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                {renderFixedNumberBoxes(data.governadorNum ? data.governadorNum.padEnd(2, ' ') : '  ')}
+                {renderConfirmaButton()}
+              </div>
+            </div>
+
+            {/* 6. PRESIDENTE */}
+            <div className="flex flex-col gap-1.5 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
+                  6. PRESIDENTE
+                </span>
+                <span className="text-xs font-bold text-black truncate max-w-[200px]">
+                  {data.presidenteNome || '---'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                {renderFixedNumberBoxes(data.presidenteNum ? data.presidenteNum.padEnd(2, ' ') : '  ')}
+                {renderConfirmaButton()}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Stories com CNPJ e Link */}
+          <div className="bg-gray-100 rounded-lg p-2 text-center text-[9px] text-gray-600 font-semibold uppercase tracking-tight leading-tight">
+            <div>PROPAGANDA ELEITORAL - RAFAEL SARAIVA GAIA 68.283.115/0001-74 | MARINA PASSADORE 68.237.505/0001-08</div>
+            <div className="text-black font-bold mt-0.5">www.rafaelsaraivasp.com/colinha</div>
+          </div>
         </div>
       </div>
     </>
