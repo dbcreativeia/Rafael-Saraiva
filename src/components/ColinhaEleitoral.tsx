@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Check, MessageCircle, Instagram, Facebook, Loader2, X } from 'lucide-react';
+import { Download, Check, MessageCircle, Instagram, Facebook, Loader2, X, PawPrint } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { toPng, toBlob } from 'html-to-image';
 import { trackEvent } from '../analytics';
@@ -291,11 +291,11 @@ export const ColinhaEleitoral: React.FC = () => {
     }
   };
 
-  // Compartilhar nos Stories do Instagram com imagem 9:16 que encaixa perfeitamente na tela
+  // Compartilhar nos Stories do Instagram com imagem 4:5 que encaixa perfeitamente
   const handleShareInstagramStories = async () => {
-    const targetEl = storiesCardRef.current || printableCardRef.current;
+    const targetEl = exportCardRef.current || storiesCardRef.current || printableCardRef.current;
     if (!targetEl || isExporting) return;
-    setLoadingText('Preparando Stories do Instagram...');
+    setLoadingText('Preparando imagem 4:5 para o Instagram...');
     setIsExporting(true);
     trackEvent('Share_Colinha_Instagram_Stories');
 
@@ -307,9 +307,9 @@ export const ColinhaEleitoral: React.FC = () => {
       });
 
       if (blob) {
-        const file = new File([blob], 'minha-colinha-stories.png', { type: 'image/png' });
+        const file = new File([blob], 'minha-colinha.png', { type: 'image/png' });
 
-        // No mobile, abre a bandeja nativa com a imagem 9:16 carregada para ir direto aos Stories do Instagram
+        // No mobile, abre a bandeja nativa com a imagem 4:5 carregada para ir direto ao Instagram
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: 'Minha Colinha',
@@ -319,20 +319,20 @@ export const ColinhaEleitoral: React.FC = () => {
         }
       }
 
-      // Fallback: Faz download da imagem 9:16 e abre o app do Instagram
+      // Fallback: Faz download da imagem 4:5 e abre o app do Instagram
       const dataUrl = await toPng(targetEl, {
         quality: 0.95,
         pixelRatio: 2.5,
         skipFonts: true
       });
       const a = document.createElement('a');
-      a.download = `minha-colinha-stories.png`;
+      a.download = `minha-colinha.png`;
       a.href = dataUrl;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
-      showToast('Imagem salva! Abrindo o Instagram para você postar nos Stories.');
+      showToast('Imagem 4:5 salva! Abrindo o Instagram para você postar.');
       
       setTimeout(() => {
         window.location.href = 'instagram://camera';
@@ -350,11 +350,11 @@ export const ColinhaEleitoral: React.FC = () => {
     }
   };
 
-  // Compartilhar nos Stories do Facebook com imagem 9:16 que encaixa perfeitamente na tela
+  // Compartilhar no Facebook com imagem 4:5
   const handleShareFacebookStories = async () => {
-    const targetEl = storiesCardRef.current || printableCardRef.current;
+    const targetEl = exportCardRef.current || storiesCardRef.current || printableCardRef.current;
     if (!targetEl || isExporting) return;
-    setLoadingText('Preparando Stories do Facebook...');
+    setLoadingText('Preparando imagem 4:5 para o Facebook...');
     setIsExporting(true);
     trackEvent('Share_Colinha_Facebook_Stories');
 
@@ -366,9 +366,9 @@ export const ColinhaEleitoral: React.FC = () => {
       });
 
       if (blob) {
-        const file = new File([blob], 'minha-colinha-stories.png', { type: 'image/png' });
+        const file = new File([blob], 'minha-colinha.png', { type: 'image/png' });
 
-        // No mobile, abre a bandeja nativa com a imagem 9:16 carregada para ir direto aos Stories do Facebook
+        // No mobile, abre a bandeja nativa com a imagem 4:5 carregada para ir direto ao Facebook
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: 'Minha Colinha Eleitoral',
@@ -379,20 +379,20 @@ export const ColinhaEleitoral: React.FC = () => {
         }
       }
 
-      // Fallback: Faz download da imagem 9:16 e abre o app do Facebook
+      // Fallback: Faz download da imagem 4:5 e abre o app do Facebook
       const dataUrl = await toPng(targetEl, {
         quality: 0.95,
         pixelRatio: 2.5,
         skipFonts: true
       });
       const a = document.createElement('a');
-      a.download = `minha-colinha-stories.png`;
+      a.download = `minha-colinha.png`;
       a.href = dataUrl;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
-      showToast('Imagem salva! Abrindo o Facebook para você postar nos Stories.');
+      showToast('Imagem 4:5 salva! Abrindo o Facebook para você postar.');
 
       setTimeout(() => {
         window.location.href = 'fb://';
@@ -412,7 +412,7 @@ export const ColinhaEleitoral: React.FC = () => {
 
   // Botão CONFIRMA verde da urna eletrônica
   const renderConfirmaButton = () => (
-    <div className="h-11 sm:h-12 px-3.5 sm:px-4 bg-[#00823c] text-white font-sans font-bold text-xs sm:text-sm rounded-md border-b-2 border-[#005a29] shadow-xs flex items-center justify-center tracking-wider select-none shrink-0 uppercase">
+    <div className="h-10 px-3.5 bg-[#00823c] text-white font-sans font-black text-xs rounded-lg shadow-xs flex items-center justify-center tracking-wider select-none shrink-0 uppercase">
       CONFIRMA
     </div>
   );
@@ -422,11 +422,11 @@ export const ColinhaEleitoral: React.FC = () => {
     const safeStr = numberStr || '';
     const digits = totalDigits ? safeStr.padEnd(totalDigits, ' ').slice(0, totalDigits) : safeStr;
     return (
-      <div className="flex items-center gap-1 sm:gap-1.5">
+      <div className="flex items-center gap-1.5">
         {digits.split('').map((digit, i) => (
           <div
             key={i}
-            className="w-8.5 h-11 sm:w-10 sm:h-12 bg-white text-black border-2 border-black rounded-md flex items-center justify-center font-sans font-bold text-xl sm:text-2xl shadow-xs"
+            className="w-8.5 h-10 bg-white text-black border border-black/80 rounded-lg flex items-center justify-center font-sans font-black text-xl shadow-xs"
           >
             {digit.trim()}
           </div>
@@ -509,23 +509,50 @@ export const ColinhaEleitoral: React.FC = () => {
           {/* ========================================================= */}
           <div
             ref={printableCardRef}
-            className="w-full bg-white text-black rounded-2xl overflow-hidden border-2 border-black shadow-md flex flex-col font-sans"
+            className="w-full bg-gradient-to-br from-[#121622] via-[#d45f2d] to-[#e5a42f] text-black rounded-2xl overflow-hidden border-2 border-black shadow-xl flex flex-col font-sans relative"
           >
-            {/* Header da Cédula */}
-            <div className="bg-black text-white px-4 py-3 text-center border-b-2 border-black">
-              <h2 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white leading-tight">
-                MINHA COLINHA
-              </h2>
+            {/* Standard Campaign Texture igual à Home */}
+            <div className="absolute inset-0 opacity-[0.06] pointer-events-none overflow-hidden mix-blend-overlay z-0">
+              <img 
+                src="https://lh3.googleusercontent.com/d/1nuBTcNr3uRbjStHMKJgLX0KCrgtjDwj7" 
+                alt="Texture" 
+                className="w-full h-full object-cover"
+                crossOrigin="anonymous"
+              />
             </div>
 
-            {/* Lista dos Candidatos */}
-            <div className="p-4 sm:p-5 flex flex-col gap-5 bg-white divide-y divide-gray-100">
+            {/* Header da Cédula */}
+            <div className="relative z-10 bg-black/90 backdrop-blur-xs text-white px-4 py-3 flex items-center justify-between border-b border-white/20">
+              <div className="flex items-center gap-1.5 text-[#e5a42f]">
+                <PawPrint className="w-5 h-5 fill-current -rotate-12" />
+                <PawPrint className="w-3.5 h-3.5 fill-current rotate-12 opacity-80" />
+              </div>
+              <div className="flex items-center gap-2">
+                <PawPrint className="w-4 h-4 fill-white text-white -rotate-12" />
+                <h2 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white leading-tight">
+                  MINHA COLINHA
+                </h2>
+                <PawPrint className="w-4 h-4 fill-white text-white rotate-12" />
+              </div>
+              <div className="flex items-center gap-1.5 text-[#e5a42f]">
+                <PawPrint className="w-3.5 h-3.5 fill-current -rotate-12 opacity-80" />
+                <PawPrint className="w-5 h-5 fill-current rotate-12" />
+              </div>
+            </div>
+
+            {/* Lista dos Candidatos (Escolhas por Blocos) */}
+            <div className="relative z-10 p-3 sm:p-4 flex flex-col gap-3">
 
               {/* 1. DEPUTADA FEDERAL - NINA PASSADORE (4407) */}
-              <div className="flex flex-col gap-2 pt-0 first:pt-0">
-                <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider block">
-                  1. DEPUTADA FEDERAL
-                </span>
+              <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-md border border-black/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider block">
+                    1. DEPUTADA FEDERAL
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider flex items-center gap-1">
+                    <PawPrint className="w-3 h-3 fill-current inline" /> CAUSA ANIMAL
+                  </span>
+                </div>
 
                 <div className="flex items-center gap-3">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center shadow-2xs">
@@ -546,17 +573,22 @@ export const ColinhaEleitoral: React.FC = () => {
                 </div>
 
                 {/* Número e Botão Confirma Verde */}
-                <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   {renderFixedNumberBoxes("4407")}
                   {renderConfirmaButton()}
                 </div>
               </div>
 
               {/* 2. DEPUTADO ESTADUAL - RAFAEL SARAIVA (44077) */}
-              <div className="flex flex-col gap-2 pt-4">
-                <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider block">
-                  2. DEPUTADO ESTADUAL
-                </span>
+              <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-md border border-black/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider block">
+                    2. DEPUTADO ESTADUAL
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider flex items-center gap-1">
+                    <PawPrint className="w-3 h-3 fill-current inline" /> CAUSA ANIMAL
+                  </span>
+                </div>
 
                 <div className="flex items-center gap-3">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center shadow-2xs">
@@ -577,14 +609,14 @@ export const ColinhaEleitoral: React.FC = () => {
                 </div>
 
                 {/* Número e Botão Confirma Verde */}
-                <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   {renderFixedNumberBoxes("44077")}
                   {renderConfirmaButton()}
                 </div>
               </div>
 
               {/* 3. SENADOR 1 */}
-              <div className="flex flex-col gap-2.5 pt-4">
+              <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-md border border-black/10 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider">
                     3. 1º SENADOR
@@ -640,14 +672,14 @@ export const ColinhaEleitoral: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   {renderInputNumberBoxes('senador1Num', data.senador1Num, 3)}
                   {renderConfirmaButton()}
                 </div>
               </div>
 
               {/* 4. SENADOR 2 */}
-              <div className="flex flex-col gap-2.5 pt-4">
+              <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-md border border-black/10 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider">
                     4. 2º SENADOR
@@ -703,14 +735,14 @@ export const ColinhaEleitoral: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   {renderInputNumberBoxes('senador2Num', data.senador2Num, 3)}
                   {renderConfirmaButton()}
                 </div>
               </div>
 
               {/* 5. GOVERNADOR */}
-              <div className="flex flex-col gap-2.5 pt-4">
+              <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-md border border-black/10 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider">
                     5. GOVERNADOR
@@ -766,14 +798,14 @@ export const ColinhaEleitoral: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   {renderInputNumberBoxes('governadorNum', data.governadorNum, 2)}
                   {renderConfirmaButton()}
                 </div>
               </div>
 
               {/* 6. PRESIDENTE */}
-              <div className="flex flex-col gap-2.5 pt-4">
+              <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-md border border-black/10 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold uppercase text-gray-700 tracking-wider">
                     6. PRESIDENTE
@@ -829,7 +861,7 @@ export const ColinhaEleitoral: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   {renderInputNumberBoxes('presidenteNum', data.presidenteNum, 2)}
                   {renderConfirmaButton()}
                 </div>
@@ -838,7 +870,7 @@ export const ColinhaEleitoral: React.FC = () => {
             </div>
 
             {/* Rodapé Legal da Cédula (CNPJs de Campanha - Incluso na Imagem) */}
-            <div className="bg-gray-100 border-t border-gray-200 px-3 py-2 text-center text-[9px] sm:text-[10px] text-gray-600 font-semibold uppercase tracking-tight leading-tight">
+            <div className="relative z-10 bg-black/85 border-t border-white/20 px-3 py-2 text-center text-[9px] sm:text-[10px] text-gray-200 font-semibold uppercase tracking-tight leading-tight">
               PROPAGANDA ELEITORAL - RAFAEL SARAIVA GAIA 68.283.115/0001-74 | MARINA PASSADORE 68.237.505/0001-08
             </div>
           </div>
@@ -964,380 +996,467 @@ export const ColinhaEleitoral: React.FC = () => {
       )}
 
       {/* ========================================================= */}
-      {/* EXPORT TEMPLATES (OFFSCREEN FOR CRYSTAL-CLEAR PNG GENERATION) */}
+      {/* EXPORT TEMPLATES (OFFSCREEN FOR CRYSTAL-CLEAR PNG GENERATION - EXACT 4:5 RATIO) */}
       {/* ========================================================= */}
       <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none opacity-0 select-none overflow-hidden">
         
-        {/* 1. EXPORT CARD FOR DOWNLOAD & WHATSAPP (STATIC, NATURAL HEIGHT, ZERO OVERLAPPING) */}
+        {/* 1. EXPORT CARD FOR DOWNLOAD & SOCIAL SHARING (EXACT 4:5 ASPECT RATIO) */}
         <div
           ref={exportCardRef}
-          className="w-[460px] bg-white text-black rounded-2xl overflow-hidden border-2 border-black font-sans flex flex-col"
-          style={{ width: '460px' }}
+          className="w-[640px] h-[800px] bg-gradient-to-br from-[#121622] via-[#d45f2d] to-[#e5a42f] text-black overflow-hidden font-sans flex flex-col justify-between relative p-6"
+          style={{ width: '640px', height: '800px', boxSizing: 'border-box' }}
         >
-          {/* Lista dos Candidatos */}
-          <div className="p-5 flex flex-col gap-4 bg-white divide-y divide-gray-200">
-            {/* 1. DEPUTADA FEDERAL */}
-            <div className="flex flex-col gap-2 pt-0 first:pt-0">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider block">
-                1. DEPUTADA FEDERAL
-              </span>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                  <img
-                    src={NINA_PHOTO}
-                    alt="NINA PASSADORE"
-                    className="w-full h-full object-cover object-top"
-                    crossOrigin="anonymous"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-lg font-bold text-black block leading-tight">
-                    NINA PASSADORE
+          {/* Fundo de Campanha igual à Home do site */}
+          <div className="absolute inset-0 opacity-[0.08] pointer-events-none overflow-hidden mix-blend-overlay z-0">
+            <img 
+              src="https://lh3.googleusercontent.com/d/1nuBTcNr3uRbjStHMKJgLX0KCrgtjDwj7" 
+              alt="Texture" 
+              className="w-full h-full object-cover"
+              crossOrigin="anonymous"
+            />
+          </div>
+
+          {/* Imagem de Animais Encaixada na Lateral Direita (Tamanho ajustado e sem recorte reto) */}
+          <div className="absolute right-0 bottom-0 w-[290px] pointer-events-none z-30 flex items-end justify-end">
+            <img
+              src="/animaislateral.webp"
+              alt="Animais Causa Animal"
+              className="w-full h-auto object-contain object-right-bottom"
+            />
+          </div>
+
+          {/* Layout Principal: Coluna de Blocos Alinhada à Esquerda ocupando a altura total */}
+          <div className="relative z-20 flex-1 flex flex-col items-start justify-between w-full h-full">
+            {/* Coluna das Escolhas por Blocos (Alinhada à Esquerda) */}
+            <div className="w-[400px] shrink-0 h-full flex flex-col justify-between gap-2.5">
+              {/* 1. DEPUTADA FEDERAL */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    1. DEPUTADA FEDERAL
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                    NATURAL DA CAUSA ANIMAL
                   </span>
                 </div>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {renderFixedNumberBoxes("4407")}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 2. DEPUTADO ESTADUAL */}
-            <div className="flex flex-col gap-2 pt-3">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider block">
-                2. DEPUTADO ESTADUAL
-              </span>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                  <img
-                    src={RAFAEL_PHOTO}
-                    alt="RAFAEL SARAIVA"
-                    className="w-full h-full object-cover object-top"
-                    crossOrigin="anonymous"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-lg font-bold text-black block leading-tight">
-                    RAFAEL SARAIVA
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {renderFixedNumberBoxes("44077")}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 3. 1º SENADOR */}
-            <div className="flex flex-col gap-1.5 pt-3">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                3. 1º SENADOR
-              </span>
-              <div className="flex items-center gap-3">
-                {data.senador1Foto ? (
-                  <div className="w-14 h-14 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                     <img
-                      src={data.senador1Foto}
-                      alt={data.senador1Nome || "1º SENADOR"}
+                      src={NINA_PHOTO}
+                      alt="NINA PASSADORE"
                       className="w-full h-full object-cover object-top"
                       crossOrigin="anonymous"
                     />
                   </div>
-                ) : (
-                  <div className="w-14 h-14 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
-                    VOTO
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      NINA PASSADORE
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes("4407")}
+                      {renderConfirmaButton()}
+                    </div>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className="text-lg font-bold text-black block leading-tight">
-                    {data.senador1Nome ? data.senador1Nome.toUpperCase() : '---'}
-                  </span>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {renderFixedNumberBoxes(data.senador1Num, 3)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
 
-            {/* 4. 2º SENADOR */}
-            <div className="flex flex-col gap-1.5 pt-3">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                4. 2º SENADOR
-              </span>
-              <div className="flex items-center gap-3">
-                {data.senador2Foto ? (
-                  <div className="w-14 h-14 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
+              {/* 2. DEPUTADO ESTADUAL (Padrão de tamanho para os outros) */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    2. DEPUTADO ESTADUAL
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                    O DEPUTADO DA CAUSA ANIMAL
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                     <img
-                      src={data.senador2Foto}
-                      alt={data.senador2Nome || "2º SENADOR"}
+                      src={RAFAEL_PHOTO}
+                      alt="RAFAEL SARAIVA"
                       className="w-full h-full object-cover object-top"
                       crossOrigin="anonymous"
                     />
                   </div>
-                ) : (
-                  <div className="w-14 h-14 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
-                    VOTO
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      RAFAEL SARAIVA
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes("44077")}
+                      {renderConfirmaButton()}
+                    </div>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className="text-lg font-bold text-black block leading-tight">
-                    {data.senador2Nome ? data.senador2Nome.toUpperCase() : '---'}
-                  </span>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {renderFixedNumberBoxes(data.senador2Num, 3)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
 
-            {/* 5. GOVERNADOR */}
-            <div className="flex flex-col gap-1.5 pt-3">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                5. GOVERNADOR
-              </span>
-              <div className="flex items-center gap-3">
-                {data.governadorFoto ? (
-                  <div className="w-14 h-14 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                    <img
-                      src={data.governadorFoto}
-                      alt={data.governadorNome || "GOVERNADOR"}
-                      className="w-full h-full object-cover object-top"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
-                    VOTO
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className="text-lg font-bold text-black block leading-tight">
-                    {data.governadorNome ? data.governadorNome.toUpperCase() : '---'}
+              {/* 3. 1º SENADOR */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    3. 1º SENADOR
                   </span>
                 </div>
+                <div className="flex items-center gap-3">
+                  {data.senador1Foto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.senador1Foto}
+                        alt={data.senador1Nome || "1º SENADOR"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.senador1Nome ? data.senador1Nome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.senador1Num, 3)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {renderFixedNumberBoxes(data.governadorNum, 2)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
 
-            {/* 6. PRESIDENTE */}
-            <div className="flex flex-col gap-1.5 pt-3">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                6. PRESIDENTE
-              </span>
-              <div className="flex items-center gap-3">
-                {data.presidenteFoto ? (
-                  <div className="w-14 h-14 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                    <img
-                      src={data.presidenteFoto}
-                      alt={data.presidenteNome || "PRESIDENTE"}
-                      className="w-full h-full object-cover object-top"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
-                    VOTO
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className="text-lg font-bold text-black block leading-tight">
-                    {data.presidenteNome ? data.presidenteNome.toUpperCase() : '---'}
+              {/* 4. 2º SENADOR */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    4. 2º SENADOR
                   </span>
                 </div>
+                <div className="flex items-center gap-3">
+                  {data.senador2Foto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.senador2Foto}
+                        alt={data.senador2Nome || "2º SENADOR"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.senador2Nome ? data.senador2Nome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.senador2Num, 3)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {renderFixedNumberBoxes(data.presidenteNum, 2)}
-                {renderConfirmaButton()}
+
+              {/* 5. GOVERNADOR */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    5. GOVERNADOR
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {data.governadorFoto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.governadorFoto}
+                        alt={data.governadorNome || "GOVERNADOR"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.governadorNome ? data.governadorNome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.governadorNum, 2)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. PRESIDENTE */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    6. PRESIDENTE
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {data.presidenteFoto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.presidenteFoto}
+                        alt={data.presidenteNome || "PRESIDENTE"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.presidenteNome ? data.presidenteNome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.presidenteNum, 2)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 2. 9:16 STORIES TEMPLATE (ENCAIXE 100% PERFEITO NOS STORIES) */}
+        {/* 2. STORIES TEMPLATE (EXATO 4:5 PARA CONSISTÊNCIA TOTAL) */}
         <div
           ref={storiesCardRef}
-          className="w-[450px] h-[800px] bg-white text-black flex flex-col justify-between p-4 font-sans border-2 border-black"
-          style={{ width: '450px', height: '800px' }}
+          className="w-[640px] h-[800px] bg-gradient-to-br from-[#121622] via-[#d45f2d] to-[#e5a42f] text-black overflow-hidden font-sans flex flex-col justify-between relative p-6"
+          style={{ width: '640px', height: '800px', boxSizing: 'border-box' }}
         >
-          {/* Candidatos Formatados */}
-          <div className="flex flex-col gap-2.5 my-auto divide-y divide-gray-100">
-            {/* 1. DEPUTADA FEDERAL */}
-            <div className="flex flex-col gap-1 pt-0 first:pt-0">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                1. DEPUTADA FEDERAL
-              </span>
-              <div className="flex items-center gap-2.5">
-                <div className="w-11 h-11 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                  <img
-                    src={NINA_PHOTO}
-                    alt="NINA PASSADORE"
-                    className="w-full h-full object-cover object-top"
-                    crossOrigin="anonymous"
-                  />
-                </div>
-                <span className="text-base font-bold text-black flex-1">
-                  NINA PASSADORE
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                {renderFixedNumberBoxes("4407")}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 2. DEPUTADO ESTADUAL */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                2. DEPUTADO ESTADUAL
-              </span>
-              <div className="flex items-center gap-2.5">
-                <div className="w-11 h-11 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                  <img
-                    src={RAFAEL_PHOTO}
-                    alt="RAFAEL SARAIVA"
-                    className="w-full h-full object-cover object-top"
-                    crossOrigin="anonymous"
-                  />
-                </div>
-                <span className="text-base font-bold text-black flex-1">
-                  RAFAEL SARAIVA
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                {renderFixedNumberBoxes("44077")}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 3. 1º SENADOR */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                3. 1º SENADOR
-              </span>
-              <div className="flex items-center gap-2.5">
-                {data.senador1Foto ? (
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                    <img
-                      src={data.senador1Foto}
-                      alt={data.senador1Nome || "1º SENADOR"}
-                      className="w-full h-full object-cover object-top"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-11 h-11 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-400 uppercase">
-                    VOTO
-                  </div>
-                )}
-                <span className="text-base font-bold text-black flex-1 truncate">
-                  {data.senador1Nome ? data.senador1Nome.toUpperCase() : '---'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                {renderFixedNumberBoxes(data.senador1Num, 3)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 4. 2º SENADOR */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                4. 2º SENADOR
-              </span>
-              <div className="flex items-center gap-2.5">
-                {data.senador2Foto ? (
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                    <img
-                      src={data.senador2Foto}
-                      alt={data.senador2Nome || "2º SENADOR"}
-                      className="w-full h-full object-cover object-top"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-11 h-11 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-400 uppercase">
-                    VOTO
-                  </div>
-                )}
-                <span className="text-base font-bold text-black flex-1 truncate">
-                  {data.senador2Nome ? data.senador2Nome.toUpperCase() : '---'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                {renderFixedNumberBoxes(data.senador2Num, 3)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 5. GOVERNADOR */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                5. GOVERNADOR
-              </span>
-              <div className="flex items-center gap-2.5">
-                {data.governadorFoto ? (
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                    <img
-                      src={data.governadorFoto}
-                      alt={data.governadorNome || "GOVERNADOR"}
-                      className="w-full h-full object-cover object-top"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-11 h-11 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-400 uppercase">
-                    VOTO
-                  </div>
-                )}
-                <span className="text-base font-bold text-black flex-1 truncate">
-                  {data.governadorNome ? data.governadorNome.toUpperCase() : '---'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                {renderFixedNumberBoxes(data.governadorNum, 2)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
-
-            {/* 6. PRESIDENTE */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">
-                6. PRESIDENTE
-              </span>
-              <div className="flex items-center gap-2.5">
-                {data.presidenteFoto ? (
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-black shrink-0 bg-gray-100 flex items-center justify-center">
-                    <img
-                      src={data.presidenteFoto}
-                      alt={data.presidenteNome || "PRESIDENTE"}
-                      className="w-full h-full object-cover object-top"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-11 h-11 rounded-full border border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-400 uppercase">
-                    VOTO
-                  </div>
-                )}
-                <span className="text-base font-bold text-black flex-1 truncate">
-                  {data.presidenteNome ? data.presidenteNome.toUpperCase() : '---'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                {renderFixedNumberBoxes(data.presidenteNum, 2)}
-                {renderConfirmaButton()}
-              </div>
-            </div>
+          {/* Fundo de Campanha igual à Home do site */}
+          <div className="absolute inset-0 opacity-[0.08] pointer-events-none overflow-hidden mix-blend-overlay z-0">
+            <img 
+              src="https://lh3.googleusercontent.com/d/1nuBTcNr3uRbjStHMKJgLX0KCrgtjDwj7" 
+              alt="Texture" 
+              className="w-full h-full object-cover"
+              crossOrigin="anonymous"
+            />
           </div>
 
-          {/* Footer Stories com Link */}
-          <div className="text-center text-[10px] text-gray-500 font-semibold p-1">
-            www.rafaelsaraivasp.com/colinha
+          {/* Imagem de Animais Encaixada na Lateral Direita (Tamanho ajustado e sem recorte reto) */}
+          <div className="absolute right-0 bottom-0 w-[290px] pointer-events-none z-30 flex items-end justify-end">
+            <img
+              src="/animaislateral.webp"
+              alt="Animais Causa Animal"
+              className="w-full h-auto object-contain object-right-bottom"
+            />
+          </div>
+
+          {/* Layout Principal: Coluna de Blocos Alinhada à Esquerda ocupando a altura total */}
+          <div className="relative z-20 flex-1 flex flex-col items-start justify-between w-full h-full">
+            {/* Coluna das Escolhas por Blocos (Alinhada à Esquerda) */}
+            <div className="w-[400px] shrink-0 h-full flex flex-col justify-between gap-2.5">
+              {/* 1. DEPUTADA FEDERAL */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    1. DEPUTADA FEDERAL
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                    NATURAL DA CAUSA ANIMAL
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                    <img
+                      src={NINA_PHOTO}
+                      alt="NINA PASSADORE"
+                      className="w-full h-full object-cover object-top"
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      NINA PASSADORE
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes("4407")}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. DEPUTADO ESTADUAL (Padrão de tamanho para os outros) */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    2. DEPUTADO ESTADUAL
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                    O DEPUTADO DA CAUSA ANIMAL
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                    <img
+                      src={RAFAEL_PHOTO}
+                      alt="RAFAEL SARAIVA"
+                      className="w-full h-full object-cover object-top"
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      RAFAEL SARAIVA
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes("44077")}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. 1º SENADOR */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    3. 1º SENADOR
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {data.senador1Foto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.senador1Foto}
+                        alt={data.senador1Nome || "1º SENADOR"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.senador1Nome ? data.senador1Nome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.senador1Num, 3)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. 2º SENADOR */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    4. 2º SENADOR
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {data.senador2Foto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.senador2Foto}
+                        alt={data.senador2Nome || "2º SENADOR"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.senador2Nome ? data.senador2Nome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.senador2Num, 3)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. GOVERNADOR */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    5. GOVERNADOR
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {data.governadorFoto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.governadorFoto}
+                        alt={data.governadorNome || "GOVERNADOR"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.governadorNome ? data.governadorNome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.governadorNum, 2)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. PRESIDENTE */}
+              <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                    6. PRESIDENTE
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {data.presidenteFoto ? (
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
+                      <img
+                        src={data.presidenteFoto}
+                        alt={data.presidenteNome || "PRESIDENTE"}
+                        className="w-full h-full object-cover object-top"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 shrink-0 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                      VOTO
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-sm font-bold text-black block leading-tight truncate mb-1">
+                      {data.presidenteNome ? data.presidenteNome.toUpperCase() : '---'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {renderFixedNumberBoxes(data.presidenteNum, 2)}
+                      {renderConfirmaButton()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
