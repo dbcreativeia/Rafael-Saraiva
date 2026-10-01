@@ -192,6 +192,60 @@ export const ColinhaEleitoral: React.FC = () => {
     setData(prev => ({ ...prev, [field]: value.slice(0, 30) }));
   };
 
+  const ensureImagesReady = async (el: HTMLElement) => {
+    const imgs = Array.from(el.querySelectorAll('img'));
+    await Promise.all(
+      imgs.map(async img => {
+        if (!img.complete) {
+          await new Promise(res => {
+            img.onload = res;
+            img.onerror = res;
+          });
+        }
+        if (img.decode) {
+          try {
+            await img.decode();
+          } catch (e) {
+            // Ignore decode error
+          }
+        }
+      })
+    );
+  };
+
+  const captureElement = async (targetEl: HTMLElement, mode: 'png' | 'blob' = 'png') => {
+    await ensureImagesReady(targetEl);
+    const opts = {
+      quality: 0.98,
+      pixelRatio: 2,
+      cacheBust: true,
+      skipFonts: true,
+      style: {
+        transform: 'none',
+        boxShadow: 'none',
+        visibility: 'visible',
+        opacity: '1'
+      }
+    };
+
+    // Warmup pass for WebKit / iOS Safari rendering engine
+    try {
+      await toPng(targetEl, opts);
+    } catch (e) {
+      // ignore warmup error
+    }
+
+    if (mode === 'blob') {
+      const resBlob = await toBlob(targetEl, opts);
+      if (resBlob) return resBlob;
+      const dataUrl = await toPng(targetEl, opts);
+      const res = await fetch(dataUrl);
+      return await res.blob();
+    }
+
+    return await toPng(targetEl, opts);
+  };
+
   const handleDownload = async () => {
     const targetEl = exportCardRef.current || printableCardRef.current;
     if (!targetEl || isExporting) return;
@@ -200,16 +254,7 @@ export const ColinhaEleitoral: React.FC = () => {
     trackEvent('Download_Colinha_Image');
 
     try {
-      const dataUrl = await toPng(targetEl, {
-        quality: 0.98,
-        pixelRatio: 3,
-        cacheBust: true,
-        skipFonts: true,
-        style: {
-          transform: 'none',
-          boxShadow: 'none'
-        }
-      });
+      const dataUrl = (await captureElement(targetEl, 'png')) as string;
 
       const a = document.createElement('a');
       a.download = `minha-colinha.png`;
@@ -218,7 +263,7 @@ export const ColinhaEleitoral: React.FC = () => {
       a.click();
       document.body.removeChild(a);
 
-      // Abre a imagem cheia na tela para visualização no celular
+      // Abre a imagem cheia na tela para visualização no celular (iOS/Android)
       setFullScreenImage(dataUrl);
       showToast('Imagem salva! Visualização aberta na tela.');
     } catch (err) {
@@ -259,11 +304,7 @@ export const ColinhaEleitoral: React.FC = () => {
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
 
     try {
-      const blob = await toBlob(targetEl, {
-        quality: 0.95,
-        pixelRatio: 2.5,
-        skipFonts: true
-      });
+      const blob = (await captureElement(targetEl, 'blob')) as Blob;
 
       if (blob) {
         const file = new File([blob], 'minha-colinha.png', { type: 'image/png' });
@@ -300,11 +341,7 @@ export const ColinhaEleitoral: React.FC = () => {
     trackEvent('Share_Colinha_Instagram_Stories');
 
     try {
-      const blob = await toBlob(targetEl, {
-        quality: 0.95,
-        pixelRatio: 2.5,
-        skipFonts: true
-      });
+      const blob = (await captureElement(targetEl, 'blob')) as Blob;
 
       if (blob) {
         const file = new File([blob], 'minha-colinha.png', { type: 'image/png' });
@@ -320,11 +357,7 @@ export const ColinhaEleitoral: React.FC = () => {
       }
 
       // Fallback: Faz download da imagem 4:5 e abre o app do Instagram
-      const dataUrl = await toPng(targetEl, {
-        quality: 0.95,
-        pixelRatio: 2.5,
-        skipFonts: true
-      });
+      const dataUrl = (await captureElement(targetEl, 'png')) as string;
       const a = document.createElement('a');
       a.download = `minha-colinha.png`;
       a.href = dataUrl;
@@ -332,6 +365,7 @@ export const ColinhaEleitoral: React.FC = () => {
       a.click();
       document.body.removeChild(a);
 
+      setFullScreenImage(dataUrl);
       showToast('Imagem 4:5 salva! Abrindo o Instagram para você postar.');
       
       setTimeout(() => {
@@ -998,7 +1032,7 @@ export const ColinhaEleitoral: React.FC = () => {
       {/* ========================================================= */}
       {/* EXPORT TEMPLATES (OFFSCREEN FOR CRYSTAL-CLEAR PNG GENERATION - EXACT 4:5 RATIO) */}
       {/* ========================================================= */}
-      <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none opacity-0 select-none overflow-hidden">
+      <div className="fixed left-[-9999px] top-0 pointer-events-none select-none overflow-hidden" style={{ opacity: 1, zIndex: -999 }}>
         
         {/* 1. EXPORT CARD FOR DOWNLOAD & SOCIAL SHARING (EXACT 4:5 ASPECT RATIO) */}
         <div
