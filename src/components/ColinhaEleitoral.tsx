@@ -1065,15 +1065,15 @@ export const ColinhaEleitoral: React.FC = () => {
             <div className="w-[400px] shrink-0 h-full flex flex-col justify-between gap-2.5">
               {/* 1. DEPUTADA FEDERAL */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     1. DEPUTADA FEDERAL
                   </span>
-                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider whitespace-nowrap shrink-0 text-right">
                     NATURAL DA CAUSA ANIMAL
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                     <img
                       src={NINA_PHOTO}
@@ -1096,15 +1096,15 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 2. DEPUTADO ESTADUAL (Padrão de tamanho para os outros) */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     2. DEPUTADO ESTADUAL
                   </span>
-                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider whitespace-nowrap shrink-0 text-right">
                     O DEPUTADO DA CAUSA ANIMAL
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                     <img
                       src={RAFAEL_PHOTO}
@@ -1127,12 +1127,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 3. 1º SENADOR */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     3. 1º SENADOR
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.senador1Foto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1161,12 +1161,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 4. 2º SENADOR */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     4. 2º SENADOR
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.senador2Foto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1195,12 +1195,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 5. GOVERNADOR */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     5. GOVERNADOR
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.governadorFoto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1229,12 +1229,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 6. PRESIDENTE */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     6. PRESIDENTE
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.presidenteFoto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1295,15 +1295,15 @@ export const ColinhaEleitoral: React.FC = () => {
             <div className="w-[400px] shrink-0 h-full flex flex-col justify-between gap-2.5">
               {/* 1. DEPUTADA FEDERAL */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     1. DEPUTADA FEDERAL
                   </span>
-                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider whitespace-nowrap shrink-0 text-right">
                     NATURAL DA CAUSA ANIMAL
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                     <img
                       src={NINA_PHOTO}
@@ -1326,15 +1326,15 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 2. DEPUTADO ESTADUAL (Padrão de tamanho para os outros) */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     2. DEPUTADO ESTADUAL
                   </span>
-                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[#00823c] uppercase tracking-wider whitespace-nowrap shrink-0 text-right">
                     O DEPUTADO DA CAUSA ANIMAL
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                     <img
                       src={RAFAEL_PHOTO}
@@ -1357,12 +1357,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 3. 1º SENADOR */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     3. 1º SENADOR
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.senador1Foto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1391,12 +1391,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 4. 2º SENADOR */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     4. 2º SENADOR
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.senador2Foto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1425,12 +1425,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 5. GOVERNADOR */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     5. GOVERNADOR
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.governadorFoto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
@@ -1459,12 +1459,12 @@ export const ColinhaEleitoral: React.FC = () => {
 
               {/* 6. PRESIDENTE */}
               <div className="flex-1 bg-white/92 backdrop-blur-xs rounded-2xl px-4 py-2.5 shadow-md border border-gray-100/80 flex flex-col justify-center gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider">
+                <div className="flex items-center justify-between shrink-0 mb-0.5">
+                  <span className="text-[11px] font-bold uppercase text-gray-700 tracking-wider whitespace-nowrap shrink-0">
                     6. PRESIDENTE
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   {data.presidenteFoto ? (
                     <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center shadow-xs">
                       <img
