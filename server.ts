@@ -1,4 +1,4 @@
-import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm, deleteLeadById } from "./crmService.ts";
+import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm, deleteLeadById, exportCrmStream, exportCrmXlsx } from "./crmService.ts";
 import { sanitizeGeo, sanitizeCity, sanitizeState } from "./geoSanitizer.ts";
 import express from "express";
 import compression from "compression";
@@ -910,29 +910,25 @@ async function startServer() {
 
   app.get('/api/leads/export', async (req, res) => {
     try {
-      const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
-      const filename = `leads_consolidados_${new Date().toISOString().slice(0, 10)}.${format}`;
+      const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+      const isAddressOnly = req.query.addressOnly === 'true';
+      const filename = isAddressOnly
+        ? `enderecos_correios_${new Date().toISOString().slice(0, 10)}.${format}`
+        : `leads_consolidados_${new Date().toISOString().slice(0, 10)}.${format}`;
       
       if (format === 'csv') {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.flushHeaders();
-        await leadsConsolidator.streamCsvExport(req.query as any, res);
+        await exportCrmStream(req.query as any, res);
         return;
       }
 
-      const result = await leadsConsolidator.exportLeads(req.query as any, format);
-      
-      if (result.type === 'zip') {
-        const zipFilename = `leads_consolidados_${new Date().toISOString().slice(0, 10)}.zip`;
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
-      } else {
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      }
-      
-      return res.send(result.buffer);
+      const buffer = await exportCrmXlsx(req.query as any);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(buffer);
     } catch (err) {
       console.error("Error in /api/leads/export:", err);
       if (!res.headersSent) {

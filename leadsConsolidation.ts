@@ -2039,22 +2039,22 @@ class LeadsConsolidationManager {
     try {
       const db = await getDbConnection();
       if (db) {
-        // 1. Material Oficial Rafael (apenas material impresso)
+        // 1. Material Oficial Rafael (apenas material impresso e/ou adesivo perfurado)
         const [materials] = await db.query<any[]>(`
           SELECT id, nome, sobrenome, whatsapp, email, cidade, estado, endereco, numero, complemento, bairro, cep, adesivoPerfurado, createdAt
           FROM material_campaign
-          WHERE tipoMaterial = 'impresso'
+          WHERE tipoMaterial = 'impresso' OR adesivoPerfurado = 1 OR adesivoPerfurado = '1'
           ORDER BY id DESC
         `).catch((e) => {
           console.error("Erro ao buscar material_campaign:", e);
           return [[]];
         });
 
-        // 2. Dobrada Nina Passadore (apenas material impresso)
+        // 2. Dobrada Nina Passadore (apenas material impresso e/ou adesivo perfurado)
         const [nina] = await db.query<any[]>(`
           SELECT id, nome, sobrenome, whatsapp, email, cidade, estado, endereco, numero, complemento, bairro, cep, adesivoPerfurado, createdAt
           FROM ninapassadore_campaign
-          WHERE tipoMaterial = 'impresso'
+          WHERE tipoMaterial = 'impresso' OR adesivoPerfurado = 1 OR adesivoPerfurado = '1'
           ORDER BY id DESC
         `).catch((e) => {
           console.error("Erro ao buscar ninapassadore_campaign:", e);
@@ -2065,7 +2065,7 @@ class LeadsConsolidationManager {
         const [imported] = await db.query<any[]>(`
           SELECT id, nome, whatsapp, email, cidade, estado, endereco, numero, complemento, bairro, cep, campanha, createdAt
           FROM imported_leads
-          WHERE campanha = 'Material Impresso Nina'
+          WHERE campanha = 'Material Impresso Nina' OR campanha LIKE '%Material Impresso%'
           ORDER BY id DESC
         `).catch((e) => {
           console.error("Erro ao buscar imported_leads Material Impresso Nina:", e);
@@ -2621,7 +2621,7 @@ class LeadsConsolidationManager {
     sortOrder?: string;
     addressOnly?: string;
   }, format: 'xlsx' | 'csv' = 'xlsx'): Promise<{ buffer: Buffer, type: 'csv' | 'xlsx' | 'zip' }> {
-    const res = await this.getPaginatedLeads({ ...params, page: 1, pageSize: 25000 });
+    const res = await this.getPaginatedLeads({ ...params, page: 1, pageSize: 100000 });
 
     // Strict export deduplication and fusion
     const uniqueLeads = deduplicateLeadsList(res.leads);
