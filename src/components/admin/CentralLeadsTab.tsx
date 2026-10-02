@@ -1664,7 +1664,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
             <button
               onClick={exportMailMergeExcel}
-              disabled={consolidatedLeads.length === 0}
+              disabled={(totalFiltered || totalUniqueLeads || consolidatedLeads.length) === 0}
               className="bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap"
             >
               <Download className="w-4 h-4" />
@@ -1673,7 +1673,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
             <button
               onClick={exportConsolidatedExcel}
-              disabled={consolidatedLeads.length === 0}
+              disabled={(totalFiltered || totalUniqueLeads || consolidatedLeads.length) === 0}
               className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap"
             >
               <Download className="w-4 h-4" />

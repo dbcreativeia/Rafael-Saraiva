@@ -1,5 +1,6 @@
 import { getDbConnection, queryWithRetry } from "./db.ts";
 import { sanitizeGeo } from "./geoSanitizer.ts";
+import * as XLSX from 'xlsx';
 
 let cachedSummary: any = null;
 let cachedSummaryTime = 0;
@@ -498,6 +499,300 @@ export const deleteLeadById = async (leadId: string) => {
   invalidateCrmSummaryCache();
 
   return { success: true, leadId };
+};
+
+/**
+ * Construtor unificado de query para filtros do CRM
+ */
+function buildCrmFilterQuery(query: any) {
+  const search = (query.search || '').trim();
+  const estado = (query.estado || '').toUpperCase().trim();
+  const cidade = (query.cidade || '').trim();
+  const campaign = query.campaign || 'all';
+  const multiAction = query.multiAction || 'all';
+  const leadType = query.leadType || 'all';
+  const qualityTier = (query.qualityTier || 'all').toLowerCase();
+  const hasWhatsApp = query.hasWhatsApp || 'all';
+  const addressOnly = query.addressOnly === 'true' || query.addressOnly === true;
+
+  let whereClauses: string[] = [];
+  let values: any[] = [];
+  let joins = '';
+
+  if (search) {
+    whereClauses.push('(l.nome LIKE ? OR l.whatsapp LIKE ? OR l.email LIKE ? OR l.cidade LIKE ? OR l.bairro LIKE ? OR l.cep LIKE ?)');
+    const s = `%${search}%`;
+    values.push(s, s, s, s, s, s);
+  }
+
+  if (estado && estado !== 'ALL') {
+    whereClauses.push('l.estado = ?');
+    values.push(estado);
+  }
+
+  if (cidade && cidade !== 'ALL') {
+    whereClauses.push('l.cidade = ?');
+    values.push(cidade);
+  }
+
+  if (hasWhatsApp === 'yes') {
+    whereClauses.push('l.whatsapp != "" AND l.whatsapp IS NOT NULL');
+  } else if (hasWhatsApp === 'no') {
+    whereClauses.push('(l.whatsapp = "" OR l.whatsapp IS NULL)');
+  }
+
+  if (multiAction === 'frequent' || multiAction === 'multi') {
+    whereClauses.push('l.campaign_count >= 2');
+  } else if (multiAction === 'super') {
+    whereClauses.push('l.campaign_count >= 3');
+  } else if (multiAction === 'vip' || multiAction === 'super5') {
+    whereClauses.push('l.campaign_count >= 5');
+  } else if (multiAction === 'single') {
+    whereClauses.push('l.campaign_count = 1');
+  }
+
+  if (qualityTier !== 'all') {
+    if (qualityTier === 'diamante') whereClauses.push('l.campaign_count >= 5');
+    else if (qualityTier === 'ouro') whereClauses.push('l.campaign_count >= 3 AND l.campaign_count <= 4');
+    else if (qualityTier === 'prata') whereClauses.push('l.campaign_count = 2');
+    else if (qualityTier === 'bronze') whereClauses.push('l.campaign_count = 1');
+    else if (qualityTier === 'high') whereClauses.push('l.campaign_count >= 3');
+  }
+
+  if (campaign !== 'all') {
+    joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
+    values.push(campaign);
+  }
+
+  if (leadType === 'organic') {
+    if (!joins.includes('a_camp')) {
+      joins += ' JOIN crm_actions a_type ON l.id = a_type.lead_id AND a_type.source = ?';
+    } else {
+      joins += ' AND a_camp.source = ?';
+    }
+    values.push('organic');
+  } else if (leadType === 'imported') {
+    if (!joins.includes('a_camp')) {
+      joins += ' JOIN crm_actions a_type ON l.id = a_type.lead_id AND a_type.source != ?';
+    } else {
+      joins += ' AND a_camp.source != ?';
+    }
+    values.push('organic');
+  }
+
+  if (addressOnly) {
+    whereClauses.push("(l.cep != '' AND l.cep IS NOT NULL OR l.endereco != '' AND l.endereco IS NOT NULL OR l.bairro != '' AND l.bairro IS NOT NULL)");
+  }
+
+  return { whereClauses, values, joins, campaign };
+}
+
+/**
+ * Exportação em stream contínuo (CSV) direto da base consolidada do CRM.
+ * Resiliente a timeouts, utiliza paginação por cursor (keyset) e UTF-8 com BOM.
+ */
+export const exportCrmStream = async (query: any, res: any) => {
+  const { whereClauses, values, joins, campaign } = buildCrmFilterQuery(query);
+
+  const headers = [
+    'Nível de Qualidade',
+    'Total de Ações',
+    'Nome',
+    'WhatsApp',
+    'WhatsApp Válido',
+    'E-mail',
+    'CEP',
+    'Endereço',
+    'Número',
+    'Complemento',
+    'Bairro',
+    'Cidade',
+    'Estado',
+    'Frequente (2+)',
+    'Multi-Campanha (3+)',
+    'Super Apoiador (5+)',
+    'Campanhas',
+    'Data de Cadastro'
+  ];
+  res.write('\uFEFF' + headers.join(',') + '\r\n');
+
+  const batchSize = 3000;
+  let lastId = '';
+  let hasMore = true;
+
+  try {
+    while (hasMore) {
+      if (res.writableEnded || res.closed) break;
+
+      const currentWhere = [...whereClauses];
+      const currentValues = [...values];
+
+      if (lastId) {
+        currentWhere.push('l.id > ?');
+        currentValues.push(lastId);
+      }
+
+      const whereSql = currentWhere.length > 0 ? 'WHERE ' + currentWhere.join(' AND ') : '';
+
+      const [rows]: any = await queryWithRetry(`
+        SELECT DISTINCT l.id, l.nome, l.whatsapp, l.email, l.cidade, l.estado, l.cep, l.endereco, l.numero, l.complemento, l.bairro, l.campaign_count, l.created_at
+        FROM crm_leads l ${joins} ${whereSql}
+        ORDER BY l.id ASC
+        LIMIT ?
+      `, [...currentValues, batchSize]);
+
+      if (!rows || rows.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const leadIds = rows.map((r: any) => r.id);
+      const campMap = new Map<string, string>();
+
+      if (leadIds.length > 0) {
+        try {
+          const [acts]: any = await queryWithRetry(
+            `SELECT lead_id, GROUP_CONCAT(DISTINCT campaign_name SEPARATOR ' | ') as campaigns
+             FROM crm_actions
+             WHERE lead_id IN (?)
+             GROUP BY lead_id`,
+            [leadIds]
+          );
+          for (const a of acts) {
+            campMap.set(a.lead_id, a.campaigns || '');
+          }
+        } catch (e) {
+          console.warn("Aviso ao buscar ações para lote:", e);
+        }
+      }
+
+      let chunk = '';
+      for (const r of rows) {
+        const cCount = Number(r.campaign_count) || 1;
+        let qTier = 'Bronze';
+        if (cCount >= 5) qTier = 'Diamante';
+        else if (cCount >= 3) qTier = 'Ouro';
+        else if (cCount >= 2) qTier = 'Prata';
+
+        const digits = (r.whatsapp || '').replace(/\D/g, '');
+        const hasValidWa = digits.length >= 10;
+        const campaigns = campMap.get(r.id) || (campaign !== 'all' ? campaign : 'Geral');
+
+        const row = [
+          `"${qTier}"`,
+          `"${cCount}"`,
+          `"${(r.nome || '').replace(/"/g, '""')}"`,
+          `"${(r.whatsapp || '').replace(/"/g, '""')}"`,
+          `"${hasValidWa ? 'Sim' : 'Não'}"`,
+          `"${(r.email || '').replace(/"/g, '""')}"`,
+          `"${(r.cep || '').replace(/"/g, '""')}"`,
+          `"${(r.endereco || '').replace(/"/g, '""')}"`,
+          `"${(r.numero || '').replace(/"/g, '""')}"`,
+          `"${(r.complemento || '').replace(/"/g, '""')}"`,
+          `"${(r.bairro || '').replace(/"/g, '""')}"`,
+          `"${(r.cidade || '').replace(/"/g, '""')}"`,
+          `"${(r.estado || '').replace(/"/g, '""')}"`,
+          `"${cCount >= 2 ? 'Sim' : 'Não'}"`,
+          `"${cCount >= 3 ? 'Sim' : 'Não'}"`,
+          `"${cCount >= 5 ? 'Sim' : 'Não'}"`,
+          `"${campaigns.replace(/"/g, '""')}"`,
+          `"${r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : ''}"`
+        ];
+        chunk += row.join(',') + '\r\n';
+      }
+
+      const canWrite = res.write(chunk);
+      if (!canWrite) {
+        await new Promise(resolve => res.once('drain', resolve));
+      }
+
+      lastId = rows[rows.length - 1].id;
+      if (rows.length < batchSize) {
+        hasMore = false;
+      }
+    }
+  } catch (err) {
+    console.error("Erro durante exportCrmStream:", err);
+  } finally {
+    if (!res.writableEnded) {
+      res.end();
+    }
+  }
+};
+
+/**
+ * Exportação em arquivo Excel (.xlsx) dos leads filtrados
+ */
+export const exportCrmXlsx = async (query: any): Promise<Buffer> => {
+  const { whereClauses, values, joins, campaign } = buildCrmFilterQuery(query);
+  const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+  const MAX_XLSX_ROWS = 100000;
+  const [rows]: any = await queryWithRetry(`
+    SELECT DISTINCT l.id, l.nome, l.whatsapp, l.email, l.cidade, l.estado, l.cep, l.endereco, l.numero, l.complemento, l.bairro, l.campaign_count, l.created_at
+    FROM crm_leads l ${joins} ${whereSql}
+    ORDER BY l.created_at DESC
+    LIMIT ?
+  `, [...values, MAX_XLSX_ROWS]);
+
+  const leadIds = (rows || []).map((r: any) => r.id);
+  const campMap = new Map<string, string>();
+
+  for (let i = 0; i < leadIds.length; i += 5000) {
+    const chunkIds = leadIds.slice(i, i + 5000);
+    try {
+      const [acts]: any = await queryWithRetry(
+        `SELECT lead_id, GROUP_CONCAT(DISTINCT campaign_name SEPARATOR ' | ') as campaigns
+         FROM crm_actions
+         WHERE lead_id IN (?)
+         GROUP BY lead_id`,
+        [chunkIds]
+      );
+      for (const a of acts) {
+        campMap.set(a.lead_id, a.campaigns || '');
+      }
+    } catch (e) {
+      console.warn("Aviso ao buscar ações para XLSX:", e);
+    }
+  }
+
+  const exportData = (rows || []).map((r: any) => {
+    const cCount = Number(r.campaign_count) || 1;
+    let qTier = 'Bronze';
+    if (cCount >= 5) qTier = 'Diamante';
+    else if (cCount >= 3) qTier = 'Ouro';
+    else if (cCount >= 2) qTier = 'Prata';
+
+    const digits = (r.whatsapp || '').replace(/\D/g, '');
+    const hasValidWa = digits.length >= 10;
+    const campaigns = campMap.get(r.id) || (campaign !== 'all' ? campaign : 'Geral');
+
+    return {
+      'Nível de Qualidade': qTier,
+      'Total de Ações': cCount,
+      'Nome': r.nome || '',
+      'WhatsApp': r.whatsapp || '',
+      'WhatsApp Válido': hasValidWa ? 'Sim' : 'Não',
+      'E-mail': r.email || '',
+      'CEP': r.cep || '',
+      'Endereço': r.endereco || '',
+      'Número': r.numero || '',
+      'Complemento': r.complemento || '',
+      'Bairro': r.bairro || '',
+      'Cidade': r.cidade || '',
+      'Estado': r.estado || '',
+      'Frequente (2+)': cCount >= 2 ? 'Sim' : 'Não',
+      'Multi-Campanha (3+)': cCount >= 3 ? 'Sim' : 'Não',
+      'Super Apoiador (5+)': cCount >= 5 ? 'Sim' : 'Não',
+      'Campanhas': campaigns,
+      'Data de Cadastro': r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : ''
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Apoiadores');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 };
 
 
