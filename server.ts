@@ -638,7 +638,7 @@ async function startServer() {
   let importRefreshTimer: NodeJS.Timeout | null = null;
 
   app.post('/api/imported-leads/bulk', async (req, res) => {
-    const { leads, campanha } = req.body;
+    const { leads, campanha, updateMode = 'merge', isFirstBatch = false } = req.body;
     if (!Array.isArray(leads) || leads.length === 0) {
       return res.status(400).json({ error: "Nenhum lead fornecido para importação." });
     }
@@ -651,9 +651,19 @@ async function startServer() {
     }
 
     const campaignName = campanha.trim();
-    const insertedRecords: any[] = [];
 
-    const valuesArray = [];
+    // Se o usuário optou por 'replace' (substituir base inteira) no primeiro lote
+    if (updateMode === 'replace' && isFirstBatch && db) {
+      try {
+        console.log(`🗑️ Modo Substituição: limpando registros anteriores da campanha "${campaignName}"...`);
+        await db.query(`DELETE FROM imported_leads WHERE campanha = ?`, [campaignName]);
+        await db.query(`DELETE FROM crm_actions WHERE campaign_name = ?`, [campaignName]);
+      } catch (err) {
+        console.error("Erro ao limpar base para substituição:", err);
+      }
+    }
+
+    const insertedRecords: any[] = [];
     for (const item of leads) {
       const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
       const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -684,31 +694,125 @@ async function startServer() {
         importedLeadsData.push(record);
       }
       insertedRecords.push(record);
-
-      valuesArray.push([
-        record.id,
-        record.nome,
-        record.whatsapp,
-        record.email,
-        record.cep,
-        record.endereco,
-        record.numero,
-        record.complemento,
-        record.bairro,
-        record.cidade,
-        record.estado,
-        record.campanha,
-        record.origem,
-        record.createdAt,
-        record.extraData
-      ]);
     }
 
-    if (db && valuesArray.length > 0) {
+    let updatedCount = 0;
+    let newCount = insertedRecords.length;
+
+    if (db && insertedRecords.length > 0) {
       try {
+        const phoneList = insertedRecords.map(r => r.whatsapp).filter(w => Boolean(w) && w.length >= 8);
+        const emailList = insertedRecords.map(r => r.email).filter(e => Boolean(e) && e.includes('@') && !e.includes('@fake'));
+
+        const existingByContact = new Map<string, any>();
+        if (phoneList.length > 0 || emailList.length > 0) {
+          const whereOr: string[] = [];
+          const params: any[] = [campaignName];
+          if (phoneList.length > 0) {
+            whereOr.push('whatsapp IN (?)');
+            params.push(phoneList);
+          }
+          if (emailList.length > 0) {
+            whereOr.push('email IN (?)');
+            params.push(emailList);
+          }
+
+          const [existingRows]: any = await db.query(
+            `SELECT id, whatsapp, email, nome, cep, endereco, numero, complemento, bairro, cidade, estado, createdAt, extraData FROM imported_leads WHERE campanha = ? AND (${whereOr.join(' OR ')})`,
+            params
+          );
+
+          for (const er of existingRows) {
+            if (er.whatsapp) existingByContact.set(`p_${er.whatsapp}`, er);
+            if (er.email) existingByContact.set(`e_${er.email.toLowerCase()}`, er);
+          }
+        }
+
+        const idsToDelete: string[] = [];
+        const finalRecordsToInsert: any[] = [];
+
+        for (const record of insertedRecords) {
+          const phoneKey = record.whatsapp ? `p_${record.whatsapp}` : null;
+          const emailKey = record.email ? `e_${record.email.toLowerCase()}` : null;
+          const existing = (phoneKey && existingByContact.get(phoneKey)) || (emailKey && existingByContact.get(emailKey));
+
+          if (existing && updateMode !== 'append') {
+            // Contato já cadastrado nesta base: mesclar e atualizar dados sem duplicar
+            updatedCount++;
+            idsToDelete.push(existing.id);
+
+            const mergedRecord = {
+              id: existing.id,
+              nome: (record.nome && record.nome !== 'Sem Nome' && record.nome !== 'Apoiador Importado') ? record.nome : (existing.nome || 'Sem Nome'),
+              whatsapp: record.whatsapp || existing.whatsapp,
+              email: record.email || existing.email,
+              cep: record.cep || existing.cep,
+              endereco: record.endereco || existing.endereco,
+              numero: record.numero || existing.numero,
+              complemento: record.complemento || existing.complemento,
+              bairro: record.bairro || existing.bairro,
+              cidade: (record.cidade && record.cidade !== 'São Paulo') ? record.cidade : (existing.cidade || 'São Paulo'),
+              estado: record.estado || existing.estado || 'SP',
+              campanha: campaignName,
+              origem: 'Importação CSV',
+              createdAt: existing.createdAt || record.createdAt,
+              extraData: record.extraData || existing.extraData
+            };
+
+            finalRecordsToInsert.push([
+              mergedRecord.id,
+              mergedRecord.nome,
+              mergedRecord.whatsapp,
+              mergedRecord.email,
+              mergedRecord.cep,
+              mergedRecord.endereco,
+              mergedRecord.numero,
+              mergedRecord.complemento,
+              mergedRecord.bairro,
+              mergedRecord.cidade,
+              mergedRecord.estado,
+              mergedRecord.campanha,
+              mergedRecord.origem,
+              mergedRecord.createdAt,
+              mergedRecord.extraData
+            ]);
+          } else {
+            // Novo contato nesta base
+            finalRecordsToInsert.push([
+              record.id,
+              record.nome,
+              record.whatsapp,
+              record.email,
+              record.cep,
+              record.endereco,
+              record.numero,
+              record.complemento,
+              record.bairro,
+              record.cidade,
+              record.estado,
+              record.campanha,
+              record.origem,
+              record.createdAt,
+              record.extraData
+            ]);
+          }
+        }
+
+        newCount = finalRecordsToInsert.length - updatedCount;
+
+        // Se houver registros repetidos para atualizar, removemos as versões antigas antes da re-inserção consolidada
+        if (idsToDelete.length > 0) {
+          const CHUNK_DEL = 1000;
+          for (let i = 0; i < idsToDelete.length; i += CHUNK_DEL) {
+            const delChunk = idsToDelete.slice(i, i + CHUNK_DEL);
+            await db.query(`DELETE FROM imported_leads WHERE id IN (?)`, [delChunk]);
+          }
+        }
+
+        // Gravação dos registros finais no MySQL
         const CHUNK_SIZE = 1000;
-        for (let i = 0; i < valuesArray.length; i += CHUNK_SIZE) {
-          const chunk = valuesArray.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < finalRecordsToInsert.length; i += CHUNK_SIZE) {
+          const chunk = finalRecordsToInsert.slice(i, i + CHUNK_SIZE);
           await db.query(
             `INSERT INTO imported_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campanha, origem, createdAt, extraData) VALUES ?`,
             [chunk]
@@ -728,11 +832,13 @@ async function startServer() {
       console.log(`🔄 Disparando sincronização no CRM para campanha "${campaignName}"...`);
       await syncCampaignToCrm(campaignName);
       leadsConsolidator.refresh().catch(err => console.error("Erro ao atualizar consolidador após importação:", err));
-    }, 5000);
+    }, 3000);
 
     return res.json({
       success: true,
       count: insertedRecords.length,
+      updatedCount,
+      newCount,
       campanha: campaignName
     });
   });
