@@ -25,6 +25,9 @@ import {
   Eye, 
   X, 
   ChevronRight, 
+  ChevronDown,
+  CheckSquare,
+  Square,
   Package, 
   HeartHandshake, 
   Gamepad2, 
@@ -170,7 +173,16 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [estadoFilter, setEstadoFilter] = useState('');
   const [cidadeFilter, setCidadeFilter] = useState('');
   const [multiActionFilter, setMultiActionFilter] = useState<'all' | 'multi' | 'super' | 'single' | 'frequent' | 'vip'>('all');
-  const [campaignFilter, setCampaignFilter] = useState<string>('all');
+  const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
+  const [isCampaignDropdownOpen, setIsCampaignDropdownOpen] = useState(false);
+  const [campaignSearchText, setCampaignSearchText] = useState('');
+  const [isExportCombinedBasesModalOpen, setIsExportCombinedBasesModalOpen] = useState(false);
+  const [exportModalSelectedBases, setExportModalSelectedBases] = useState<string[]>([]);
+  const [exportModalFormat, setExportModalFormat] = useState<'csv' | 'xlsx'>('csv');
+  const [exportModalType, setExportModalType] = useState<'all' | 'address'>('all');
+  const [exportModalOnlySp, setExportModalOnlySp] = useState(false);
+  const [exportModalSearch, setExportModalSearch] = useState('');
+  const campaignDropdownRef = useRef<HTMLDivElement>(null);
   const [leadTypeFilter, setLeadTypeFilter] = useState<'all' | 'organic' | 'imported'>('all');
   const [qualityTierFilter, setQualityTierFilter] = useState<'all' | 'diamante' | 'ouro' | 'prata' | 'bronze' | 'high'>('all');
   const [hasWhatsAppFilter, setHasWhatsAppFilter] = useState<'all' | 'yes' | 'no'>('all');
@@ -192,6 +204,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [confirmDeleteBase, setConfirmDeleteBase] = useState('');
 
   const [campaignInput, setCampaignInput] = useState('');
+  const [importUpdateMode, setImportUpdateMode] = useState<'merge' | 'replace'>('merge');
   const [isColdBase, setIsColdBase] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvFileName, setCsvFileName] = useState('');
@@ -311,7 +324,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         search: deferredSearch.trim(),
         estado: estadoFilter,
         cidade: cidadeFilter,
-        campaign: campaignFilter,
+        campaign: campaignFilter.length > 0 ? campaignFilter.join(',') : 'all',
+        campaigns: campaignFilter.length > 0 ? campaignFilter.join(',') : 'all',
         multiAction: multiActionFilter,
         leadType: leadTypeFilter,
         qualityTier: qualityTierFilter,
@@ -560,14 +574,55 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     setUploadError('');
 
     const nowTimeStr = () => new Date().toLocaleTimeString('pt-BR');
-    const totalLeads = parsedCsvLeads.length;
+
+    // 1. Deduplicação interna da planilha antes do envio
+    const seenContactMap = new Map<string, any>();
+    let internalDuplicatesCount = 0;
+
+    for (const lead of parsedCsvLeads) {
+      const cleanPhone = (lead.whatsapp || '').replace(/\D/g, '');
+      const cleanEmail = (lead.email || '').trim().toLowerCase();
+      const key = cleanPhone && cleanPhone.length >= 8 
+        ? `p_${cleanPhone}` 
+        : (cleanEmail && cleanEmail.includes('@') && !cleanEmail.includes('@fake') ? `e_${cleanEmail}` : null);
+
+      if (!key) {
+        seenContactMap.set(`id_${Math.random().toString(36).substring(2, 9)}`, { ...lead });
+        continue;
+      }
+
+      if (seenContactMap.has(key)) {
+        internalDuplicatesCount++;
+        const existing = seenContactMap.get(key);
+        // Enriquece o registro existente com dados mais completos da linha repetida
+        if ((!existing.nome || existing.nome === 'Apoiador Importado' || existing.nome === 'Sem Nome') && lead.nome && lead.nome !== 'Apoiador Importado' && lead.nome !== 'Sem Nome') {
+          existing.nome = lead.nome;
+        }
+        if (!existing.endereco && lead.endereco) existing.endereco = lead.endereco;
+        if (!existing.numero && lead.numero) existing.numero = lead.numero;
+        if (!existing.complemento && lead.complemento) existing.complemento = lead.complemento;
+        if (!existing.bairro && lead.bairro) existing.bairro = lead.bairro;
+        if (!existing.cep && lead.cep) existing.cep = lead.cep;
+        if ((!existing.cidade || existing.cidade === 'São Paulo') && lead.cidade && lead.cidade !== 'São Paulo') existing.cidade = lead.cidade;
+        if (!existing.email && lead.email) existing.email = lead.email;
+        if (!existing.whatsapp && lead.whatsapp) existing.whatsapp = lead.whatsapp;
+        if (lead.extraData) {
+          existing.extraData = { ...(existing.extraData || {}), ...lead.extraData };
+        }
+      } else {
+        seenContactMap.set(key, { ...lead });
+      }
+    }
+
+    const cleanLeadsToSend = Array.from(seenContactMap.values());
+    const totalLeads = cleanLeadsToSend.length;
     const CHUNK_SIZE = 2500;
     const totalBatches = Math.ceil(totalLeads / CHUNK_SIZE);
 
     // Collect initial city/state stats from parsed batch
     const cityMap: Record<string, number> = {};
     const stateMap: Record<string, number> = {};
-    parsedCsvLeads.forEach(lead => {
+    cleanLeadsToSend.forEach(lead => {
       if (lead.cidade) {
         cityMap[lead.cidade] = (cityMap[lead.cidade] || 0) + 1;
       }
@@ -596,8 +651,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       speedPerSec: 0,
       estRemainingSec: Math.round(totalLeads / 4000) + 2,
       logs: [
-        { time: nowTimeStr(), text: `Iniciando processamento de ${totalLeads.toLocaleString('pt-BR')} registros para a campanha "${campaignInput.trim()}"...`, type: 'info' },
-        { time: nowTimeStr(), text: `Higienização e normalização de municípios e UFs concluída. Total de ${topCities.length} principais polos regionais mapeados.`, type: 'success' }
+        { time: nowTimeStr(), text: `Iniciando processamento para a base "${campaignInput.trim()}". ${parsedCsvLeads.length.toLocaleString('pt-BR')} linhas lidas.`, type: 'info' },
+        ...(internalDuplicatesCount > 0 ? [
+          { time: nowTimeStr(), text: `Deduplicação interna: ${internalDuplicatesCount.toLocaleString('pt-BR')} contatos repetidos na planilha foram mesclados e enriquecidos. ${totalLeads.toLocaleString('pt-BR')} registros únicos prontos.`, type: 'warn' }
+        ] : [
+          { time: nowTimeStr(), text: `Deduplicação interna: planilha sem repetições (${totalLeads.toLocaleString('pt-BR')} contatos únicos).`, type: 'success' }
+        ]),
+        { time: nowTimeStr(), text: `Higienização e normalização de municípios e UFs concluída (${topCities.length} principais polos regionais mapeados).`, type: 'success' }
       ],
       topCities,
       topStates
@@ -609,18 +669,20 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     try {
       const startTime = Date.now();
       let importedCount = 0;
+      let totalUpdated = 0;
+      let totalNew = 0;
 
       setUploadProgress(prev => ({
         ...prev,
         stage: 'uploading',
         logs: [
           ...prev.logs,
-          { time: nowTimeStr(), text: `Iniciando gravação no banco de dados MySQL em ${totalBatches} lotes estruturados...`, type: 'info' }
+          { time: nowTimeStr(), text: `Iniciando gravação no banco de dados MySQL em ${totalBatches} lotes estruturados (Modo: ${importUpdateMode === 'replace' ? 'Substituir' : 'Atualizar & Deduplicar'})...`, type: 'info' }
         ]
       }));
 
       for (let i = 0; i < totalLeads; i += CHUNK_SIZE) {
-        const chunk = parsedCsvLeads.slice(i, i + CHUNK_SIZE);
+        const chunk = cleanLeadsToSend.slice(i, i + CHUNK_SIZE);
         const currentBatch = Math.floor(i / CHUNK_SIZE) + 1;
         
         let success = false;
@@ -633,7 +695,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 leads: chunk,
-                campanha: campaignInput.trim() + (isColdBase ? ' [Sem Engajamento]' : '')
+                campanha: campaignInput.trim() + (isColdBase ? ' [Sem Engajamento]' : ''),
+                updateMode: importUpdateMode,
+                isFirstBatch: i === 0
               })
             });
 
@@ -645,6 +709,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             const data = await res.json();
             if (res.ok && data.success) {
               importedCount += data.count;
+              totalUpdated += data.updatedCount || 0;
+              totalNew += data.newCount !== undefined ? data.newCount : data.count;
               success = true;
 
               const elapsedSec = Math.max(0.5, (Date.now() - startTime) / 1000);
@@ -721,6 +787,12 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         logs: [
           ...prev.logs,
           { time: nowTimeStr(), text: `Sincronização e deduplicação concluídas com sucesso em ${totalElapsed}s.`, type: 'success' },
+          ...(totalUpdated > 0 ? [
+            { time: nowTimeStr(), text: `Base atualizada: ${totalUpdated.toLocaleString('pt-BR')} contatos que já constavam no sistema foram enriquecidos e atualizados sem duplicação!`, type: 'success' },
+            { time: nowTimeStr(), text: `Novos registros: ${totalNew.toLocaleString('pt-BR')} novos contatos únicos foram adicionados à base.`, type: 'info' }
+          ] : [
+            { time: nowTimeStr(), text: `Base gravada e deduplicada com sucesso: ${importedCount.toLocaleString('pt-BR')} contatos registrados.`, type: 'success' }
+          ]),
           { time: nowTimeStr(), text: `Campanha "${campaignInput.trim()}" pronta e disponível para filtros e exportação no CRM!`, type: 'success' }
         ]
       }));
@@ -1114,6 +1186,32 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const filteredLeads = Array.isArray(serverLeads) ? serverLeads : [];
   const consolidatedLeads = Array.isArray(serverLeads) ? serverLeads : [];
 
+  const availableBases = useMemo(() => {
+    const baseMap = new Map<string, number>();
+    (importedBases || []).forEach(b => {
+      if (b.campanha) baseMap.set(b.campanha, Number(b.count) || 0);
+    });
+    (campaignOptions || []).forEach(c => {
+      if (c && !baseMap.has(c)) {
+        baseMap.set(c, 0);
+      }
+    });
+    return Array.from(baseMap.entries()).map(([campanha, count]) => ({
+      campanha,
+      count
+    })).sort((a, b) => (b.count || 0) - (a.count || 0));
+  }, [importedBases, campaignOptions]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (campaignDropdownRef.current && !campaignDropdownRef.current.contains(event.target as Node)) {
+        setIsCampaignDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const previousIsRefreshing = useRef(summary?.isRefreshing);
   useEffect(() => {
     if (previousIsRefreshing.current === true && summary?.isRefreshing === false) {
@@ -1126,7 +1224,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   }, [summary?.isRefreshing, currentPage]);
 
   useEffect(() => {
-    let interval;
+    let interval: any;
     if (summary?.isRefreshing || !summary?.isReady) {
       interval = setInterval(() => {
         fetchSummary();
@@ -1137,13 +1235,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     }
   }, [summary?.isRefreshing, summary?.isReady]);
 
+  const campaignFilterKey = campaignFilter.join(',');
+
   useEffect(() => {
     fetchLeadsPage(currentPage);
-  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilter, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder, currentPage]);
+  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilterKey, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilter, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder]);
+  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilterKey, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder]);
 
   useEffect(() => {
     if (activeView === 'MATERIAL') {
@@ -1155,12 +1255,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     window.location.href = `/api/leads/export-materials?adesivoFilter=${materialFilterAdesivo}&format=${format}`;
   };
 
-  const exportMailMergeExcel = () => {
+  const exportMailMergeExcel = (customCampaigns?: string[]) => {
+    const selected = customCampaigns !== undefined ? customCampaigns : campaignFilter;
     const params = new URLSearchParams({
       search: search.trim(),
       estado: estadoFilter,
       cidade: cidadeFilter,
-      campaign: campaignFilter,
+      campaign: selected.length > 0 ? selected.join(',') : 'all',
+      campaigns: selected.length > 0 ? selected.join(',') : 'all',
       multiAction: multiActionFilter,
       leadType: leadTypeFilter,
       qualityTier: qualityTierFilter,
@@ -1174,19 +1276,21 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   };
 
   // Export Unified List to Excel (.xlsx) using high-speed server stream
-  const exportConsolidatedExcel = () => {
+  const exportConsolidatedExcel = (customCampaigns?: string[], format: 'csv' | 'xlsx' = 'csv', onlySp = false) => {
+    const selected = customCampaigns !== undefined ? customCampaigns : campaignFilter;
     const params = new URLSearchParams({
       search: search.trim(),
-      estado: estadoFilter,
+      estado: onlySp ? 'SP' : estadoFilter,
       cidade: cidadeFilter,
-      campaign: campaignFilter,
+      campaign: selected.length > 0 ? selected.join(',') : 'all',
+      campaigns: selected.length > 0 ? selected.join(',') : 'all',
       multiAction: multiActionFilter,
       leadType: leadTypeFilter,
       qualityTier: qualityTierFilter,
       hasWhatsApp: hasWhatsAppFilter,
       sortField: sortField,
       sortOrder: sortOrder,
-      format: 'csv'
+      format: format
     });
     window.location.href = `/api/leads/export?${params.toString()}`;
   };
@@ -1663,7 +1767,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             </button>
 
             <button
-              onClick={exportMailMergeExcel}
+              onClick={() => exportMailMergeExcel()}
               disabled={(totalFiltered || totalUniqueLeads || consolidatedLeads.length) === 0}
               className="bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap"
             >
@@ -1672,12 +1776,31 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             </button>
 
             <button
-              onClick={exportConsolidatedExcel}
+              onClick={() => exportConsolidatedExcel()}
               disabled={(totalFiltered || totalUniqueLeads || consolidatedLeads.length) === 0}
               className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap"
             >
               <Download className="w-4 h-4" />
               <span>Exportar Lista Única</span>
+            </button>
+
+            <button
+              onClick={() => {
+                fetchImportedBases();
+                setExportModalSelectedBases(campaignFilter.length > 0 ? [...campaignFilter] : []);
+                setIsExportCombinedBasesModalOpen(true);
+              }}
+              disabled={(totalFiltered || totalUniqueLeads || consolidatedLeads.length) === 0}
+              className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap border border-indigo-400/30"
+              title="Selecionar e exportar múltiplas bases combinadas com deduplicação"
+            >
+              <Layers className="w-4 h-4" />
+              <span>Exportar Bases Combinadas</span>
+              {campaignFilter.length > 1 && (
+                <span className="bg-white/20 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                  {campaignFilter.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -2395,14 +2518,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </div>
 
               {/* Botão de Limpar Todos os Filtros se houver algum ativo */}
-              {(search || estadoFilter || cidadeFilter || multiActionFilter !== 'all' || campaignFilter !== 'all' || leadTypeFilter !== 'all' || qualityTierFilter !== 'all' || hasWhatsAppFilter !== 'all') && (
+              {(search || estadoFilter || cidadeFilter || multiActionFilter !== 'all' || campaignFilter.length > 0 || leadTypeFilter !== 'all' || qualityTierFilter !== 'all' || hasWhatsAppFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setSearch('');
                     setEstadoFilter('');
                     setCidadeFilter('');
                     setMultiActionFilter('all');
-                    setCampaignFilter('all');
+                    setCampaignFilter([]);
                     setLeadTypeFilter('all');
                     setQualityTierFilter('all');
                     setHasWhatsAppFilter('all');
@@ -2445,11 +2568,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
                 >
                   <option value="all">Todas as Qualidades</option>
-                  <option value="high">✨ Alta Qualidade (💎 + 🥇)</option>
-                  <option value="diamante">💎 Diamante (Super Engajado)</option>
+                  <option value="high">✨ Alta Qualidade (Whats Válido)</option>
+                  <option value="diamante">💎 Diamante (Completo + 2+ Ações)</option>
                   <option value="ouro">🥇 Ouro (Whats + Endereço)</option>
                   <option value="prata">🥈 Prata (Whats Válido)</option>
-                  <option value="bronze">🥉 Bronze (Incompleto)</option>
+                  <option value="bronze">🥉 Bronze (Sem Whats / Incompleto)</option>
                 </select>
               </div>
 
@@ -2539,21 +2662,151 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                 </select>
               </div>
 
-              {/* Filtro de Campanha Específica */}
-              <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500 mb-1">
-                  Canal / Campanha
-                </label>
-                <select
-                  value={campaignFilter}
-                  onChange={(e) => setCampaignFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-blue-500"
+              {/* Filtro de Bases Combinadas / Campanhas */}
+              <div className="relative" ref={campaignDropdownRef}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500">
+                    Bases / Canais
+                  </label>
+                  {campaignFilter.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCampaignFilter([])}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCampaignDropdownOpen(prev => !prev)}
+                  className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                    campaignFilter.length > 0
+                      ? 'border-indigo-400 bg-indigo-50/70 text-indigo-900 shadow-2xs'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  <option value="all">Todos os Canais</option>
-                  {(campaignOptions || []).map(camp => (
-                    <option key={camp} value={camp}>{camp}</option>
-                  ))}
-                </select>
+                  <span className="truncate text-left flex-1">
+                    {campaignFilter.length === 0
+                      ? `Todas as Bases (${availableBases.length})`
+                      : campaignFilter.length === 1
+                      ? campaignFilter[0]
+                      : `${campaignFilter.length} Bases Combinadas`}
+                  </span>
+                  {campaignFilter.length > 1 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black shrink-0">
+                      {campaignFilter.length}
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isCampaignDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Popover Dropdown de Seleção de Bases */}
+                {isCampaignDropdownOpen && (
+                  <div className="absolute right-0 sm:left-0 sm:right-auto mt-1.5 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-gray-200/90 z-40 p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-gray-800 uppercase tracking-tight">
+                        <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Selecionar Bases</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCampaignFilter(availableBases.map(b => b.campanha))}
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        >
+                          Todas
+                        </button>
+                        <span className="text-gray-300 text-xs">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setCampaignFilter([])}
+                          className="text-[10px] font-bold text-gray-500 hover:text-gray-700 cursor-pointer"
+                        >
+                          Nenhuma
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Busca interna de bases */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={campaignSearchText}
+                        onChange={(e) => setCampaignSearchText(e.target.value)}
+                        placeholder="Filtrar base..."
+                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Lista com scroll e checkboxes */}
+                    <div className="max-h-56 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                      {(() => {
+                        const filtered = availableBases.filter(b =>
+                          !campaignSearchText || b.campanha.toLowerCase().includes(campaignSearchText.toLowerCase())
+                        );
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center py-4 text-xs text-gray-400 font-medium">
+                              Nenhuma base encontrada.
+                            </div>
+                          );
+                        }
+
+                        return filtered.map(b => {
+                          const isSelected = campaignFilter.includes(b.campanha);
+                          return (
+                            <label
+                              key={b.campanha}
+                              className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                                isSelected ? 'bg-indigo-50 text-indigo-900' : 'hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    setCampaignFilter(prev =>
+                                      isSelected
+                                        ? prev.filter(c => c !== b.campanha)
+                                        : [...prev, b.campanha]
+                                    );
+                                  }}
+                                  className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                                <span className="truncate">{b.campanha}</span>
+                              </div>
+                              {b.count > 0 && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600 shrink-0">
+                                  {b.count.toLocaleString('pt-BR')}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    {/* Rodapé do dropdown */}
+                    <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500 font-medium">
+                        {campaignFilter.length === 0 ? 'Todas as bases' : `${campaignFilter.length} selecionada(s)`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsCampaignDropdownOpen(false)}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 cursor-pointer transition-colors"
+                      >
+                        Pronto
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -2568,18 +2821,34 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   setLeadTypeFilter('all');
                   setQualityTierFilter('all');
                   setHasWhatsAppFilter('all');
-                  setCampaignFilter('all');
+                  setCampaignFilter([]);
                   setEstadoFilter('');
                   setCidadeFilter('');
                 }}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  multiActionFilter === 'all' && !estadoFilter && !cidadeFilter && campaignFilter === 'all'
+                  multiActionFilter === 'all' && !estadoFilter && !cidadeFilter && campaignFilter.length === 0
                     ? 'bg-gray-900 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Todos ({(summary?.totalUniqueLeads || totalUniqueLeads).toLocaleString('pt-BR')})
               </button>
+
+              {campaignFilter.length > 0 && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">
+                  <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>
+                    {campaignFilter.length === 1 ? campaignFilter[0] : `${campaignFilter.length} Bases Combinadas`}
+                  </span>
+                  <button
+                    onClick={() => setCampaignFilter([])}
+                    className="ml-1 text-indigo-400 hover:text-indigo-700 font-black cursor-pointer"
+                    title="Remover filtro de bases"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               <button
                 onClick={() => setMultiActionFilter(multiActionFilter === 'frequent' ? 'all' : 'frequent')}
@@ -3284,6 +3553,329 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       )}
 
       
+      {/* MODAL DE EXPORTAÇÃO DE BASES COMBINADAS */}
+      {isExportCombinedBasesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 p-6 text-white relative">
+              <button
+                onClick={() => setIsExportCombinedBasesModalOpen(false)}
+                className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                    <span>Exportar Bases Combinadas</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                      Consolidado
+                    </span>
+                  </h2>
+                  <p className="text-xs text-indigo-200 mt-0.5">
+                    Selecione duas ou mais bases para exportar em lista única, com deduplicação de chaves e contatos.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50/50">
+              
+              {/* Passo 1: Seleção de Bases */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">1</span>
+                      <span>Selecione as bases que deseja combinar</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Marque as bases cujos apoiadores você deseja unir no arquivo final.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExportModalSelectedBases(availableBases.map(b => b.campanha))}
+                      className="px-2.5 py-1 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg cursor-pointer transition-colors"
+                    >
+                      Marcar Todas ({availableBases.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExportModalSelectedBases([])}
+                      className="px-2.5 py-1 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
+                    >
+                      Desmarcar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campo de Busca Rápida de Base */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={exportModalSearch}
+                    onChange={(e) => setExportModalSearch(e.target.value)}
+                    placeholder="Buscar base pelo nome..."
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Grid de Checkboxes de Bases */}
+                <div className="max-h-60 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                  {(() => {
+                    const filtered = availableBases.filter(b =>
+                      !exportModalSearch || b.campanha.toLowerCase().includes(exportModalSearch.toLowerCase())
+                    );
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-center py-6 text-xs text-gray-400">
+                          Nenhuma base encontrada para &quot;{exportModalSearch}&quot;.
+                        </div>
+                      );
+                    }
+
+                    return filtered.map(b => {
+                      const isChecked = exportModalSelectedBases.includes(b.campanha);
+                      return (
+                        <label
+                          key={b.campanha}
+                          className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                            isChecked
+                              ? 'bg-indigo-50/80 border-indigo-300 text-indigo-950 shadow-2xs'
+                              : 'bg-white border-gray-200/80 hover:border-gray-300 text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setExportModalSelectedBases(prev =>
+                                  isChecked
+                                    ? prev.filter(c => c !== b.campanha)
+                                    : [...prev, b.campanha]
+                                );
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-black truncate">{b.campanha}</div>
+                            </div>
+                          </div>
+                          {b.count > 0 && (
+                            <span className="text-[11px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
+                              {b.count.toLocaleString('pt-BR')} leads
+                            </span>
+                          )}
+                        </label>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Resumo da Seleção de Bases */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+                    <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                    <span>
+                      {exportModalSelectedBases.length === 0
+                        ? 'Nenhuma base selecionada'
+                        : `${exportModalSelectedBases.length} base(s) selecionada(s)`}
+                    </span>
+                  </div>
+                  {exportModalSelectedBases.length > 0 && (
+                    <div className="text-[11px] text-gray-500">
+                      Total bruto estimado: ~
+                      {availableBases
+                        .filter(b => exportModalSelectedBases.includes(b.campanha))
+                        .reduce((acc, curr) => acc + (curr.count || 0), 0)
+                        .toLocaleString('pt-BR')}{' '}
+                      leads (duplicatas serão removidas)
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Passo 2: Opções de Exportação */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-4">
+                <div className="border-b border-gray-100 pb-2">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">2</span>
+                    <span>Opções de Formato e Conteúdo</span>
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Formato do Arquivo */}
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">
+                      Formato do Arquivo
+                    </label>
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        exportModalFormat === 'csv'
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="format"
+                          value="csv"
+                          checked={exportModalFormat === 'csv'}
+                          onChange={() => setExportModalFormat('csv')}
+                          className="text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <div>CSV (.csv) - Recomendado ⚡</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Streaming ultra-rápido, sem limites de volume.</div>
+                        </div>
+                      </label>
+
+                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        exportModalFormat === 'xlsx'
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="format"
+                          value="xlsx"
+                          checked={exportModalFormat === 'xlsx'}
+                          onChange={() => setExportModalFormat('xlsx')}
+                          className="text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <div>Excel (.xlsx)</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Planilha formatada tradicional.</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Tipo de Conteúdo */}
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">
+                      Filtro de Conteúdo
+                    </label>
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        exportModalType === 'all'
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="type"
+                          value="all"
+                          checked={exportModalType === 'all'}
+                          onChange={() => setExportModalType('all')}
+                          className="text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <div>Lista Única Completa</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Todos os dados e contatos disponíveis.</div>
+                        </div>
+                      </label>
+
+                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        exportModalType === 'address'
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="type"
+                          value="address"
+                          checked={exportModalType === 'address'}
+                          onChange={() => setExportModalType('address')}
+                          className="text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <div>Endereços Correios (Mala Direta)</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Apenas contatos que possuem endereço/CEP.</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filtro Regional Opcional */}
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={exportModalOnlySp}
+                      onChange={(e) => setExportModalOnlySp(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Filtrar apenas apoiadores do Estado de São Paulo (SP)</span>
+                  </label>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 bg-white border-t border-gray-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-gray-500 font-medium">
+                {exportModalSelectedBases.length === 0 ? (
+                  <span className="text-amber-600 font-bold">Selecione ao menos 1 base para exportar</span>
+                ) : (
+                  <span>
+                    Pronto para exportar <strong>{exportModalSelectedBases.length}</strong> base(s) combinada(s)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCampaignFilter(exportModalSelectedBases);
+                    setIsExportCombinedBasesModalOpen(false);
+                  }}
+                  disabled={exportModalSelectedBases.length === 0}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold transition-colors disabled:opacity-40 cursor-pointer"
+                  title="Ver os leads combinados na tabela antes de exportar"
+                >
+                  Filtrar na Tabela
+                </button>
+
+                <button
+                  type="button"
+                  disabled={exportModalSelectedBases.length === 0}
+                  onClick={() => {
+                    if (exportModalType === 'address') {
+                      exportMailMergeExcel(exportModalSelectedBases);
+                    } else {
+                      exportConsolidatedExcel(exportModalSelectedBases, exportModalFormat, exportModalOnlySp);
+                    }
+                    setIsExportCombinedBasesModalOpen(false);
+                  }}
+                  className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar Base Combinada ({exportModalFormat.toUpperCase()})</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE GERENCIAMENTO DE BASES */}
       {isManageBasesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
@@ -3356,13 +3948,30 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => setConfirmDeleteBase(base.campanha)}
-                          className="p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors border border-red-100"
-                          title="Excluir Base Inteira"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setCampaignInput(base.campanha);
+                              setImportUpdateMode('merge');
+                              setIsManageBasesModalOpen(false);
+                              setIsUploadModalOpen(true);
+                              setUploadError('');
+                              setUploadSuccessMessage('');
+                            }}
+                            className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl transition-colors border border-blue-200 flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                            title="Atualizar esta base enviando nova planilha"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Atualizar Base</span>
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteBase(base.campanha)}
+                            className="p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors border border-red-100 cursor-pointer"
+                            title="Excluir Base Inteira"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -3706,13 +4315,130 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   type="text"
                   value={campaignInput}
                   onChange={(e) => setCampaignInput(e.target.value)}
-                  placeholder="Ex: Meta Ads - Março 2026, Feira Adoção Ibirapuera, Mutirão ZL..."
+                  placeholder="Ex: Meta Ads - Março 2026, Feira Adoção Ibirapuera, Edital Animal 2025..."
                   className="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none text-sm font-medium transition-all"
                 />
+
+                {/* Banner de Base Existente & Seleção de Modo de Deduplicação/Atualização */}
+                {(() => {
+                  const matchedExistingBase = availableBases.find(
+                    b => b.campanha && b.campanha.toLowerCase().trim() === campaignInput.toLowerCase().trim()
+                  );
+                  if (!matchedExistingBase) return null;
+
+                  return (
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/60 to-blue-50 border border-blue-200 shadow-xs space-y-3 mt-2 animate-in fade-in">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs shadow-xs">
+                            <RefreshCw className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black uppercase tracking-wider text-blue-950 block">
+                              Base Cadastrada Identificada
+                            </span>
+                            <span className="text-[11px] text-blue-700 font-medium">
+                              "{matchedExistingBase.campanha}" já possui <strong className="font-extrabold">{matchedExistingBase.count.toLocaleString('pt-BR')} leads</strong> cadastrados.
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                          Atualização de Base
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-gray-700 font-semibold">
+                        Como você deseja processar este upload para a base existente?
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <label className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                          importUpdateMode === 'merge'
+                            ? 'bg-white border-blue-600 ring-2 ring-blue-500/20 shadow-xs'
+                            : 'bg-white/60 border-gray-200 hover:bg-white'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="import_update_mode"
+                            checked={importUpdateMode === 'merge'}
+                            onChange={() => setImportUpdateMode('merge')}
+                            className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                              <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                              Atualizar e Deduplicar (Recomendado)
+                            </span>
+                            <span className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                              Deduplica pelo WhatsApp/E-mail. Contatos já existentes têm seus dados enriquecidos (endereço, etc.) sem duplicar. Novos contatos são inseridos na base.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                          importUpdateMode === 'replace'
+                            ? 'bg-white border-red-500 ring-2 ring-red-500/20 shadow-xs'
+                            : 'bg-white/60 border-gray-200 hover:bg-white'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="import_update_mode"
+                            checked={importUpdateMode === 'replace'}
+                            onChange={() => setImportUpdateMode('replace')}
+                            className="mt-0.5 w-4 h-4 text-red-600 focus:ring-red-500 cursor-pointer"
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              Substituir Base Inteira
+                            </span>
+                            <span className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                              Apaga todos os registros anteriores desta campanha no banco e grava os novos contatos da planilha do zero.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Bases Já Cadastradas para Atualização Rápida */}
+                {availableBases.length > 0 && (
+                  <div className="pt-2">
+                    <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Database className="w-3 h-3 text-blue-600" />
+                      <span>Bases cadastradas no sistema (clique para atualizar):</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                      {availableBases.slice(0, 10).map((b) => (
+                        <button
+                          key={b.campanha}
+                          type="button"
+                          onClick={() => {
+                            setCampaignInput(b.campanha);
+                            setImportUpdateMode('merge');
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            campaignInput.toLowerCase().trim() === b.campanha.toLowerCase().trim()
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-blue-50/60 text-blue-900 border-blue-200 hover:bg-blue-100/80'
+                          }`}
+                        >
+                          <span>{b.campanha}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                            campaignInput.toLowerCase().trim() === b.campanha.toLowerCase().trim() ? 'bg-blue-700 text-blue-100' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {Number(b.count || 0).toLocaleString('pt-BR')}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
-                {/* Sugestões Rápidas */}
+                {/* Sugestões Rápidas de Nova Campanha */}
                 <div className="pt-1">
-                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Sugestões rápidas de campanha:</div>
+                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Ou escolha um tipo padrão de ação:</div>
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       'Meta Ads (Instagram/FB)',
@@ -3726,7 +4452,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                       <button
                         key={sug}
                         type="button"
-                        onClick={() => setCampaignInput(sug)}
+                        onClick={() => {
+                          setCampaignInput(sug);
+                          setImportUpdateMode('merge');
+                        }}
                         className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer ${
                           campaignInput === sug
                             ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
@@ -3956,7 +4685,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   <button
                     type="button"
                     onClick={() => {
-                      setCampaignFilter(campaignInput.trim() + (isColdBase ? ' [Sem Engajamento]' : ''));
+                      setCampaignFilter([campaignInput.trim() + (isColdBase ? ' [Sem Engajamento]' : '')]);
                       setIsUploadModalOpen(false);
                       setParsedCsvLeads([]);
                       setCsvMappedHeaders([]);

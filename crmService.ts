@@ -78,6 +78,17 @@ export const getCrmSummary = async (forceRefresh = false) => {
   return result;
 };
 
+export function extractCampaignList(query: any): string[] {
+  let list: string[] = [];
+  const raw = query?.campaigns ?? query?.campaign;
+  if (Array.isArray(raw)) {
+    list = raw.map((c: any) => String(c).trim()).filter((c: string) => c && c !== 'all' && c !== 'ALL');
+  } else if (typeof raw === 'string' && raw.trim() && raw !== 'all' && raw !== 'ALL') {
+    list = raw.split(',').map((c: string) => c.trim()).filter((c: string) => c && c !== 'all' && c !== 'ALL');
+  }
+  return Array.from(new Set(list));
+}
+
 export const getCrmPaginated = async (query: any) => {
   const page = parseInt(query.page || '1');
   const pageSize = parseInt(query.pageSize || '20');
@@ -86,7 +97,7 @@ export const getCrmPaginated = async (query: any) => {
   
   const estado = query.estado || '';
   const cidade = query.cidade || '';
-  const campaign = query.campaign || 'all';
+  const campaignList = extractCampaignList(query);
   const multiAction = query.multiAction || 'all';
   const leadType = query.leadType || 'all';
   const qualityTier = query.qualityTier || 'all';
@@ -131,16 +142,26 @@ export const getCrmPaginated = async (query: any) => {
   }
 
   if (qualityTier !== 'all') {
-    if (qualityTier === 'diamante') whereClauses.push('l.campaign_count >= 5');
-    else if (qualityTier === 'ouro') whereClauses.push('l.campaign_count >= 3 AND l.campaign_count <= 4');
-    else if (qualityTier === 'prata') whereClauses.push('l.campaign_count = 2');
-    else if (qualityTier === 'bronze') whereClauses.push('l.campaign_count = 1');
-    else if (qualityTier === 'high') whereClauses.push('l.campaign_count >= 3');
+    if (qualityTier === 'diamante') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL AND l.campaign_count >= 2 AND (l.cep != "" AND l.cep IS NOT NULL OR l.endereco != "" AND l.endereco IS NOT NULL OR l.bairro != "" AND l.bairro IS NOT NULL))');
+    } else if (qualityTier === 'ouro') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL AND (l.cep != "" AND l.cep IS NOT NULL OR l.endereco != "" AND l.endereco IS NOT NULL OR l.bairro != "" AND l.bairro IS NOT NULL))');
+    } else if (qualityTier === 'prata') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL)');
+    } else if (qualityTier === 'bronze') {
+      whereClauses.push('(l.whatsapp = "" OR l.whatsapp IS NULL)');
+    } else if (qualityTier === 'high') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL)');
+    }
   }
 
-  if (campaign !== 'all') {
+  if (campaignList.length === 1) {
     joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
-    joinValues.push(campaign);
+    joinValues.push(campaignList[0]);
+  } else if (campaignList.length > 1) {
+    const placeholders = campaignList.map(() => '?').join(', ');
+    joins += ` JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name IN (${placeholders})`;
+    joinValues.push(...campaignList);
   }
 
   if (leadType === 'organic') {
@@ -162,12 +183,25 @@ export const getCrmPaginated = async (query: any) => {
   const values = [...joinValues, ...whereValues];
   const whereStr = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
-  // Optimized count query: simple COUNT(*) when no joins are present
-  const countSql = joins.length > 0
-    ? `SELECT COUNT(DISTINCT l.id) as total FROM crm_leads l ${joins} ${whereStr}`
-    : `SELECT COUNT(*) as total FROM crm_leads l ${whereStr}`;
+  // Optimized count query
+  let countSql = '';
+  let countValues = values;
+  if (whereClauses.length === 0 && campaignList.length > 0 && leadType === 'all') {
+    if (campaignList.length === 1) {
+      countSql = 'SELECT COUNT(DISTINCT lead_id) as total FROM crm_actions WHERE campaign_name = ?';
+      countValues = [campaignList[0]];
+    } else {
+      const placeholders = campaignList.map(() => '?').join(', ');
+      countSql = `SELECT COUNT(DISTINCT lead_id) as total FROM crm_actions WHERE campaign_name IN (${placeholders})`;
+      countValues = campaignList;
+    }
+  } else if (joins.length > 0) {
+    countSql = `SELECT COUNT(DISTINCT l.id) as total FROM crm_leads l ${joins} ${whereStr}`;
+  } else {
+    countSql = `SELECT COUNT(*) as total FROM crm_leads l ${whereStr}`;
+  }
 
-  const [countRes]: any = await queryWithRetry(countSql, values);
+  const [countRes]: any = await queryWithRetry(countSql, countValues);
   const total = countRes[0]?.total || 0;
 
   let orderStr = 'ORDER BY l.created_at ' + sortOrder;
@@ -205,6 +239,23 @@ export const getCrmPaginated = async (query: any) => {
 
   const leads = rows.map((row: any) => {
     const acts = actionsByLeadId.get(row.id) || [];
+    const hasValidWhats = Boolean(row.whatsapp && String(row.whatsapp).trim() !== '');
+    const hasAddress = Boolean((row.cep && row.cep.trim()) || (row.endereco && row.endereco.trim()) || (row.bairro && row.bairro.trim()));
+    const totalActs = acts.length || row.campaign_count || 1;
+
+    let leadQualityTier: 'DIAMANTE' | 'OURO' | 'PRATA' | 'BRONZE' = 'BRONZE';
+    if (hasValidWhats) {
+      if (hasAddress && totalActs >= 2) {
+        leadQualityTier = 'DIAMANTE';
+      } else if (hasAddress) {
+        leadQualityTier = 'OURO';
+      } else {
+        leadQualityTier = 'PRATA';
+      }
+    } else {
+      leadQualityTier = 'BRONZE';
+    }
+
     return {
       id: row.id,
       nome: row.nome,
@@ -217,11 +268,12 @@ export const getCrmPaginated = async (query: any) => {
       numero: row.numero,
       complemento: row.complemento,
       bairro: row.bairro,
-      totalActions: acts.length || row.campaign_count || 1,
-      isFrequent: (row.campaign_count || acts.length) >= 2,
-      isMultiAction: (row.campaign_count || acts.length) >= 2,
-      isSuperSupporter: (row.campaign_count || acts.length) >= 3,
-      isVip: (row.campaign_count || acts.length) >= 5,
+      qualityTier: leadQualityTier,
+      totalActions: totalActs,
+      isFrequent: totalActs >= 2,
+      isMultiAction: totalActs >= 2,
+      isSuperSupporter: totalActs >= 3,
+      isVip: totalActs >= 5,
       distinctCampaigns: Array.from(new Set(acts.map((a: any) => a.campaign_name))),
       actions: acts.map((a: any) => ({
         sourceKey: a.source,
@@ -375,14 +427,39 @@ export const syncCampaignToCrm = async (campaignName: string) => {
     const db = await getDbConnection();
     if (!db) return;
 
-    console.log(`⚡ Sincronizando campanha "${campaignName}" para o CRM com deduplicação avançada...`);
+    console.log(`⚡ Sincronizando campanha "${campaignName}" para o CRM com deduplicação avançada e atualização cadastral...`);
     const start = Date.now();
 
-    // 1. Criar tabela temporária com os leads da campanha higienizados
-    // 2. Para contatos que já existem por WhatsApp ou E-mail, vincular a ação ao lead_id existente
-    // 3. Para contatos 100% novos, criar o registro em crm_leads e depois inserir em crm_actions
+    // 1. Limpar duplicidades internas prévias em imported_leads para esta campanha
+    await db.query(`
+      DELETE il1 FROM imported_leads il1
+      INNER JOIN imported_leads il2 ON il1.campanha = il2.campanha
+      WHERE il1.id > il2.id
+        AND il1.whatsapp != '' AND il1.whatsapp IS NOT NULL AND il1.whatsapp = il2.whatsapp
+        AND il1.campanha = ?
+    `, [campaignName]);
 
-    // Inserir novos leads que não existem por WhatsApp nem por E-mail
+    // 2. Atualizar e enriquecer contatos que já existem no CRM com dados novos/mais completos
+    await db.query(`
+      UPDATE crm_leads cl
+      INNER JOIN imported_leads il ON (
+        (il.whatsapp != '' AND il.whatsapp IS NOT NULL AND il.whatsapp = cl.whatsapp)
+        OR
+        (il.email != '' AND il.email IS NOT NULL AND il.email NOT LIKE '%@fake%' AND il.email = cl.email)
+      )
+      SET
+        cl.nome = IF((cl.nome = '' OR cl.nome = 'Sem Nome' OR cl.nome = 'Apoiador Importado') AND il.nome != '' AND il.nome != 'Sem Nome', il.nome, cl.nome),
+        cl.cep = IF((cl.cep IS NULL OR cl.cep = '') AND il.cep != '', il.cep, cl.cep),
+        cl.endereco = IF((cl.endereco IS NULL OR cl.endereco = '') AND il.endereco != '', il.endereco, cl.endereco),
+        cl.numero = IF((cl.numero IS NULL OR cl.numero = '') AND il.numero != '', il.numero, cl.numero),
+        cl.complemento = IF((cl.complemento IS NULL OR cl.complemento = '') AND il.complemento != '', il.complemento, cl.complemento),
+        cl.bairro = IF((cl.bairro IS NULL OR cl.bairro = '') AND il.bairro != '', il.bairro, cl.bairro),
+        cl.cidade = IF((cl.cidade IS NULL OR cl.cidade = '' OR cl.cidade = 'São Paulo') AND il.cidade != '' AND il.cidade != 'São Paulo', il.cidade, cl.cidade),
+        cl.estado = IF((cl.estado IS NULL OR cl.estado = '') AND il.estado != '', il.estado, cl.estado)
+      WHERE il.campanha = ?
+    `, [campaignName]);
+
+    // 3. Inserir novos leads que não existem por WhatsApp nem por E-mail
     await db.query(`
       INSERT INTO crm_leads (id, nome, whatsapp, email, cep, endereco, numero, complemento, bairro, cidade, estado, campaign_count, created_at)
       SELECT il.id, il.nome, il.whatsapp, il.email, il.cep, il.endereco, il.numero, il.complemento, il.bairro, il.cidade, il.estado, 1, il.createdAt
@@ -395,10 +472,17 @@ export const syncCampaignToCrm = async (campaignName: string) => {
       ON DUPLICATE KEY UPDATE nome = VALUES(nome)
     `, [campaignName]);
 
-    // Inserir ações apontando para o lead consolidado (existente ou novo)
+    // 4. Limpar histórico de ações duplicadas prévias na campanha
     await db.query(`
-      INSERT IGNORE INTO crm_actions (lead_id, campaign_name, source, created_at)
-      SELECT 
+      DELETE ca1 FROM crm_actions ca1
+      INNER JOIN crm_actions ca2 ON ca1.campaign_name = ca2.campaign_name AND ca1.lead_id = ca2.lead_id
+      WHERE ca1.id > ca2.id AND ca1.campaign_name = ?
+    `, [campaignName]);
+
+    // 5. Inserir ações apontando para o lead consolidado (existente ou novo) garantindo que NÃO repita
+    await db.query(`
+      INSERT INTO crm_actions (lead_id, campaign_name, source, created_at)
+      SELECT DISTINCT
         COALESCE(cl_w.id, cl_e.id, il.id) AS lead_id,
         il.campanha,
         'Importação CSV',
@@ -407,9 +491,14 @@ export const syncCampaignToCrm = async (campaignName: string) => {
       LEFT JOIN crm_leads cl_w ON (il.whatsapp != '' AND il.whatsapp IS NOT NULL AND il.whatsapp = cl_w.whatsapp)
       LEFT JOIN crm_leads cl_e ON (il.email != '' AND il.email IS NOT NULL AND il.email NOT LIKE '%@fake%' AND il.email = cl_e.email)
       WHERE il.campanha = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM crm_actions ca
+          WHERE ca.lead_id = COALESCE(cl_w.id, cl_e.id, il.id)
+            AND ca.campaign_name = il.campanha
+        )
     `, [campaignName]);
 
-    // Recalcular contagem de campanhas
+    // 6. Recalcular contagem de campanhas por lead
     await db.query(`
       UPDATE crm_leads l
       INNER JOIN (
@@ -510,7 +599,7 @@ function buildCrmFilterQuery(query: any) {
   const search = (query.search || '').trim();
   const estado = (query.estado || '').toUpperCase().trim();
   const cidade = (query.cidade || '').trim();
-  const campaign = query.campaign || 'all';
+  const campaignList = extractCampaignList(query);
   const multiAction = query.multiAction || 'all';
   const leadType = query.leadType || 'all';
   const qualityTier = (query.qualityTier || 'all').toLowerCase();
@@ -555,16 +644,26 @@ function buildCrmFilterQuery(query: any) {
   }
 
   if (qualityTier !== 'all') {
-    if (qualityTier === 'diamante') whereClauses.push('l.campaign_count >= 5');
-    else if (qualityTier === 'ouro') whereClauses.push('l.campaign_count >= 3 AND l.campaign_count <= 4');
-    else if (qualityTier === 'prata') whereClauses.push('l.campaign_count = 2');
-    else if (qualityTier === 'bronze') whereClauses.push('l.campaign_count = 1');
-    else if (qualityTier === 'high') whereClauses.push('l.campaign_count >= 3');
+    if (qualityTier === 'diamante') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL AND l.campaign_count >= 2 AND (l.cep != "" AND l.cep IS NOT NULL OR l.endereco != "" AND l.endereco IS NOT NULL OR l.bairro != "" AND l.bairro IS NOT NULL))');
+    } else if (qualityTier === 'ouro') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL AND (l.cep != "" AND l.cep IS NOT NULL OR l.endereco != "" AND l.endereco IS NOT NULL OR l.bairro != "" AND l.bairro IS NOT NULL))');
+    } else if (qualityTier === 'prata') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL)');
+    } else if (qualityTier === 'bronze') {
+      whereClauses.push('(l.whatsapp = "" OR l.whatsapp IS NULL)');
+    } else if (qualityTier === 'high') {
+      whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL)');
+    }
   }
 
-  if (campaign !== 'all') {
+  if (campaignList.length === 1) {
     joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
-    joinValues.push(campaign);
+    joinValues.push(campaignList[0]);
+  } else if (campaignList.length > 1) {
+    const placeholders = campaignList.map(() => '?').join(', ');
+    joins += ` JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name IN (${placeholders})`;
+    joinValues.push(...campaignList);
   }
 
   if (leadType === 'organic') {
@@ -588,7 +687,7 @@ function buildCrmFilterQuery(query: any) {
   }
 
   const values = [...joinValues, ...whereValues];
-  return { whereClauses, whereValues, joinValues, values, joins, campaign };
+  return { whereClauses, whereValues, joinValues, values, joins, campaign: campaignList.join(', ') || 'all', campaignList };
 }
 
 /**
@@ -672,14 +771,20 @@ export const exportCrmStream = async (query: any, res: any) => {
 
       let chunk = '';
       for (const r of rows) {
-        const cCount = Number(r.campaign_count) || 1;
-        let qTier = 'Bronze';
-        if (cCount >= 5) qTier = 'Diamante';
-        else if (cCount >= 3) qTier = 'Ouro';
-        else if (cCount >= 2) qTier = 'Prata';
-
         const digits = (r.whatsapp || '').replace(/\D/g, '');
         const hasValidWa = digits.length >= 10;
+        const hasAddress = Boolean((r.cep && r.cep.trim()) || (r.endereco && r.endereco.trim()) || (r.bairro && r.bairro.trim()));
+        const cCount = Number(r.campaign_count) || 1;
+
+        let qTier = 'Bronze';
+        if (hasValidWa) {
+          if (hasAddress && cCount >= 2) qTier = 'Diamante';
+          else if (hasAddress) qTier = 'Ouro';
+          else qTier = 'Prata';
+        } else {
+          qTier = 'Bronze';
+        }
+
         const campaigns = campMap.get(r.id) || (campaign !== 'all' ? campaign : 'Geral');
 
         const row = [
