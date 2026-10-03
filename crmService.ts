@@ -144,6 +144,87 @@ export function deduceMacroRegion(cidade?: string | null, estado?: string | null
   return 'São Paulo (Geral)';
 }
 
+export function getSpZonesCondition(spZones: string[]): string | null {
+  if (!spZones || spZones.length === 0 || spZones.includes('all')) return null;
+  const zoneOrClauses: string[] = [];
+  
+  if (spZones.includes('centro')) {
+    zoneOrClauses.push(`(
+      LEFT(REPLACE(l.cep, '-', ''), 3) BETWEEN '010' AND '015'
+      OR l.bairro LIKE '%Sé%' OR l.bairro LIKE '%República%' OR l.bairro LIKE '%Bela Vista%' 
+      OR l.bairro LIKE '%Consolação%' OR l.bairro LIKE '%Santa Cecília%' OR l.bairro LIKE '%Bom Retiro%' 
+      OR l.bairro LIKE '%Brás%' OR l.bairro LIKE '%Cambuci%' OR l.bairro LIKE '%Pari%' OR l.bairro LIKE '%Liberdade%'
+      OR l.bairro LIKE '%Centro%'
+    )`);
+  }
+  
+  if (spZones.includes('zona_leste') || spZones.includes('leste')) {
+    zoneOrClauses.push(`(
+      LEFT(REPLACE(l.cep, '-', ''), 2) = '03' OR LEFT(REPLACE(l.cep, '-', ''), 3) BETWEEN '080' AND '084'
+      OR l.bairro LIKE '%Tatuapé%' OR l.bairro LIKE '%Mooca%' OR l.bairro LIKE '%Itaquera%' 
+      OR l.bairro LIKE '%Penha%' OR l.bairro LIKE '%Vila Prudente%' OR l.bairro LIKE '%São Mateus%' 
+      OR l.bairro LIKE '%Ermelino%' OR l.bairro LIKE '%Guaianases%' OR l.bairro LIKE '%Sapopemba%' 
+      OR l.bairro LIKE '%São Miguel%' OR l.bairro LIKE '%Belém%' OR l.bairro LIKE '%Cangaíba%'
+      OR l.bairro LIKE '%Artur Alvim%' OR l.bairro LIKE '%Cidade Tiradentes%' OR l.bairro LIKE '%Itaim Paulista%'
+      OR l.bairro LIKE '%Vila Formosa%' OR l.bairro LIKE '%Vila Matilde%' OR l.bairro LIKE '%Aricanduva%'
+      OR l.bairro LIKE '%Zona Leste%'
+    )`);
+  }
+
+  if (spZones.includes('zona_norte') || spZones.includes('norte')) {
+    zoneOrClauses.push(`(
+      LEFT(REPLACE(l.cep, '-', ''), 2) = '02'
+      OR l.bairro LIKE '%Santana%' OR l.bairro LIKE '%Tucuruvi%' OR l.bairro LIKE '%Vila Maria%'
+      OR l.bairro LIKE '%Casa Verde%' OR l.bairro LIKE '%Freguesia do Ó%' OR l.bairro LIKE '%Tremembé%'
+      OR l.bairro LIKE '%Jaçanã%' OR l.bairro LIKE '%Brasilândia%' OR l.bairro LIKE '%Limão%'
+      OR l.bairro LIKE '%Mandaqui%' OR l.bairro LIKE '%Vila Guilherme%' OR l.bairro LIKE '%Cachoeirinha%'
+      OR l.bairro LIKE '%Zona Norte%'
+    )`);
+  }
+
+  if (spZones.includes('zona_sul') || spZones.includes('sul')) {
+    zoneOrClauses.push(`(
+      LEFT(REPLACE(l.cep, '-', ''), 2) = '04'
+      OR l.bairro LIKE '%Santo Amaro%' OR l.bairro LIKE '%Moema%' OR l.bairro LIKE '%Vila Mariana%'
+      OR l.bairro LIKE '%Campo Limpo%' OR l.bairro LIKE '%Ipiranga%' OR l.bairro LIKE '%Jabaquara%'
+      OR l.bairro LIKE '%Capela do Socorro%' OR l.bairro LIKE '%Cidade Ademar%' OR l.bairro LIKE '%M\\'Boi Mirim%'
+      OR l.bairro LIKE '%Parelheiros%' OR l.bairro LIKE '%Saúde%' OR l.bairro LIKE '%Cursino%'
+      OR l.bairro LIKE '%Socorro%' OR l.bairro LIKE '%Grajaú%' OR l.bairro LIKE '%Sacomã%'
+      OR l.bairro LIKE '%Zona Sul%'
+    )`);
+  }
+
+  if (spZones.includes('zona_oeste') || spZones.includes('oeste')) {
+    zoneOrClauses.push(`(
+      LEFT(REPLACE(l.cep, '-', ''), 2) = '05'
+      OR l.bairro LIKE '%Pinheiros%' OR l.bairro LIKE '%Lapa%' OR l.bairro LIKE '%Perdizes%'
+      OR l.bairro LIKE '%Butantã%' OR l.bairro LIKE '%Vila Leopoldina%' OR l.bairro LIKE '%Jaguaré%'
+      OR l.bairro LIKE '%Rio Pequeno%' OR l.bairro LIKE '%Raposo Tavares%' OR l.bairro LIKE '%Morumbi%'
+      OR l.bairro LIKE '%Vila Sônia%' OR l.bairro LIKE '%Alto de Pinheiros%' OR l.bairro LIKE '%Barra Funda%'
+      OR l.bairro LIKE '%Pirituba%' OR l.bairro LIKE '%Jaraguá%' OR l.bairro LIKE '%Zona Oeste%'
+    )`);
+  }
+
+  if (zoneOrClauses.length > 0) {
+    return `(${zoneOrClauses.join(' OR ')})`;
+  }
+  return null;
+}
+
+export function getMacroRegionCondition(macroRegion: string): string | null {
+  if (!macroRegion || macroRegion === 'all') return null;
+  if (macroRegion === 'capital_rmsp') {
+    return "(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) BETWEEN '01' AND '09' OR l.cidade = 'São Paulo' OR l.whatsapp REGEXP '^(55)?11'))";
+  } else if (macroRegion === 'litoral') {
+    return "(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) = '11' OR l.cidade IN ('Santos', 'Praia Grande', 'São Vicente', 'Guarujá', 'Cubatão', 'Bertioga', 'Itanhaém', 'Mongaguá', 'Peruíbe', 'Ubatuba', 'Caraguatatuba', 'São Sebastião', 'Ilhabela') OR l.whatsapp REGEXP '^(55)?13'))";
+  } else if (macroRegion === 'vale_paraiba') {
+    return "(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) = '12' OR l.cidade IN ('São José dos Campos', 'Taubaté', 'Jacareí', 'Pindamonhangaba', 'Guaratinguetá', 'Caçapava', 'Lorena', 'Bragança Paulista', 'Atibaia') OR l.whatsapp REGEXP '^(55)?12'))";
+  } else if (macroRegion === 'interior') {
+    return "(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) BETWEEN '13' AND '19' OR l.whatsapp REGEXP '^(55)?(14|15|16|17|18|19)'))";
+  }
+  return null;
+}
+
 export function buildGeoRegionConditions(query: any): string[] {
   const clauses: string[] = [];
   const macroRegion = query.macroRegion || query.macro_region || 'all';
@@ -157,81 +238,14 @@ export function buildGeoRegionConditions(query: any): string[] {
     clauses.push("l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$'");
   }
 
-  if (macroRegion && macroRegion !== 'all') {
-    if (macroRegion === 'capital_rmsp') {
-      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) BETWEEN '01' AND '09' OR l.cidade = 'São Paulo' OR l.whatsapp REGEXP '^(55)?11'))");
-    } else if (macroRegion === 'litoral') {
-      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) = '11' OR l.cidade IN ('Santos', 'Praia Grande', 'São Vicente', 'Guarujá', 'Cubatão', 'Bertioga', 'Itanhaém', 'Mongaguá', 'Peruíbe', 'Ubatuba', 'Caraguatatuba', 'São Sebastião', 'Ilhabela') OR l.whatsapp REGEXP '^(55)?13'))");
-    } else if (macroRegion === 'vale_paraiba') {
-      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) = '12' OR l.cidade IN ('São José dos Campos', 'Taubaté', 'Jacareí', 'Pindamonhangaba', 'Guaratinguetá', 'Caçapava', 'Lorena', 'Bragança Paulista', 'Atibaia') OR l.whatsapp REGEXP '^(55)?12'))");
-    } else if (macroRegion === 'interior') {
-      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) BETWEEN '13' AND '19' OR l.whatsapp REGEXP '^(55)?(14|15|16|17|18|19)'))");
-    }
+  const macroCond = getMacroRegionCondition(macroRegion);
+  if (macroCond) {
+    clauses.push(macroCond);
   }
 
-  if (spZones.length > 0 && !spZones.includes('all')) {
-    const zoneOrClauses: string[] = [];
-    
-    if (spZones.includes('centro')) {
-      zoneOrClauses.push(`(
-        LEFT(REPLACE(l.cep, '-', ''), 3) BETWEEN '010' AND '015'
-        OR l.bairro LIKE '%Sé%' OR l.bairro LIKE '%República%' OR l.bairro LIKE '%Bela Vista%' 
-        OR l.bairro LIKE '%Consolação%' OR l.bairro LIKE '%Santa Cecília%' OR l.bairro LIKE '%Bom Retiro%' 
-        OR l.bairro LIKE '%Brás%' OR l.bairro LIKE '%Cambuci%' OR l.bairro LIKE '%Pari%' OR l.bairro LIKE '%Liberdade%'
-        OR l.bairro LIKE '%Centro%'
-      )`);
-    }
-    
-    if (spZones.includes('zona_leste') || spZones.includes('leste')) {
-      zoneOrClauses.push(`(
-        LEFT(REPLACE(l.cep, '-', ''), 2) = '03' OR LEFT(REPLACE(l.cep, '-', ''), 3) BETWEEN '080' AND '084'
-        OR l.bairro LIKE '%Tatuapé%' OR l.bairro LIKE '%Mooca%' OR l.bairro LIKE '%Itaquera%' 
-        OR l.bairro LIKE '%Penha%' OR l.bairro LIKE '%Vila Prudente%' OR l.bairro LIKE '%São Mateus%' 
-        OR l.bairro LIKE '%Ermelino%' OR l.bairro LIKE '%Guaianases%' OR l.bairro LIKE '%Sapopemba%' 
-        OR l.bairro LIKE '%São Miguel%' OR l.bairro LIKE '%Belém%' OR l.bairro LIKE '%Cangaíba%'
-        OR l.bairro LIKE '%Artur Alvim%' OR l.bairro LIKE '%Cidade Tiradentes%' OR l.bairro LIKE '%Itaim Paulista%'
-        OR l.bairro LIKE '%Vila Formosa%' OR l.bairro LIKE '%Vila Matilde%' OR l.bairro LIKE '%Aricanduva%'
-        OR l.bairro LIKE '%Zona Leste%'
-      )`);
-    }
-
-    if (spZones.includes('zona_norte') || spZones.includes('norte')) {
-      zoneOrClauses.push(`(
-        LEFT(REPLACE(l.cep, '-', ''), 2) = '02'
-        OR l.bairro LIKE '%Santana%' OR l.bairro LIKE '%Tucuruvi%' OR l.bairro LIKE '%Vila Maria%'
-        OR l.bairro LIKE '%Casa Verde%' OR l.bairro LIKE '%Freguesia do Ó%' OR l.bairro LIKE '%Tremembé%'
-        OR l.bairro LIKE '%Jaçanã%' OR l.bairro LIKE '%Brasilândia%' OR l.bairro LIKE '%Limão%'
-        OR l.bairro LIKE '%Mandaqui%' OR l.bairro LIKE '%Vila Guilherme%' OR l.bairro LIKE '%Cachoeirinha%'
-        OR l.bairro LIKE '%Zona Norte%'
-      )`);
-    }
-
-    if (spZones.includes('zona_sul') || spZones.includes('sul')) {
-      zoneOrClauses.push(`(
-        LEFT(REPLACE(l.cep, '-', ''), 2) = '04'
-        OR l.bairro LIKE '%Santo Amaro%' OR l.bairro LIKE '%Moema%' OR l.bairro LIKE '%Vila Mariana%'
-        OR l.bairro LIKE '%Campo Limpo%' OR l.bairro LIKE '%Ipiranga%' OR l.bairro LIKE '%Jabaquara%'
-        OR l.bairro LIKE '%Capela do Socorro%' OR l.bairro LIKE '%Cidade Ademar%' OR l.bairro LIKE '%M\\'Boi Mirim%'
-        OR l.bairro LIKE '%Parelheiros%' OR l.bairro LIKE '%Saúde%' OR l.bairro LIKE '%Cursino%'
-        OR l.bairro LIKE '%Socorro%' OR l.bairro LIKE '%Grajaú%' OR l.bairro LIKE '%Sacomã%'
-        OR l.bairro LIKE '%Zona Sul%'
-      )`);
-    }
-
-    if (spZones.includes('zona_oeste') || spZones.includes('oeste')) {
-      zoneOrClauses.push(`(
-        LEFT(REPLACE(l.cep, '-', ''), 2) = '05'
-        OR l.bairro LIKE '%Pinheiros%' OR l.bairro LIKE '%Lapa%' OR l.bairro LIKE '%Perdizes%'
-        OR l.bairro LIKE '%Butantã%' OR l.bairro LIKE '%Vila Leopoldina%' OR l.bairro LIKE '%Jaguaré%'
-        OR l.bairro LIKE '%Rio Pequeno%' OR l.bairro LIKE '%Raposo Tavares%' OR l.bairro LIKE '%Morumbi%'
-        OR l.bairro LIKE '%Vila Sônia%' OR l.bairro LIKE '%Alto de Pinheiros%' OR l.bairro LIKE '%Barra Funda%'
-        OR l.bairro LIKE '%Pirituba%' OR l.bairro LIKE '%Jaraguá%' OR l.bairro LIKE '%Zona Oeste%'
-      )`);
-    }
-
-    if (zoneOrClauses.length > 0) {
-      clauses.push(`(${zoneOrClauses.join(' OR ')})`);
-    }
+  const zoneCond = getSpZonesCondition(spZones);
+  if (zoneCond) {
+    clauses.push(zoneCond);
   }
 
   return clauses;
@@ -813,10 +827,25 @@ function buildCrmFilterQuery(query: any) {
     }
   }
 
-  // Geo regions & SP Zones filters
-  const geoClauses = buildGeoRegionConditions(query);
-  if (geoClauses.length > 0) {
-    whereClauses.push(...geoClauses);
+  const criteriaMode = query.criteriaMode || (query.strictFilter === 'true' ? 'strict' : 'prioritize');
+  const validSpWaOnly = query.validSpWaOnly === 'true' || query.validSpWaOnly === true;
+  const macroRegion = query.macroRegion || query.macro_region || 'all';
+  const rawZones = query.spZones || query.sp_zones || query.spZone || '';
+  const spZones = Array.isArray(rawZones) 
+    ? rawZones.map((z: any) => String(z).trim().toLowerCase()).filter(Boolean)
+    : String(rawZones).split(',').map((z: string) => z.trim().toLowerCase()).filter(Boolean);
+
+  const zoneCond = getSpZonesCondition(spZones);
+  const macroCond = getMacroRegionCondition(macroRegion);
+
+  if (validSpWaOnly) {
+    whereClauses.push("l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$'");
+  }
+
+  // Se o modo for estrito, filtra rigidamente no WHERE. Se for priorização, aplica bônus ponderado no ORDER BY.
+  if (criteriaMode === 'strict') {
+    if (macroCond) whereClauses.push(macroCond);
+    if (zoneCond) whereClauses.push(zoneCond);
   }
 
   if (campaignList.length === 1) {
@@ -849,14 +878,19 @@ function buildCrmFilterQuery(query: any) {
   }
 
   let orderBySql = 'ORDER BY l.id ASC';
+  const zoneBonusSql = (criteriaMode === 'prioritize' && zoneCond) ? `(CASE WHEN ${zoneCond} THEN 1000 ELSE 0 END) + ` : '';
+  const macroBonusSql = (criteriaMode === 'prioritize' && macroCond) ? `(CASE WHEN ${macroCond} THEN 500 ELSE 0 END) + ` : '';
+
   if (smartScore || query.sortBy === 'smart_score') {
-    // Ordenação por Propensão de Leitura e Engajamento:
-    // 1. WhatsApp Válido de SP/Brasil com celular (DDD 11 a 19 + 9 dígitos)
-    // 2. Total de ações / campanhas participadas (frequência e lealdade do apoiador)
-    // 3. Completude cadastral (endereço/CEP/bairro preenchidos)
-    // 4. Recência da interação
+    // Ordenação por Propensão de Leitura e Engajamento com Priorização Regional:
+    // 1. Priorização de Zonas específicas selecionadas (ex: Centro + Zona Leste) -> +1000 pts
+    // 2. Priorização de Macrorregião selecionada -> +500 pts
+    // 3. WhatsApp Válido de SP/Brasil com celular (DDD 11 a 19 + 9 dígitos) -> +100 pts
+    // 4. Total de ações / campanhas participadas (frequência e engajamento) -> +25 pts / ação
+    // 5. Completude cadastral (endereço/CEP/bairro preenchidos) -> +30 pts
+    // 6. Recência da interação
     orderBySql = `ORDER BY 
-      (CASE WHEN l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$' THEN 100 ELSE 0 END + 
+      (${zoneBonusSql}${macroBonusSql}(CASE WHEN l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$' THEN 100 ELSE 0 END) + 
        (l.campaign_count * 25) + 
        (CASE WHEN l.cep != '' AND l.cep IS NOT NULL AND l.endereco != '' AND l.endereco IS NOT NULL THEN 20 ELSE 0 END) +
        (CASE WHEN l.bairro != '' AND l.bairro IS NOT NULL THEN 10 ELSE 0 END) +
@@ -865,6 +899,8 @@ function buildCrmFilterQuery(query: any) {
       l.campaign_count DESC, 
       l.created_at DESC, 
       l.id ASC`;
+  } else if (zoneBonusSql || macroBonusSql) {
+    orderBySql = `ORDER BY (${zoneBonusSql}${macroBonusSql}0) DESC, l.id ASC`;
   } else if (query.sortField === 'nome') {
     orderBySql = `ORDER BY l.nome ${query.sortOrder === 'desc' ? 'DESC' : 'ASC'}, l.id ASC`;
   } else if (query.sortField === 'created_at' || query.sortField === 'lastDate') {

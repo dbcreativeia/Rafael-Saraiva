@@ -193,6 +193,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [exportModalSpZones, setExportModalSpZones] = useState<string[]>([]);
   const [exportModalValidSpWaOnly, setExportModalValidSpWaOnly] = useState<boolean>(true);
   const [exportModalCidade, setExportModalCidade] = useState<string>('');
+  const [exportModalCriteriaMode, setExportModalCriteriaMode] = useState<'prioritize' | 'strict'>('prioritize');
   const campaignDropdownRef = useRef<HTMLDivElement>(null);
   const [leadTypeFilter, setLeadTypeFilter] = useState<'all' | 'organic' | 'imported'>('all');
   const [qualityTierFilter, setQualityTierFilter] = useState<'all' | 'diamante' | 'ouro' | 'prata' | 'bronze' | 'high'>('all');
@@ -1307,6 +1308,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       addressOnly?: boolean;
       estado?: string;
       cidade?: string;
+      criteriaMode?: 'prioritize' | 'strict';
     }
   ) => {
     const selected = customCampaigns !== undefined ? customCampaigns : campaignFilter;
@@ -1337,6 +1339,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     if (options?.smartScore || (options === undefined && exportModalSmartScore)) {
       params.set('smartScore', 'true');
     }
+
+    const cMode = options?.criteriaMode !== undefined ? options.criteriaMode : exportModalCriteriaMode;
+    params.set('criteriaMode', cMode);
 
     const mReg = options?.macroRegion !== undefined ? options.macroRegion : macroRegionFilter;
     if (mReg && mReg !== 'all') {
@@ -3792,7 +3797,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                       <span>Critérios de Localização & Regiões (São Paulo)</span>
                     </h3>
                     <p className="text-[11px] text-gray-500 mt-0.5">
-                      Filtre por regiões do Estado de SP ou zonas específicas da cidade de São Paulo.
+                      Filtre ou priorize por regiões do Estado de SP ou zonas específicas da capital.
                     </p>
                   </div>
 
@@ -3806,6 +3811,60 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     />
                     <span>Apenas Estado de SP (SP)</span>
                   </label>
+                </div>
+
+                {/* Seletor de Modo: Priorização vs Filtro Estrito */}
+                <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-200/80 space-y-2">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Como aplicar as regiões e critérios com o número alvo de leads?</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <label className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      exportModalCriteriaMode === 'prioritize'
+                        ? 'bg-white border-indigo-500 text-indigo-950 shadow-2xs ring-2 ring-indigo-500/20'
+                        : 'bg-white/60 border-indigo-200 text-gray-700 hover:bg-white'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="exportModalCriteriaMode"
+                        value="prioritize"
+                        checked={exportModalCriteriaMode === 'prioritize'}
+                        onChange={() => setExportModalCriteriaMode('prioritize')}
+                        className="text-indigo-600 focus:ring-indigo-500 mt-0.5"
+                      />
+                      <div>
+                        <div className="font-black text-indigo-950 flex items-center gap-1">
+                          <span>Priorizar Critérios</span>
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-bold">Recomendado</span>
+                        </div>
+                        <div className="text-[11px] text-gray-600 mt-0.5 leading-snug">
+                          Coloca os contatos das regiões/zonas escolhidas no topo absoluto. Caso a região tenha menos leads que a meta ({exportModalLimit ? Number(exportModalLimit).toLocaleString('pt-BR') : 'meta'}), preenche o restante com os próximos melhores leads da base.
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      exportModalCriteriaMode === 'strict'
+                        ? 'bg-white border-indigo-500 text-indigo-950 shadow-2xs ring-2 ring-indigo-500/20'
+                        : 'bg-white/60 border-indigo-200 text-gray-700 hover:bg-white'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="exportModalCriteriaMode"
+                        value="strict"
+                        checked={exportModalCriteriaMode === 'strict'}
+                        onChange={() => setExportModalCriteriaMode('strict')}
+                        className="text-indigo-600 focus:ring-indigo-500 mt-0.5"
+                      />
+                      <div>
+                        <div className="font-black text-gray-900">Filtro Estrito (Exclusivo)</div>
+                        <div className="text-[11px] text-gray-600 mt-0.5 leading-snug">
+                          Exporta estritamente apenas quem está 100% dentro das regiões/zonas marcadas, mesmo que o total fique abaixo da quantidade digitada.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Macrorregiões do Estado de SP */}
@@ -4152,7 +4211,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                         validSpWaOnly: exportModalValidSpWaOnly,
                         addressOnly: exportModalType === 'address',
                         estado: exportModalOnlySp ? 'SP' : (estadoFilter || 'SP'),
-                        cidade: exportModalCidade
+                        cidade: exportModalCidade,
+                        criteriaMode: exportModalCriteriaMode
                       }
                     );
                     setIsExportCombinedBasesModalOpen(false);
