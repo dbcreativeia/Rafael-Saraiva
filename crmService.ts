@@ -95,22 +95,23 @@ export const getCrmPaginated = async (query: any) => {
   const sortOrder = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
   let whereClauses: string[] = [];
-  let values: any[] = [];
+  let whereValues: any[] = [];
+  let joinValues: any[] = [];
   let joins = '';
 
   if (search) {
     whereClauses.push('(l.nome LIKE ? OR l.whatsapp LIKE ? OR l.email LIKE ?)');
-    values.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    whereValues.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
 
-  if (estado) {
+  if (estado && estado !== 'ALL') {
     whereClauses.push('l.estado = ?');
-    values.push(estado);
+    whereValues.push(estado);
   }
 
-  if (cidade) {
+  if (cidade && cidade !== 'ALL') {
     whereClauses.push('l.cidade = ?');
-    values.push(cidade);
+    whereValues.push(cidade);
   }
 
   if (hasWhatsApp === 'yes') {
@@ -139,7 +140,7 @@ export const getCrmPaginated = async (query: any) => {
 
   if (campaign !== 'all') {
     joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
-    values.push(campaign);
+    joinValues.push(campaign);
   }
 
   if (leadType === 'organic') {
@@ -148,16 +149,17 @@ export const getCrmPaginated = async (query: any) => {
     } else {
        joins += ' AND a_camp.source = ?';
     }
-    values.push('organic');
+    joinValues.push('organic');
   } else if (leadType === 'imported') {
     if (!joins.includes('a_camp')) {
        joins += ' JOIN crm_actions a_type ON l.id = a_type.lead_id AND a_type.source != ?';
     } else {
        joins += ' AND a_camp.source != ?';
     }
-    values.push('organic');
+    joinValues.push('organic');
   }
 
+  const values = [...joinValues, ...whereValues];
   const whereStr = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
   // Optimized count query: simple COUNT(*) when no joins are present
@@ -516,23 +518,24 @@ function buildCrmFilterQuery(query: any) {
   const addressOnly = query.addressOnly === 'true' || query.addressOnly === true;
 
   let whereClauses: string[] = [];
-  let values: any[] = [];
+  let whereValues: any[] = [];
+  let joinValues: any[] = [];
   let joins = '';
 
   if (search) {
     whereClauses.push('(l.nome LIKE ? OR l.whatsapp LIKE ? OR l.email LIKE ? OR l.cidade LIKE ? OR l.bairro LIKE ? OR l.cep LIKE ?)');
     const s = `%${search}%`;
-    values.push(s, s, s, s, s, s);
+    whereValues.push(s, s, s, s, s, s);
   }
 
   if (estado && estado !== 'ALL') {
     whereClauses.push('l.estado = ?');
-    values.push(estado);
+    whereValues.push(estado);
   }
 
   if (cidade && cidade !== 'ALL') {
     whereClauses.push('l.cidade = ?');
-    values.push(cidade);
+    whereValues.push(cidade);
   }
 
   if (hasWhatsApp === 'yes') {
@@ -561,7 +564,7 @@ function buildCrmFilterQuery(query: any) {
 
   if (campaign !== 'all') {
     joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
-    values.push(campaign);
+    joinValues.push(campaign);
   }
 
   if (leadType === 'organic') {
@@ -570,21 +573,22 @@ function buildCrmFilterQuery(query: any) {
     } else {
       joins += ' AND a_camp.source = ?';
     }
-    values.push('organic');
+    joinValues.push('organic');
   } else if (leadType === 'imported') {
     if (!joins.includes('a_camp')) {
       joins += ' JOIN crm_actions a_type ON l.id = a_type.lead_id AND a_type.source != ?';
     } else {
       joins += ' AND a_camp.source != ?';
     }
-    values.push('organic');
+    joinValues.push('organic');
   }
 
   if (addressOnly) {
     whereClauses.push("(l.cep != '' AND l.cep IS NOT NULL OR l.endereco != '' AND l.endereco IS NOT NULL OR l.bairro != '' AND l.bairro IS NOT NULL)");
   }
 
-  return { whereClauses, values, joins, campaign };
+  const values = [...joinValues, ...whereValues];
+  return { whereClauses, whereValues, joinValues, values, joins, campaign };
 }
 
 /**
@@ -592,7 +596,7 @@ function buildCrmFilterQuery(query: any) {
  * Resiliente a timeouts, utiliza paginação por cursor (keyset) e UTF-8 com BOM.
  */
 export const exportCrmStream = async (query: any, res: any) => {
-  const { whereClauses, values, joins, campaign } = buildCrmFilterQuery(query);
+  const { whereClauses, whereValues, joinValues, joins, campaign } = buildCrmFilterQuery(query);
 
   const headers = [
     'Nível de Qualidade',
@@ -625,7 +629,7 @@ export const exportCrmStream = async (query: any, res: any) => {
       if (res.writableEnded || res.closed) break;
 
       const currentWhere = [...whereClauses];
-      const currentValues = [...values];
+      const currentValues = [...joinValues, ...whereValues];
 
       if (lastId) {
         currentWhere.push('l.id > ?');
