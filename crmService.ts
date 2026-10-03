@@ -89,6 +89,154 @@ export function extractCampaignList(query: any): string[] {
   return Array.from(new Set(list));
 }
 
+export function deduceSpZone(bairro?: string | null, cep?: string | null): string {
+  const cleanCep = String(cep || '').replace(/\D/g, '');
+  const b = String(bairro || '').toLowerCase();
+  
+  if (cleanCep.length >= 3) {
+    const p3 = cleanCep.substring(0, 3);
+    const p2 = cleanCep.substring(0, 2);
+    if (p3 >= '010' && p3 <= '015') return 'Centro';
+    if (p2 === '02') return 'Zona Norte';
+    if (p2 === '03' || (p3 >= '080' && p3 <= '084')) return 'Zona Leste';
+    if (p2 === '04') return 'Zona Sul';
+    if (p2 === '05') return 'Zona Oeste';
+  }
+
+  if (b.includes('sé') || b.includes('república') || b.includes('bela vista') || b.includes('consolação') || b.includes('santa cecília') || b.includes('bom retiro') || b.includes('brás') || b.includes('cambuci') || b.includes('pari') || b.includes('liberdade') || b.includes('centro')) {
+    return 'Centro';
+  }
+  if (b.includes('tatuapé') || b.includes('mooca') || b.includes('itaquera') || b.includes('penha') || b.includes('vila prudente') || b.includes('são mateus') || b.includes('ermelino') || b.includes('guaianases') || b.includes('sapopemba') || b.includes('são miguel') || b.includes('belém') || b.includes('cangaíba') || b.includes('artur alvim') || b.includes('tiradentes') || b.includes('itaim paulista') || b.includes('vila formosa') || b.includes('vila matilde') || b.includes('aricanduva') || b.includes('zona leste')) {
+    return 'Zona Leste';
+  }
+  if (b.includes('santana') || b.includes('tucuruvi') || b.includes('vila maria') || b.includes('casa verde') || b.includes('freguesia') || b.includes('tremembé') || b.includes('jaçanã') || b.includes('brasilândia') || b.includes('limão') || b.includes('mandaqui') || b.includes('guilherme') || b.includes('cachoeirinha') || b.includes('zona norte')) {
+    return 'Zona Norte';
+  }
+  if (b.includes('santo amaro') || b.includes('moema') || b.includes('vila mariana') || b.includes('campo limpo') || b.includes('ipiranga') || b.includes('jabaquara') || b.includes('socorro') || b.includes('cidade ademar') || b.includes('m\'boi') || b.includes('parelheiros') || b.includes('saúde') || b.includes('cursino') || b.includes('grajaú') || b.includes('sacomã') || b.includes('zona sul')) {
+    return 'Zona Sul';
+  }
+  if (b.includes('pinheiros') || b.includes('lapa') || b.includes('perdizes') || b.includes('butantã') || b.includes('leopoldina') || b.includes('jaguaré') || b.includes('rio pequeno') || b.includes('raposo') || b.includes('morumbi') || b.includes('vila sônia') || b.includes('barra funda') || b.includes('pirituba') || b.includes('jaraguá') || b.includes('zona oeste')) {
+    return 'Zona Oeste';
+  }
+  return '-';
+}
+
+export function deduceMacroRegion(cidade?: string | null, estado?: string | null, cep?: string | null, whatsapp?: string | null): string {
+  if (estado && estado !== 'SP') return 'Outro Estado';
+  const cleanCep = String(cep || '').replace(/\D/g, '');
+  const c = String(cidade || '').toLowerCase();
+  const wa = String(whatsapp || '').replace(/\D/g, '');
+  
+  if (cleanCep.length >= 2) {
+    const p2 = cleanCep.substring(0, 2);
+    if (p2 >= '01' && p2 <= '05') return 'Capital (São Paulo)';
+    if (p2 >= '06' && p2 <= '09') return 'Grande São Paulo (RMSP)';
+    if (p2 === '11') return 'Litoral / Baixada Santista';
+    if (p2 === '12') return 'Vale do Paraíba';
+    if (p2 >= '13' && p2 <= '19') return 'Interior Paulista';
+  }
+
+  if (c === 'são paulo' || c === 'sao paulo' || wa.startsWith('11') || wa.startsWith('5511')) return 'Capital & Grande SP';
+  if (c.includes('santos') || c.includes('praia grande') || c.includes('guarujá') || c.includes('são vicente') || wa.startsWith('13') || wa.startsWith('5513')) return 'Litoral / Baixada Santista';
+  if (c.includes('são josé dos campos') || c.includes('taubaté') || c.includes('jacareí') || wa.startsWith('12') || wa.startsWith('5512')) return 'Vale do Paraíba';
+  if (wa.match(/^(55)?(14|15|16|17|18|19)/)) return 'Interior Paulista';
+
+  return 'São Paulo (Geral)';
+}
+
+export function buildGeoRegionConditions(query: any): string[] {
+  const clauses: string[] = [];
+  const macroRegion = query.macroRegion || query.macro_region || 'all';
+  const rawZones = query.spZones || query.sp_zones || query.spZone || '';
+  const spZones = Array.isArray(rawZones) 
+    ? rawZones.map((z: any) => String(z).trim().toLowerCase()).filter(Boolean)
+    : String(rawZones).split(',').map((z: string) => z.trim().toLowerCase()).filter(Boolean);
+  const validSpWaOnly = query.validSpWaOnly === 'true' || query.validSpWaOnly === true;
+
+  if (validSpWaOnly) {
+    clauses.push("l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$'");
+  }
+
+  if (macroRegion && macroRegion !== 'all') {
+    if (macroRegion === 'capital_rmsp') {
+      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) BETWEEN '01' AND '09' OR l.cidade = 'São Paulo' OR l.whatsapp REGEXP '^(55)?11'))");
+    } else if (macroRegion === 'litoral') {
+      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) = '11' OR l.cidade IN ('Santos', 'Praia Grande', 'São Vicente', 'Guarujá', 'Cubatão', 'Bertioga', 'Itanhaém', 'Mongaguá', 'Peruíbe', 'Ubatuba', 'Caraguatatuba', 'São Sebastião', 'Ilhabela') OR l.whatsapp REGEXP '^(55)?13'))");
+    } else if (macroRegion === 'vale_paraiba') {
+      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) = '12' OR l.cidade IN ('São José dos Campos', 'Taubaté', 'Jacareí', 'Pindamonhangaba', 'Guaratinguetá', 'Caçapava', 'Lorena', 'Bragança Paulista', 'Atibaia') OR l.whatsapp REGEXP '^(55)?12'))");
+    } else if (macroRegion === 'interior') {
+      clauses.push("(l.estado = 'SP' AND (LEFT(REPLACE(l.cep, '-', ''), 2) BETWEEN '13' AND '19' OR l.whatsapp REGEXP '^(55)?(14|15|16|17|18|19)'))");
+    }
+  }
+
+  if (spZones.length > 0 && !spZones.includes('all')) {
+    const zoneOrClauses: string[] = [];
+    
+    if (spZones.includes('centro')) {
+      zoneOrClauses.push(`(
+        LEFT(REPLACE(l.cep, '-', ''), 3) BETWEEN '010' AND '015'
+        OR l.bairro LIKE '%Sé%' OR l.bairro LIKE '%República%' OR l.bairro LIKE '%Bela Vista%' 
+        OR l.bairro LIKE '%Consolação%' OR l.bairro LIKE '%Santa Cecília%' OR l.bairro LIKE '%Bom Retiro%' 
+        OR l.bairro LIKE '%Brás%' OR l.bairro LIKE '%Cambuci%' OR l.bairro LIKE '%Pari%' OR l.bairro LIKE '%Liberdade%'
+        OR l.bairro LIKE '%Centro%'
+      )`);
+    }
+    
+    if (spZones.includes('zona_leste') || spZones.includes('leste')) {
+      zoneOrClauses.push(`(
+        LEFT(REPLACE(l.cep, '-', ''), 2) = '03' OR LEFT(REPLACE(l.cep, '-', ''), 3) BETWEEN '080' AND '084'
+        OR l.bairro LIKE '%Tatuapé%' OR l.bairro LIKE '%Mooca%' OR l.bairro LIKE '%Itaquera%' 
+        OR l.bairro LIKE '%Penha%' OR l.bairro LIKE '%Vila Prudente%' OR l.bairro LIKE '%São Mateus%' 
+        OR l.bairro LIKE '%Ermelino%' OR l.bairro LIKE '%Guaianases%' OR l.bairro LIKE '%Sapopemba%' 
+        OR l.bairro LIKE '%São Miguel%' OR l.bairro LIKE '%Belém%' OR l.bairro LIKE '%Cangaíba%'
+        OR l.bairro LIKE '%Artur Alvim%' OR l.bairro LIKE '%Cidade Tiradentes%' OR l.bairro LIKE '%Itaim Paulista%'
+        OR l.bairro LIKE '%Vila Formosa%' OR l.bairro LIKE '%Vila Matilde%' OR l.bairro LIKE '%Aricanduva%'
+        OR l.bairro LIKE '%Zona Leste%'
+      )`);
+    }
+
+    if (spZones.includes('zona_norte') || spZones.includes('norte')) {
+      zoneOrClauses.push(`(
+        LEFT(REPLACE(l.cep, '-', ''), 2) = '02'
+        OR l.bairro LIKE '%Santana%' OR l.bairro LIKE '%Tucuruvi%' OR l.bairro LIKE '%Vila Maria%'
+        OR l.bairro LIKE '%Casa Verde%' OR l.bairro LIKE '%Freguesia do Ó%' OR l.bairro LIKE '%Tremembé%'
+        OR l.bairro LIKE '%Jaçanã%' OR l.bairro LIKE '%Brasilândia%' OR l.bairro LIKE '%Limão%'
+        OR l.bairro LIKE '%Mandaqui%' OR l.bairro LIKE '%Vila Guilherme%' OR l.bairro LIKE '%Cachoeirinha%'
+        OR l.bairro LIKE '%Zona Norte%'
+      )`);
+    }
+
+    if (spZones.includes('zona_sul') || spZones.includes('sul')) {
+      zoneOrClauses.push(`(
+        LEFT(REPLACE(l.cep, '-', ''), 2) = '04'
+        OR l.bairro LIKE '%Santo Amaro%' OR l.bairro LIKE '%Moema%' OR l.bairro LIKE '%Vila Mariana%'
+        OR l.bairro LIKE '%Campo Limpo%' OR l.bairro LIKE '%Ipiranga%' OR l.bairro LIKE '%Jabaquara%'
+        OR l.bairro LIKE '%Capela do Socorro%' OR l.bairro LIKE '%Cidade Ademar%' OR l.bairro LIKE '%M\\'Boi Mirim%'
+        OR l.bairro LIKE '%Parelheiros%' OR l.bairro LIKE '%Saúde%' OR l.bairro LIKE '%Cursino%'
+        OR l.bairro LIKE '%Socorro%' OR l.bairro LIKE '%Grajaú%' OR l.bairro LIKE '%Sacomã%'
+        OR l.bairro LIKE '%Zona Sul%'
+      )`);
+    }
+
+    if (spZones.includes('zona_oeste') || spZones.includes('oeste')) {
+      zoneOrClauses.push(`(
+        LEFT(REPLACE(l.cep, '-', ''), 2) = '05'
+        OR l.bairro LIKE '%Pinheiros%' OR l.bairro LIKE '%Lapa%' OR l.bairro LIKE '%Perdizes%'
+        OR l.bairro LIKE '%Butantã%' OR l.bairro LIKE '%Vila Leopoldina%' OR l.bairro LIKE '%Jaguaré%'
+        OR l.bairro LIKE '%Rio Pequeno%' OR l.bairro LIKE '%Raposo Tavares%' OR l.bairro LIKE '%Morumbi%'
+        OR l.bairro LIKE '%Vila Sônia%' OR l.bairro LIKE '%Alto de Pinheiros%' OR l.bairro LIKE '%Barra Funda%'
+        OR l.bairro LIKE '%Pirituba%' OR l.bairro LIKE '%Jaraguá%' OR l.bairro LIKE '%Zona Oeste%'
+      )`);
+    }
+
+    if (zoneOrClauses.length > 0) {
+      clauses.push(`(${zoneOrClauses.join(' OR ')})`);
+    }
+  }
+
+  return clauses;
+}
+
 export const getCrmPaginated = async (query: any) => {
   const page = parseInt(query.page || '1');
   const pageSize = parseInt(query.pageSize || '20');
@@ -153,6 +301,12 @@ export const getCrmPaginated = async (query: any) => {
     } else if (qualityTier === 'high') {
       whereClauses.push('(l.whatsapp != "" AND l.whatsapp IS NOT NULL)');
     }
+  }
+
+  // Geo regions & SP Zones filters
+  const geoClauses = buildGeoRegionConditions(query);
+  if (geoClauses.length > 0) {
+    whereClauses.push(...geoClauses);
   }
 
   if (campaignList.length === 1) {
@@ -605,6 +759,8 @@ function buildCrmFilterQuery(query: any) {
   const qualityTier = (query.qualityTier || 'all').toLowerCase();
   const hasWhatsApp = query.hasWhatsApp || 'all';
   const addressOnly = query.addressOnly === 'true' || query.addressOnly === true;
+  const smartScore = query.smartScore === 'true' || query.smartScore === true || query.sortBy === 'smart_score' || !query.sortField;
+  const maxLimit = parseInt(query.limit) > 0 ? parseInt(query.limit) : 0;
 
   let whereClauses: string[] = [];
   let whereValues: any[] = [];
@@ -657,6 +813,12 @@ function buildCrmFilterQuery(query: any) {
     }
   }
 
+  // Geo regions & SP Zones filters
+  const geoClauses = buildGeoRegionConditions(query);
+  if (geoClauses.length > 0) {
+    whereClauses.push(...geoClauses);
+  }
+
   if (campaignList.length === 1) {
     joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
     joinValues.push(campaignList[0]);
@@ -686,16 +848,41 @@ function buildCrmFilterQuery(query: any) {
     whereClauses.push("(l.cep != '' AND l.cep IS NOT NULL OR l.endereco != '' AND l.endereco IS NOT NULL OR l.bairro != '' AND l.bairro IS NOT NULL)");
   }
 
+  let orderBySql = 'ORDER BY l.id ASC';
+  if (smartScore || query.sortBy === 'smart_score') {
+    // Ordenação por Propensão de Leitura e Engajamento:
+    // 1. WhatsApp Válido de SP/Brasil com celular (DDD 11 a 19 + 9 dígitos)
+    // 2. Total de ações / campanhas participadas (frequência e lealdade do apoiador)
+    // 3. Completude cadastral (endereço/CEP/bairro preenchidos)
+    // 4. Recência da interação
+    orderBySql = `ORDER BY 
+      (CASE WHEN l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$' THEN 100 ELSE 0 END + 
+       (l.campaign_count * 25) + 
+       (CASE WHEN l.cep != '' AND l.cep IS NOT NULL AND l.endereco != '' AND l.endereco IS NOT NULL THEN 20 ELSE 0 END) +
+       (CASE WHEN l.bairro != '' AND l.bairro IS NOT NULL THEN 10 ELSE 0 END) +
+       (CASE WHEN l.nome != '' AND l.nome != 'Apoiador' AND l.nome != 'Sem Nome' AND l.nome != 'Apoiador Importado' THEN 10 ELSE 0 END)
+      ) DESC, 
+      l.campaign_count DESC, 
+      l.created_at DESC, 
+      l.id ASC`;
+  } else if (query.sortField === 'nome') {
+    orderBySql = `ORDER BY l.nome ${query.sortOrder === 'desc' ? 'DESC' : 'ASC'}, l.id ASC`;
+  } else if (query.sortField === 'created_at' || query.sortField === 'lastDate') {
+    orderBySql = `ORDER BY l.created_at ${query.sortOrder === 'asc' ? 'ASC' : 'DESC'}, l.id ASC`;
+  } else if (query.sortField === 'campaign_count') {
+    orderBySql = `ORDER BY l.campaign_count ${query.sortOrder === 'asc' ? 'ASC' : 'DESC'}, l.id ASC`;
+  }
+
   const values = [...joinValues, ...whereValues];
-  return { whereClauses, whereValues, joinValues, values, joins, campaign: campaignList.join(', ') || 'all', campaignList };
+  return { whereClauses, whereValues, joinValues, values, joins, campaign: campaignList.join(', ') || 'all', campaignList, orderBySql, smartScore, maxLimit };
 }
 
 /**
  * Exportação em stream contínuo (CSV) direto da base consolidada do CRM.
- * Resiliente a timeouts, utiliza paginação por cursor (keyset) e UTF-8 com BOM.
+ * Resiliente a timeouts, utiliza paginação resiliente e UTF-8 com BOM.
  */
 export const exportCrmStream = async (query: any, res: any) => {
-  const { whereClauses, whereValues, joinValues, joins, campaign } = buildCrmFilterQuery(query);
+  const { whereClauses, whereValues, joinValues, joins, campaign, orderBySql, maxLimit } = buildCrmFilterQuery(query);
 
   const headers = [
     'Nível de Qualidade',
@@ -711,6 +898,8 @@ export const exportCrmStream = async (query: any, res: any) => {
     'Bairro',
     'Cidade',
     'Estado',
+    'Zona SP',
+    'Macro-Região',
     'Frequente (2+)',
     'Multi-Campanha (3+)',
     'Super Apoiador (5+)',
@@ -720,29 +909,30 @@ export const exportCrmStream = async (query: any, res: any) => {
   res.write('\uFEFF' + headers.join(',') + '\r\n');
 
   const batchSize = 3000;
-  let lastId = '';
+  let offset = 0;
   let hasMore = true;
+  let totalExported = 0;
 
   try {
+    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+    const currentValues = [...joinValues, ...whereValues];
+
     while (hasMore) {
       if (res.writableEnded || res.closed) break;
 
-      const currentWhere = [...whereClauses];
-      const currentValues = [...joinValues, ...whereValues];
-
-      if (lastId) {
-        currentWhere.push('l.id > ?');
-        currentValues.push(lastId);
+      if (maxLimit > 0 && totalExported >= maxLimit) {
+        hasMore = false;
+        break;
       }
 
-      const whereSql = currentWhere.length > 0 ? 'WHERE ' + currentWhere.join(' AND ') : '';
+      const currentLimit = maxLimit > 0 ? Math.min(batchSize, maxLimit - totalExported) : batchSize;
 
       const [rows]: any = await queryWithRetry(`
         SELECT DISTINCT l.id, l.nome, l.whatsapp, l.email, l.cidade, l.estado, l.cep, l.endereco, l.numero, l.complemento, l.bairro, l.campaign_count, l.created_at
         FROM crm_leads l ${joins} ${whereSql}
-        ORDER BY l.id ASC
-        LIMIT ?
-      `, [...currentValues, batchSize]);
+        ${orderBySql}
+        LIMIT ? OFFSET ?
+      `, [...currentValues, currentLimit, offset]);
 
       if (!rows || rows.length === 0) {
         hasMore = false;
@@ -786,6 +976,8 @@ export const exportCrmStream = async (query: any, res: any) => {
         }
 
         const campaigns = campMap.get(r.id) || (campaign !== 'all' ? campaign : 'Geral');
+        const zonaSp = deduceSpZone(r.bairro, r.cep);
+        const macroReg = deduceMacroRegion(r.cidade, r.estado, r.cep, r.whatsapp);
 
         const row = [
           `"${qTier}"`,
@@ -801,6 +993,8 @@ export const exportCrmStream = async (query: any, res: any) => {
           `"${(r.bairro || '').replace(/"/g, '""')}"`,
           `"${(r.cidade || '').replace(/"/g, '""')}"`,
           `"${(r.estado || '').replace(/"/g, '""')}"`,
+          `"${zonaSp.replace(/"/g, '""')}"`,
+          `"${macroReg.replace(/"/g, '""')}"`,
           `"${cCount >= 2 ? 'Sim' : 'Não'}"`,
           `"${cCount >= 3 ? 'Sim' : 'Não'}"`,
           `"${cCount >= 5 ? 'Sim' : 'Não'}"`,
@@ -810,13 +1004,15 @@ export const exportCrmStream = async (query: any, res: any) => {
         chunk += row.join(',') + '\r\n';
       }
 
+      totalExported += rows.length;
+      offset += rows.length;
+
       const canWrite = res.write(chunk);
       if (!canWrite) {
         await new Promise(resolve => res.once('drain', resolve));
       }
 
-      lastId = rows[rows.length - 1].id;
-      if (rows.length < batchSize) {
+      if (rows.length < currentLimit || (maxLimit > 0 && totalExported >= maxLimit)) {
         hasMore = false;
       }
     }
@@ -833,14 +1029,14 @@ export const exportCrmStream = async (query: any, res: any) => {
  * Exportação em arquivo Excel (.xlsx) dos leads filtrados
  */
 export const exportCrmXlsx = async (query: any): Promise<Buffer> => {
-  const { whereClauses, values, joins, campaign } = buildCrmFilterQuery(query);
+  const { whereClauses, values, joins, campaign, orderBySql, maxLimit } = buildCrmFilterQuery(query);
   const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
-  const MAX_XLSX_ROWS = 100000;
+  const MAX_XLSX_ROWS = maxLimit > 0 ? Math.min(maxLimit, 100000) : 100000;
   const [rows]: any = await queryWithRetry(`
     SELECT DISTINCT l.id, l.nome, l.whatsapp, l.email, l.cidade, l.estado, l.cep, l.endereco, l.numero, l.complemento, l.bairro, l.campaign_count, l.created_at
     FROM crm_leads l ${joins} ${whereSql}
-    ORDER BY l.created_at DESC
+    ${orderBySql}
     LIMIT ?
   `, [...values, MAX_XLSX_ROWS]);
 
@@ -875,6 +1071,8 @@ export const exportCrmXlsx = async (query: any): Promise<Buffer> => {
     const digits = (r.whatsapp || '').replace(/\D/g, '');
     const hasValidWa = digits.length >= 10;
     const campaigns = campMap.get(r.id) || (campaign !== 'all' ? campaign : 'Geral');
+    const zonaSp = deduceSpZone(r.bairro, r.cep);
+    const macroReg = deduceMacroRegion(r.cidade, r.estado, r.cep, r.whatsapp);
 
     return {
       'Nível de Qualidade': qTier,
@@ -890,6 +1088,8 @@ export const exportCrmXlsx = async (query: any): Promise<Buffer> => {
       'Bairro': r.bairro || '',
       'Cidade': r.cidade || '',
       'Estado': r.estado || '',
+      'Zona SP': zonaSp,
+      'Macro-Região': macroReg,
       'Frequente (2+)': cCount >= 2 ? 'Sim' : 'Não',
       'Multi-Campanha (3+)': cCount >= 3 ? 'Sim' : 'Não',
       'Super Apoiador (5+)': cCount >= 5 ? 'Sim' : 'Não',

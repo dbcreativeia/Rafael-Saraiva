@@ -43,7 +43,9 @@ import {
   BarChart3,
   Building2,
   TrendingUp,
-  Globe
+  Globe,
+  Target,
+  Phone
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup } from 'react-leaflet';
@@ -172,6 +174,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const deferredSearch = useDeferredValue(search);
   const [estadoFilter, setEstadoFilter] = useState('');
   const [cidadeFilter, setCidadeFilter] = useState('');
+  const [macroRegionFilter, setMacroRegionFilter] = useState<'all' | 'capital_rmsp' | 'litoral' | 'vale_paraiba' | 'interior'>('all');
+  const [spZonesFilter, setSpZonesFilter] = useState<string[]>([]);
+  const [validSpWaOnlyFilter, setValidSpWaOnlyFilter] = useState(false);
   const [multiActionFilter, setMultiActionFilter] = useState<'all' | 'multi' | 'super' | 'single' | 'frequent' | 'vip'>('all');
   const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
   const [isCampaignDropdownOpen, setIsCampaignDropdownOpen] = useState(false);
@@ -180,8 +185,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   const [exportModalSelectedBases, setExportModalSelectedBases] = useState<string[]>([]);
   const [exportModalFormat, setExportModalFormat] = useState<'csv' | 'xlsx'>('csv');
   const [exportModalType, setExportModalType] = useState<'all' | 'address'>('all');
-  const [exportModalOnlySp, setExportModalOnlySp] = useState(false);
+  const [exportModalOnlySp, setExportModalOnlySp] = useState(true);
   const [exportModalSearch, setExportModalSearch] = useState('');
+  const [exportModalLimit, setExportModalLimit] = useState<string>('250000');
+  const [exportModalSmartScore, setExportModalSmartScore] = useState<boolean>(true);
+  const [exportModalMacroRegion, setExportModalMacroRegion] = useState<'all' | 'capital_rmsp' | 'litoral' | 'vale_paraiba' | 'interior'>('all');
+  const [exportModalSpZones, setExportModalSpZones] = useState<string[]>([]);
+  const [exportModalValidSpWaOnly, setExportModalValidSpWaOnly] = useState<boolean>(true);
+  const [exportModalCidade, setExportModalCidade] = useState<string>('');
   const campaignDropdownRef = useRef<HTMLDivElement>(null);
   const [leadTypeFilter, setLeadTypeFilter] = useState<'all' | 'organic' | 'imported'>('all');
   const [qualityTierFilter, setQualityTierFilter] = useState<'all' | 'diamante' | 'ouro' | 'prata' | 'bronze' | 'high'>('all');
@@ -324,6 +335,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         search: deferredSearch.trim(),
         estado: estadoFilter,
         cidade: cidadeFilter,
+        macroRegion: macroRegionFilter,
+        spZones: spZonesFilter.join(','),
+        validSpWaOnly: validSpWaOnlyFilter ? 'true' : 'false',
         campaign: campaignFilter.length > 0 ? campaignFilter.join(',') : 'all',
         campaigns: campaignFilter.length > 0 ? campaignFilter.join(',') : 'all',
         multiAction: multiActionFilter,
@@ -651,13 +665,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       speedPerSec: 0,
       estRemainingSec: Math.round(totalLeads / 4000) + 2,
       logs: [
-        { time: nowTimeStr(), text: `Iniciando processamento para a base "${campaignInput.trim()}". ${parsedCsvLeads.length.toLocaleString('pt-BR')} linhas lidas.`, type: 'info' },
+        { time: nowTimeStr(), text: `Iniciando processamento para a base "${campaignInput.trim()}". ${parsedCsvLeads.length.toLocaleString('pt-BR')} linhas lidas.`, type: 'info' as const },
         ...(internalDuplicatesCount > 0 ? [
-          { time: nowTimeStr(), text: `Deduplicação interna: ${internalDuplicatesCount.toLocaleString('pt-BR')} contatos repetidos na planilha foram mesclados e enriquecidos. ${totalLeads.toLocaleString('pt-BR')} registros únicos prontos.`, type: 'warn' }
+          { time: nowTimeStr(), text: `Deduplicação interna: ${internalDuplicatesCount.toLocaleString('pt-BR')} contatos repetidos na planilha foram mesclados e enriquecidos. ${totalLeads.toLocaleString('pt-BR')} registros únicos prontos.`, type: 'warn' as const }
         ] : [
-          { time: nowTimeStr(), text: `Deduplicação interna: planilha sem repetições (${totalLeads.toLocaleString('pt-BR')} contatos únicos).`, type: 'success' }
+          { time: nowTimeStr(), text: `Deduplicação interna: planilha sem repetições (${totalLeads.toLocaleString('pt-BR')} contatos únicos).`, type: 'success' as const }
         ]),
-        { time: nowTimeStr(), text: `Higienização e normalização de municípios e UFs concluída (${topCities.length} principais polos regionais mapeados).`, type: 'success' }
+        { time: nowTimeStr(), text: `Higienização e normalização de municípios e UFs concluída (${topCities.length} principais polos regionais mapeados).`, type: 'success' as const }
       ],
       topCities,
       topStates
@@ -786,14 +800,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         estRemainingSec: 0,
         logs: [
           ...prev.logs,
-          { time: nowTimeStr(), text: `Sincronização e deduplicação concluídas com sucesso em ${totalElapsed}s.`, type: 'success' },
+          { time: nowTimeStr(), text: `Sincronização e deduplicação concluídas com sucesso em ${totalElapsed}s.`, type: 'success' as const },
           ...(totalUpdated > 0 ? [
-            { time: nowTimeStr(), text: `Base atualizada: ${totalUpdated.toLocaleString('pt-BR')} contatos que já constavam no sistema foram enriquecidos e atualizados sem duplicação!`, type: 'success' },
-            { time: nowTimeStr(), text: `Novos registros: ${totalNew.toLocaleString('pt-BR')} novos contatos únicos foram adicionados à base.`, type: 'info' }
+            { time: nowTimeStr(), text: `Base atualizada: ${totalUpdated.toLocaleString('pt-BR')} contatos que já constavam no sistema foram enriquecidos e atualizados sem duplicação!`, type: 'success' as const },
+            { time: nowTimeStr(), text: `Novos registros: ${totalNew.toLocaleString('pt-BR')} novos contatos únicos foram adicionados à base.`, type: 'info' as const }
           ] : [
-            { time: nowTimeStr(), text: `Base gravada e deduplicada com sucesso: ${importedCount.toLocaleString('pt-BR')} contatos registrados.`, type: 'success' }
+            { time: nowTimeStr(), text: `Base gravada e deduplicada com sucesso: ${importedCount.toLocaleString('pt-BR')} contatos registrados.`, type: 'success' as const }
           ]),
-          { time: nowTimeStr(), text: `Campanha "${campaignInput.trim()}" pronta e disponível para filtros e exportação no CRM!`, type: 'success' }
+          { time: nowTimeStr(), text: `Campanha "${campaignInput.trim()}" pronta e disponível para filtros e exportação no CRM!`, type: 'success' as const }
         ]
       }));
 
@@ -1236,14 +1250,15 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   }, [summary?.isRefreshing, summary?.isReady]);
 
   const campaignFilterKey = campaignFilter.join(',');
+  const spZonesFilterKey = spZonesFilter.join(',');
 
   useEffect(() => {
     fetchLeadsPage(currentPage);
-  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilterKey, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder, currentPage]);
+  }, [deferredSearch, estadoFilter, cidadeFilter, macroRegionFilter, spZonesFilterKey, validSpWaOnlyFilter, campaignFilterKey, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearch, estadoFilter, cidadeFilter, campaignFilterKey, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder]);
+  }, [deferredSearch, estadoFilter, cidadeFilter, macroRegionFilter, spZonesFilterKey, validSpWaOnlyFilter, campaignFilterKey, multiActionFilter, leadTypeFilter, qualityTierFilter, hasWhatsAppFilter, sortField, sortOrder]);
 
   useEffect(() => {
     if (activeView === 'MATERIAL') {
@@ -1261,6 +1276,9 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       search: search.trim(),
       estado: estadoFilter,
       cidade: cidadeFilter,
+      macroRegion: macroRegionFilter,
+      spZones: spZonesFilter.join(','),
+      validSpWaOnly: validSpWaOnlyFilter ? 'true' : 'false',
       campaign: selected.length > 0 ? selected.join(',') : 'all',
       campaigns: selected.length > 0 ? selected.join(',') : 'all',
       multiAction: multiActionFilter,
@@ -1275,13 +1293,31 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     window.location.href = `/api/leads/export?${params.toString()}`;
   };
 
-  // Export Unified List to Excel (.xlsx) using high-speed server stream
-  const exportConsolidatedExcel = (customCampaigns?: string[], format: 'csv' | 'xlsx' = 'csv', onlySp = false) => {
+  // Export Unified List to Excel (.xlsx) / CSV using high-speed server stream with Smart Score and Geofilters
+  const exportConsolidatedExcel = (
+    customCampaigns?: string[], 
+    format: 'csv' | 'xlsx' = 'csv', 
+    onlySp = false,
+    options?: {
+      limit?: string | number;
+      smartScore?: boolean;
+      macroRegion?: string;
+      spZones?: string[];
+      validSpWaOnly?: boolean;
+      addressOnly?: boolean;
+      estado?: string;
+      cidade?: string;
+    }
+  ) => {
     const selected = customCampaigns !== undefined ? customCampaigns : campaignFilter;
+    const isSp = onlySp || (options?.macroRegion && options.macroRegion !== 'all') || (options?.spZones && options.spZones.length > 0) || options?.estado === 'SP';
+    const estadoToUse = options?.estado !== undefined ? options.estado : (isSp ? 'SP' : estadoFilter);
+    const cidadeToUse = options?.cidade !== undefined ? options.cidade : cidadeFilter;
+
     const params = new URLSearchParams({
       search: search.trim(),
-      estado: onlySp ? 'SP' : estadoFilter,
-      cidade: cidadeFilter,
+      estado: estadoToUse,
+      cidade: cidadeToUse,
       campaign: selected.length > 0 ? selected.join(',') : 'all',
       campaigns: selected.length > 0 ? selected.join(',') : 'all',
       multiAction: multiActionFilter,
@@ -1292,6 +1328,35 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       sortOrder: sortOrder,
       format: format
     });
+
+    const targetLimit = options?.limit !== undefined ? options.limit : exportModalLimit;
+    if (targetLimit && parseInt(String(targetLimit)) > 0) {
+      params.set('limit', String(targetLimit));
+    }
+
+    if (options?.smartScore || (options === undefined && exportModalSmartScore)) {
+      params.set('smartScore', 'true');
+    }
+
+    const mReg = options?.macroRegion !== undefined ? options.macroRegion : macroRegionFilter;
+    if (mReg && mReg !== 'all') {
+      params.set('macroRegion', mReg);
+    }
+
+    const zones = options?.spZones !== undefined ? options.spZones : spZonesFilter;
+    if (zones && zones.length > 0) {
+      params.set('spZones', zones.join(','));
+    }
+
+    const valWa = options?.validSpWaOnly !== undefined ? options.validSpWaOnly : validSpWaOnlyFilter;
+    if (valWa) {
+      params.set('validSpWaOnly', 'true');
+    }
+
+    if (options?.addressOnly) {
+      params.set('addressOnly', 'true');
+    }
+
     window.location.href = `/api/leads/export?${params.toString()}`;
   };
 
@@ -1776,7 +1841,11 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
             </button>
 
             <button
-              onClick={() => exportConsolidatedExcel()}
+              onClick={() => {
+                fetchImportedBases();
+                setExportModalSelectedBases([]);
+                setIsExportCombinedBasesModalOpen(true);
+              }}
               disabled={(totalFiltered || totalUniqueLeads || consolidatedLeads.length) === 0}
               className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap"
             >
@@ -3553,13 +3622,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       )}
 
       
-      {/* MODAL DE EXPORTAÇÃO DE BASES COMBINADAS */}
+      {/* MODAL DE EXPORTAÇÃO ESTRATÉGICA & SEGMENTAÇÃO DE LEADS */}
       {isExportCombinedBasesModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200">
             
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 p-6 text-white relative">
+            <div className="bg-gradient-to-r from-indigo-950 via-purple-900 to-slate-900 p-6 text-white relative">
               <button
                 onClick={() => setIsExportCombinedBasesModalOpen(false)}
                 className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors cursor-pointer"
@@ -3568,53 +3637,338 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
-                  <Layers className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                  <Download className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
-                    <span>Exportar Bases Combinadas</span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                      Consolidado
+                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2 flex-wrap">
+                    <span>Exportação Estratégica de Leads</span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
+                      Score Inteligente & Geo-Segmentação
                     </span>
                   </h2>
-                  <p className="text-xs text-indigo-200 mt-0.5">
-                    Selecione duas ou mais bases para exportar em lista única, com deduplicação de chaves e contatos.
+                  <p className="text-xs text-indigo-200 mt-1">
+                    Defina a quantidade de contatos desejada (ex: 250.000) e os critérios de maior probabilidade de leitura e regiões de São Paulo.
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Content */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50/50">
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 bg-gray-50/60">
               
-              {/* Passo 1: Seleção de Bases */}
+              {/* 1. QUANTIDADE DE LEADS A EXPORTAR */}
               <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">1</span>
-                      <span>Selecione as bases que deseja combinar</span>
+                      <span>Quantidade de Leads a Exportar</span>
                     </h3>
                     <p className="text-[11px] text-gray-500 mt-0.5">
-                      Marque as bases cujos apoiadores você deseja unir no arquivo final.
+                      Digite o número exato de contatos únicos que você deseja no arquivo final.
+                    </p>
+                  </div>
+                  {exportModalLimit && parseInt(exportModalLimit) > 0 && (
+                    <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/80 self-start sm:self-auto">
+                      {parseInt(exportModalLimit).toLocaleString('pt-BR')} leads selecionados
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1000"
+                      value={exportModalLimit}
+                      onChange={(e) => setExportModalLimit(e.target.value)}
+                      placeholder="Ex: 250000 (ou deixe em branco para todos)"
+                      className="w-full pl-4 pr-12 py-2.5 text-sm font-bold text-gray-900 rounded-xl border border-gray-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
+                      leads
+                    </span>
+                  </div>
+
+                  {/* Botões Rápidos de Quantidade */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {['10000', '50000', '100000', '250000', ''].map((preset) => {
+                      const isSelected = exportModalLimit === preset;
+                      const label = preset === '' ? 'Todos' : `${parseInt(preset) / 1000}k`;
+                      return (
+                        <button
+                          key={preset || 'all'}
+                          type="button"
+                          onClick={() => setExportModalLimit(preset)}
+                          className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs font-black'
+                              : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>
+                    O sistema selecionará exatamente os <strong>{exportModalLimit ? Number(exportModalLimit).toLocaleString('pt-BR') : 'todos os'}</strong> leads mais qualificados em ordem decrescente de probabilidade de resposta.
+                  </span>
+                </div>
+              </div>
+
+              {/* 2. CRITÉRIOS DE MAIOR PROBABILIDADE DE LEITURA & QUALIDADE */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
+                <div className="border-b border-gray-100 pb-2">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">2</span>
+                    <span>Critérios de Qualidade e Maior Probabilidade de Leitura</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Priorize contatos mais propensos a abrir, ler e considerar a mensagem.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Card 1: Score Inteligente de Propensão */}
+                  <label className={`flex items-start gap-3 p-3.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                    exportModalSmartScore
+                      ? 'border-indigo-400 bg-indigo-50/70 text-indigo-950 shadow-2xs'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={exportModalSmartScore}
+                      onChange={(e) => setExportModalSmartScore(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <div className="font-black text-xs flex items-center gap-1.5 text-indigo-900">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Score de Propensão & Engajamento</span>
+                      </div>
+                      <div className="text-[11px] text-gray-600 mt-1 leading-snug">
+                        Ordena no topo apoiadores com mais ações/campanhas, dados de endereço completos e cadastros mais recentes.
+                      </div>
+                    </div>
+                  </label>
+
+                  {/* Card 2: WhatsApp Válido Obrigatório */}
+                  <label className={`flex items-start gap-3 p-3.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                    exportModalValidSpWaOnly
+                      ? 'border-emerald-400 bg-emerald-50/70 text-emerald-950 shadow-2xs'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={exportModalValidSpWaOnly}
+                      onChange={(e) => setExportModalValidSpWaOnly(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <div className="font-black text-xs flex items-center gap-1.5 text-emerald-900">
+                        <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>WhatsApp Celular Válido Obrigatório</span>
+                      </div>
+                      <div className="text-[11px] text-gray-600 mt-1 leading-snug">
+                        Filtra estritamente números celulares válidos (DDD 11 a 19 com 9º dígito), eliminando números fixos ou inválidos.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* 3. CRITÉRIOS DE LOCALIZAÇÃO & REGIÕES (ESTADO DE SP & ZONAS DA CAPITAL) */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-4">
+                <div className="border-b border-gray-100 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">3</span>
+                      <span>Critérios de Localização & Regiões (São Paulo)</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Filtre por regiões do Estado de SP ou zonas específicas da cidade de São Paulo.
+                    </p>
+                  </div>
+
+                  {/* Toggle Estado de SP vs Brasil */}
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer self-start sm:self-auto bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                    <input
+                      type="checkbox"
+                      checked={exportModalOnlySp}
+                      onChange={(e) => setExportModalOnlySp(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Apenas Estado de SP (SP)</span>
+                  </label>
+                </div>
+
+                {/* Macrorregiões do Estado de SP */}
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500">
+                    Regiões do Estado de São Paulo:
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { id: 'all', label: 'Todas as Regiões' },
+                      { id: 'capital_rmsp', label: 'Capital e Grande SP' },
+                      { id: 'litoral', label: 'Litoral Paulista' },
+                      { id: 'vale_paraiba', label: 'Vale do Paraíba' },
+                      { id: 'interior', label: 'Interior de SP' },
+                    ].map((reg) => {
+                      const isSelected = exportModalMacroRegion === reg.id;
+                      return (
+                        <button
+                          key={reg.id}
+                          type="button"
+                          onClick={() => setExportModalMacroRegion(reg.id as any)}
+                          className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs font-black'
+                              : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {reg.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Zonas da Cidade de São Paulo (Multi-Seleção) */}
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500">
+                      Regiões da Cidade de São Paulo (Zonas da Capital):
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExportModalSpZones(['centro', 'zona_leste']);
+                          setExportModalOnlySp(true);
+                        }}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                      >
+                        Ex: Centro + Zona Leste
+                      </button>
+                      <span className="text-gray-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setExportModalSpZones([])}
+                        className="text-[11px] font-bold text-gray-500 hover:underline cursor-pointer"
+                      >
+                        Limpar Zonas
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { id: 'centro', name: '🏛️ Centro', desc: 'Sé, República, Bela Vista, Consolação, Brás...' },
+                      { id: 'zona_leste', name: '🏢 Zona Leste', desc: 'Tatuapé, Mooca, Itaquera, Penha, S. Mateus...' },
+                      { id: 'zona_sul', name: '🌲 Zona Sul', desc: 'Santo Amaro, Moema, V. Mariana, Ipiranga...' },
+                      { id: 'zona_oeste', name: '🌳 Zona Oeste', desc: 'Pinheiros, Lapa, Perdizes, Butantã, Morumbi...' },
+                      { id: 'zona_norte', name: '🏔️ Zona Norte', desc: 'Santana, Tucuruvi, Casa Verde, Freguesia...' },
+                    ].map((zone) => {
+                      const isSelected = exportModalSpZones.includes(zone.id);
+                      return (
+                        <button
+                          key={zone.id}
+                          type="button"
+                          onClick={() => {
+                            setExportModalSpZones(prev =>
+                              isSelected ? prev.filter(z => z !== zone.id) : [...prev, zone.id]
+                            );
+                            setExportModalOnlySp(true);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-purple-50 border-purple-400 text-purple-950 ring-2 ring-purple-400/30 shadow-2xs'
+                              : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-xs">{zone.name}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                          </div>
+                          <div className="text-[10px] text-gray-500 mt-1 line-clamp-2 leading-tight">
+                            {zone.desc}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {exportModalSpZones.length > 0 && (
+                    <div className="text-[11px] text-purple-700 font-bold bg-purple-50 p-2 rounded-xl border border-purple-200 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      <span>
+                        Zonas ativas: <strong>{exportModalSpZones.map(z => z.replace('_', ' ').toUpperCase()).join(' + ')}</strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Filtro Específico de Cidade */}
+                <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-gray-500 shrink-0">
+                    Filtrar Cidade Específica:
+                  </div>
+                  <input
+                    type="text"
+                    value={exportModalCidade}
+                    onChange={(e) => setExportModalCidade(e.target.value)}
+                    placeholder="Ex: São Paulo, Campinas, Santos, etc. (Opcional)"
+                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  />
+                  {exportModalCidade && (
+                    <button
+                      type="button"
+                      onClick={() => setExportModalCidade('')}
+                      className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 4. SELEÇÃO DE BASES / CAMPANHAS */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">4</span>
+                      <span>Origem dos Leads (Bases & Campanhas)</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Selecione todas as bases consolidadas ou marque campanhas específicas.
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setExportModalSelectedBases(availableBases.map(b => b.campanha))}
-                      className="px-2.5 py-1 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg cursor-pointer transition-colors"
+                      onClick={() => setExportModalSelectedBases([])}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg cursor-pointer transition-colors ${
+                        exportModalSelectedBases.length === 0
+                          ? 'bg-indigo-600 text-white font-black'
+                          : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+                      }`}
                     >
-                      Marcar Todas ({availableBases.length})
+                      Todas as Bases
                     </button>
                     <button
                       type="button"
-                      onClick={() => setExportModalSelectedBases([])}
+                      onClick={() => setExportModalSelectedBases(availableBases.map(b => b.campanha))}
                       className="px-2.5 py-1 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
                     >
-                      Desmarcar
+                      Marcar Todas ({availableBases.length})
                     </button>
                   </div>
                 </div>
@@ -3626,13 +3980,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     type="text"
                     value={exportModalSearch}
                     onChange={(e) => setExportModalSearch(e.target.value)}
-                    placeholder="Buscar base pelo nome..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                    placeholder="Filtrar base por nome..."
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                   />
                 </div>
 
                 {/* Grid de Checkboxes de Bases */}
-                <div className="max-h-60 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                <div className="max-h-40 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                   {(() => {
                     const filtered = availableBases.filter(b =>
                       !exportModalSearch || b.campanha.toLowerCase().includes(exportModalSearch.toLowerCase())
@@ -3640,7 +3994,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
                     if (filtered.length === 0) {
                       return (
-                        <div className="text-center py-6 text-xs text-gray-400">
+                        <div className="text-center py-4 text-xs text-gray-400">
                           Nenhuma base encontrada para &quot;{exportModalSearch}&quot;.
                         </div>
                       );
@@ -3651,13 +4005,13 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                       return (
                         <label
                           key={b.campanha}
-                          className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
                             isChecked
                               ? 'bg-indigo-50/80 border-indigo-300 text-indigo-950 shadow-2xs'
-                              : 'bg-white border-gray-200/80 hover:border-gray-300 text-gray-700'
+                              : 'bg-white border-gray-200 hover:border-gray-300 text-gray-700'
                           }`}
                         >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <input
                               type="checkbox"
                               checked={isChecked}
@@ -3670,12 +4024,10 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                               }}
                               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                             />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-black truncate">{b.campanha}</div>
-                            </div>
+                            <div className="text-xs font-black truncate">{b.campanha}</div>
                           </div>
                           {b.count > 0 && (
-                            <span className="text-[11px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
                               {b.count.toLocaleString('pt-BR')} leads
                             </span>
                           )}
@@ -3684,190 +4036,131 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     });
                   })()}
                 </div>
-
-                {/* Resumo da Seleção de Bases */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-indigo-900">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-                    <span>
-                      {exportModalSelectedBases.length === 0
-                        ? 'Nenhuma base selecionada'
-                        : `${exportModalSelectedBases.length} base(s) selecionada(s)`}
-                    </span>
-                  </div>
-                  {exportModalSelectedBases.length > 0 && (
-                    <div className="text-[11px] text-gray-500">
-                      Total bruto estimado: ~
-                      {availableBases
-                        .filter(b => exportModalSelectedBases.includes(b.campanha))
-                        .reduce((acc, curr) => acc + (curr.count || 0), 0)
-                        .toLocaleString('pt-BR')}{' '}
-                      leads (duplicatas serão removidas)
-                    </div>
-                  )}
-                </div>
               </div>
 
-              {/* Passo 2: Opções de Exportação */}
-              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-4">
+              {/* 5. FORMATO DO ARQUIVO */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
                 <div className="border-b border-gray-100 pb-2">
                   <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">2</span>
-                    <span>Opções de Formato e Conteúdo</span>
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">5</span>
+                    <span>Formato do Arquivo</span>
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Formato do Arquivo */}
-                  <div>
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">
-                      Formato do Arquivo
-                    </label>
-                    <div className="space-y-2">
-                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        exportModalFormat === 'csv'
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
-                          : 'border-gray-200 bg-white text-gray-700'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="format"
-                          value="csv"
-                          checked={exportModalFormat === 'csv'}
-                          onChange={() => setExportModalFormat('csv')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <div>CSV (.csv) - Recomendado ⚡</div>
-                          <div className="text-[10px] text-gray-500 font-normal">Streaming ultra-rápido, sem limites de volume.</div>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        exportModalFormat === 'xlsx'
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
-                          : 'border-gray-200 bg-white text-gray-700'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="format"
-                          value="xlsx"
-                          checked={exportModalFormat === 'xlsx'}
-                          onChange={() => setExportModalFormat('xlsx')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <div>Excel (.xlsx)</div>
-                          <div className="text-[10px] text-gray-500 font-normal">Planilha formatada tradicional.</div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Tipo de Conteúdo */}
-                  <div>
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">
-                      Filtro de Conteúdo
-                    </label>
-                    <div className="space-y-2">
-                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        exportModalType === 'all'
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
-                          : 'border-gray-200 bg-white text-gray-700'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="type"
-                          value="all"
-                          checked={exportModalType === 'all'}
-                          onChange={() => setExportModalType('all')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <div>Lista Única Completa</div>
-                          <div className="text-[10px] text-gray-500 font-normal">Todos os dados e contatos disponíveis.</div>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        exportModalType === 'address'
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
-                          : 'border-gray-200 bg-white text-gray-700'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="type"
-                          value="address"
-                          checked={exportModalType === 'address'}
-                          onChange={() => setExportModalType('address')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <div>Endereços Correios (Mala Direta)</div>
-                          <div className="text-[10px] text-gray-500 font-normal">Apenas contatos que possuem endereço/CEP.</div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Filtro Regional Opcional */}
-                <div className="pt-2 border-t border-gray-100">
-                  <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                    exportModalFormat === 'csv'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-950'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}>
                     <input
-                      type="checkbox"
-                      checked={exportModalOnlySp}
-                      onChange={(e) => setExportModalOnlySp(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      type="radio"
+                      name="exportModalFormat"
+                      value="csv"
+                      checked={exportModalFormat === 'csv'}
+                      onChange={() => setExportModalFormat('csv')}
+                      className="text-indigo-600 focus:ring-indigo-500"
                     />
-                    <span>Filtrar apenas apoiadores do Estado de São Paulo (SP)</span>
+                    <div>
+                      <div className="font-black">CSV (.csv) - Recomendado ⚡</div>
+                      <div className="text-[10px] text-gray-500 font-normal">Streaming em tempo real ultra-rápido, ideal para 250k+ leads.</div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                    exportModalFormat === 'xlsx'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-950'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="exportModalFormat"
+                      value="xlsx"
+                      checked={exportModalFormat === 'xlsx'}
+                      onChange={() => setExportModalFormat('xlsx')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <div className="font-black">Excel (.xlsx)</div>
+                      <div className="text-[10px] text-gray-500 font-normal">Planilha formatada padrão do Microsoft Excel.</div>
+                    </div>
                   </label>
                 </div>
               </div>
 
             </div>
 
-            {/* Footer */}
-            <div className="p-5 bg-white border-t border-gray-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-xs text-gray-500 font-medium">
-                {exportModalSelectedBases.length === 0 ? (
-                  <span className="text-amber-600 font-bold">Selecione ao menos 1 base para exportar</span>
-                ) : (
-                  <span>
-                    Pronto para exportar <strong>{exportModalSelectedBases.length}</strong> base(s) combinada(s)
-                  </span>
-                )}
+            {/* Footer com Resumo do Lote e Botões de Ação */}
+            <div className="p-5 bg-white border-t border-gray-200 flex flex-col lg:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-gray-600 leading-snug w-full lg:w-auto">
+                <div className="font-black text-gray-900 flex items-center gap-1.5 mb-0.5">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <span>Resumo da Configuração:</span>
+                </div>
+                <div>
+                  Exportando os top <strong>{exportModalLimit ? Number(exportModalLimit).toLocaleString('pt-BR') : 'todos os'}</strong> leads
+                  {exportModalValidSpWaOnly ? ' com WhatsApp celular válido' : ''}
+                  {exportModalSpZones.length > 0 ? ` nas zonas (${exportModalSpZones.map(z => z.replace('_', ' ').toUpperCase()).join(', ')})` : ''}
+                  {exportModalMacroRegion !== 'all' ? ` na região ${exportModalMacroRegion}` : ''}
+                  {exportModalOnlySp && exportModalSpZones.length === 0 && exportModalMacroRegion === 'all' ? ' no Estado de SP' : ''}
+                  {exportModalSmartScore ? ' ordenados por maior probabilidade de leitura.' : '.'}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-2.5 w-full lg:w-auto shrink-0">
                 <button
                   type="button"
                   onClick={() => {
-                    setCampaignFilter(exportModalSelectedBases);
+                    if (exportModalSelectedBases.length > 0) {
+                      setCampaignFilter(exportModalSelectedBases);
+                    }
+                    if (exportModalSpZones.length > 0) {
+                      setSpZonesFilter(exportModalSpZones);
+                    }
+                    if (exportModalMacroRegion !== 'all') {
+                      setMacroRegionFilter(exportModalMacroRegion);
+                    }
+                    if (exportModalOnlySp) {
+                      setEstadoFilter('SP');
+                    }
+                    if (exportModalValidSpWaOnly) {
+                      setValidSpWaOnlyFilter(true);
+                    }
+                    if (exportModalCidade) {
+                      setCidadeFilter(exportModalCidade);
+                    }
                     setIsExportCombinedBasesModalOpen(false);
                   }}
-                  disabled={exportModalSelectedBases.length === 0}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold transition-colors disabled:opacity-40 cursor-pointer"
-                  title="Ver os leads combinados na tabela antes de exportar"
+                  className="flex-1 lg:flex-initial px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold transition-colors cursor-pointer"
+                  title="Ver os leads filtrados na tabela antes de baixar"
                 >
                   Filtrar na Tabela
                 </button>
 
                 <button
                   type="button"
-                  disabled={exportModalSelectedBases.length === 0}
                   onClick={() => {
-                    if (exportModalType === 'address') {
-                      exportMailMergeExcel(exportModalSelectedBases);
-                    } else {
-                      exportConsolidatedExcel(exportModalSelectedBases, exportModalFormat, exportModalOnlySp);
-                    }
+                    exportConsolidatedExcel(
+                      exportModalSelectedBases.length > 0 ? exportModalSelectedBases : undefined,
+                      exportModalFormat,
+                      exportModalOnlySp,
+                      {
+                        limit: exportModalLimit,
+                        smartScore: exportModalSmartScore,
+                        macroRegion: exportModalMacroRegion,
+                        spZones: exportModalSpZones,
+                        validSpWaOnly: exportModalValidSpWaOnly,
+                        addressOnly: exportModalType === 'address',
+                        estado: exportModalOnlySp ? 'SP' : (estadoFilter || 'SP'),
+                        cidade: exportModalCidade
+                      }
+                    );
                     setIsExportCombinedBasesModalOpen(false);
                   }}
-                  className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+                  className="flex-1 lg:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Baixar Base Combinada ({exportModalFormat.toUpperCase()})</span>
+                  <span>Baixar Lista ({exportModalFormat.toUpperCase()})</span>
                 </button>
               </div>
             </div>
