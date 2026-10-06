@@ -1,4 +1,4 @@
-import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm, deleteLeadById, exportCrmStream, exportCrmXlsx } from "./crmService.ts";
+import { getCrmSummary, getCrmPaginated, recordLeadAction, syncCampaignToCrm, deleteLeadById, exportCrmStream, exportCrmXlsx, getLeadsGeoBreakdown } from "./crmService.ts";
 import { sanitizeGeo, sanitizeCity, sanitizeState } from "./geoSanitizer.ts";
 import express from "express";
 import compression from "compression";
@@ -64,6 +64,39 @@ async function startServer() {
     }
   }
 
+  // Persistent disk storage for electoral results JSON
+  const ELECTORAL_RESULTS_FILE = path.join(process.cwd(), 'electoral_results_store.json');
+  let electoralResultsData: any = null;
+  let electoralResultsLastUpdated: string | null = null;
+  try {
+    if (fs.existsSync(ELECTORAL_RESULTS_FILE)) {
+      const content = fs.readFileSync(ELECTORAL_RESULTS_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object') {
+        electoralResultsData = parsed.data || parsed;
+        electoralResultsLastUpdated = parsed.importedAt || new Date().toISOString();
+      }
+    }
+  } catch (e) {
+    console.error("Error reading electoral_results_store.json:", e);
+  }
+
+  function saveElectoralResultsToDisk(payload: any) {
+    try {
+      const record = {
+        data: payload,
+        importedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(ELECTORAL_RESULTS_FILE, JSON.stringify(record), 'utf-8');
+      electoralResultsData = payload;
+      electoralResultsLastUpdated = record.importedAt;
+      return true;
+    } catch (e) {
+      console.error("Error saving electoral_results_store.json:", e);
+      return false;
+    }
+  }
+
   let db: any = null;
   // Initialize DB in the background without blocking server startup
   getDbConnection().then(connection => {
@@ -73,6 +106,71 @@ async function startServer() {
   
   const materialData: any[] = [];
   const ninapassadoreData: any[] = [];
+
+  // Rotas de Resultados Eleitorais 2026 (Persistência compartilhada)
+  app.get('/api/eleicoes/resultados', (req, res) => {
+    return res.json({
+      success: true,
+      hasData: !!electoralResultsData,
+      data: electoralResultsData,
+      importedAt: electoralResultsLastUpdated,
+      isPersistent: true
+    });
+  });
+
+  app.get('/api/eleicoes/leads-breakdown', async (req, res) => {
+    try {
+      const campaign = req.query.campaign ? String(req.query.campaign) : undefined;
+      const breakdown = await getLeadsGeoBreakdown(campaign);
+      return res.json(breakdown);
+    } catch (err: any) {
+      console.error("Erro ao buscar cruzamento de leads:", err);
+      return res.status(500).json({ error: "Erro ao buscar leads para cruzamento: " + err.message });
+    }
+  });
+
+  app.post('/api/eleicoes/import', (req, res) => {
+    try {
+      const payload = req.body;
+      if (!payload || typeof payload !== 'object' || !payload.bases) {
+        return res.status(400).json({ error: "Formato de arquivo inválido. Estrutura 'bases' não encontrada." });
+      }
+
+      const saved = saveElectoralResultsToDisk(payload);
+      const counts = {
+        municipios: Array.isArray(payload.bases?.municipios?.registros) ? payload.bases.municipios.registros.length : 0,
+        zonas: Array.isArray(payload.bases?.zonas?.registros) ? payload.bases.zonas.registros.length : 0,
+        bairros: Array.isArray(payload.bases?.bairros?.registros) ? payload.bases.bairros.registros.length : 0,
+        locais: Array.isArray(payload.bases?.locais?.registros) ? payload.bases.locais.registros.length : 0,
+      };
+
+      return res.json({
+        success: true,
+        isPersistent: saved,
+        counts,
+        importedAt: electoralResultsLastUpdated,
+        message: saved 
+          ? "Base eleitoral persistida no servidor com sucesso e sincronizada para todos os visitantes." 
+          : "Salvo em memória do servidor."
+      });
+    } catch (err: any) {
+      console.error("Erro ao importar base eleitoral:", err);
+      return res.status(500).json({ error: "Falha ao processar arquivo no servidor: " + err.message });
+    }
+  });
+
+  app.delete('/api/eleicoes/clear', (req, res) => {
+    try {
+      electoralResultsData = null;
+      electoralResultsLastUpdated = null;
+      if (fs.existsSync(ELECTORAL_RESULTS_FILE)) {
+        fs.unlinkSync(ELECTORAL_RESULTS_FILE);
+      }
+      return res.json({ success: true, message: "Dados eleitorais removidos do servidor com sucesso." });
+    } catch (e: any) {
+      return res.status(500).json({ error: "Erro ao limpar dados eleitorais: " + e.message });
+    }
+  });
 
   app.get('/api/material', async (req, res) => {
     if (db) {
@@ -1016,7 +1114,16 @@ async function startServer() {
 
   app.get('/api/leads/export', async (req, res) => {
     try {
-      const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+      let format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+      const maxLimit = parseInt(String(req.query.limit || '0'), 10);
+
+      // Proteção contra crash de memória e limite de 1M de linhas do Excel:
+      // O formato XLSX consome centenas de megabytes em memória se montado para bases gigantes.
+      // Para bases sem limite (1,1 milhão de leads) ou maiores de 50.000, utilizamos automaticamente CSV com streaming contínuo.
+      if (format === 'xlsx' && (maxLimit === 0 || maxLimit > 50000)) {
+        format = 'csv';
+      }
+
       const isAddressOnly = req.query.addressOnly === 'true';
       const filename = isAddressOnly
         ? `enderecos_correios_${new Date().toISOString().slice(0, 10)}.${format}`
@@ -1026,6 +1133,10 @@ async function startServer() {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
         await exportCrmStream(req.query as any, res);
         return;
