@@ -78,6 +78,71 @@ export const getCrmSummary = async (forceRefresh = false) => {
   return result;
 };
 
+export const getLeadsGeoBreakdown = async (campaignFilter?: string) => {
+  try {
+    let cityQuery = `
+      SELECT UPPER(TRIM(l.cidade)) as cidade, 
+             COUNT(DISTINCT l.id) as leads, 
+             COUNT(DISTINCT CASE WHEN l.whatsapp != '' AND l.whatsapp IS NOT NULL THEN l.id END) as whatsappCount 
+      FROM crm_leads l
+    `;
+    let bairroQuery = `
+      SELECT UPPER(TRIM(l.bairro)) as bairro, 
+             COUNT(DISTINCT l.id) as leads 
+      FROM crm_leads l
+    `;
+    let totalQuery = `SELECT COUNT(DISTINCT l.id) as total FROM crm_leads l`;
+
+    const params: any[] = [];
+    let whereClause = " WHERE l.cidade != '' AND l.cidade IS NOT NULL AND l.estado = 'SP'";
+
+    if (campaignFilter && campaignFilter !== 'ALL') {
+      cityQuery += ` INNER JOIN crm_actions a ON l.id = a.lead_id`;
+      bairroQuery += ` INNER JOIN crm_actions a ON l.id = a.lead_id`;
+      totalQuery += ` INNER JOIN crm_actions a ON l.id = a.lead_id`;
+      whereClause += ` AND (a.campaign_name = ? OR a.source = ?)`;
+      params.push(campaignFilter, campaignFilter);
+    }
+
+    const [cityRows]: any = await queryWithRetry(
+      `${cityQuery} ${whereClause} GROUP BY UPPER(TRIM(l.cidade))`,
+      params
+    );
+
+    const bairroWhere = (campaignFilter && campaignFilter !== 'ALL')
+      ? ` WHERE (l.cidade LIKE '%sao paulo%' OR l.cidade LIKE '%são paulo%') AND l.bairro != '' AND l.bairro IS NOT NULL AND (a.campaign_name = ? OR a.source = ?)`
+      : ` WHERE (l.cidade LIKE '%sao paulo%' OR l.cidade LIKE '%são paulo%') AND l.bairro != '' AND l.bairro IS NOT NULL`;
+
+    const [bairroRows]: any = await queryWithRetry(
+      `${bairroQuery} ${bairroWhere} GROUP BY UPPER(TRIM(l.bairro))`,
+      (campaignFilter && campaignFilter !== 'ALL') ? [campaignFilter, campaignFilter] : []
+    );
+
+    const totalWhere = (campaignFilter && campaignFilter !== 'ALL')
+      ? ` WHERE l.estado = 'SP' AND (a.campaign_name = ? OR a.source = ?)`
+      : ` WHERE l.estado = 'SP'`;
+
+    const [totalRow]: any = await queryWithRetry(
+      `${totalQuery} ${totalWhere}`,
+      (campaignFilter && campaignFilter !== 'ALL') ? [campaignFilter, campaignFilter] : []
+    );
+
+    const [camps]: any = await queryWithRetry(
+      `SELECT campaign_name as name, COUNT(*) as count FROM crm_actions WHERE campaign_name != '' AND campaign_name IS NOT NULL GROUP BY campaign_name ORDER BY count DESC`
+    );
+
+    return {
+      cities: Array.isArray(cityRows) ? cityRows.map((r: any) => ({ cidade: r.cidade, leads: Number(r.leads), whatsappCount: Number(r.whatsappCount) })) : [],
+      bairros: Array.isArray(bairroRows) ? bairroRows.map((r: any) => ({ bairro: r.bairro, leads: Number(r.leads) })) : [],
+      totalLeads: Number(totalRow?.[0]?.total || 0),
+      availableCampaigns: Array.isArray(camps) ? camps.map((c: any) => ({ name: c.name, count: Number(c.count) })) : []
+    };
+  } catch (err) {
+    console.error("Error in getLeadsGeoBreakdown:", err);
+    return { cities: [], bairros: [], totalLeads: 0, availableCampaigns: [] };
+  }
+};
+
 export function extractCampaignList(query: any): string[] {
   let list: string[] = [];
   const raw = query?.campaigns ?? query?.campaign;
@@ -848,13 +913,18 @@ function buildCrmFilterQuery(query: any) {
     if (zoneCond) whereClauses.push(zoneCond);
   }
 
-  if (campaignList.length === 1) {
-    joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
-    joinValues.push(campaignList[0]);
-  } else if (campaignList.length > 1) {
-    const placeholders = campaignList.map(() => '?').join(', ');
-    joins += ` JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name IN (${placeholders})`;
-    joinValues.push(...campaignList);
+  // Se a lista de campanhas incluir todas ou for maior que 10 (todas as bases do sistema selecionadas),
+  // não é necessário JOIN pois todos os leads pertencem ao sistema consolidado.
+  const isAllBases = campaignList.length === 0 || campaignList.includes('all') || campaignList.length >= 10;
+  if (!isAllBases) {
+    if (campaignList.length === 1) {
+      joins += ' JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name = ?';
+      joinValues.push(campaignList[0]);
+    } else {
+      const placeholders = campaignList.map(() => '?').join(', ');
+      joins += ` JOIN crm_actions a_camp ON l.id = a_camp.lead_id AND a_camp.campaign_name IN (${placeholders})`;
+      joinValues.push(...campaignList);
+    }
   }
 
   if (leadType === 'organic') {
@@ -881,17 +951,19 @@ function buildCrmFilterQuery(query: any) {
   const zoneBonusSql = (criteriaMode === 'prioritize' && zoneCond) ? `(CASE WHEN ${zoneCond} THEN 1000 ELSE 0 END) + ` : '';
   const macroBonusSql = (criteriaMode === 'prioritize' && macroCond) ? `(CASE WHEN ${macroCond} THEN 500 ELSE 0 END) + ` : '';
 
-  if (smartScore || query.sortBy === 'smart_score') {
+  if (maxLimit === 0 && !query.sortField) {
+    // Quando exporta TODOS os leads (1,1 milhão de registros),
+    // qualquer cálculo matemático/REGEXP dinâmico no ORDER BY força o MySQL a fazer filesort em disco,
+    // atrasando a resposta em dezenas de segundos e disparando 504 Gateway Timeout.
+    // Como 100% dos contatos vão constar no arquivo final, ordenar pela chave primária (l.id ASC)
+    // permite que o MySQL envie o primeiro byte em < 150ms via cursor de streaming contínuo.
+    orderBySql = 'ORDER BY l.id ASC';
+  } else if (smartScore || query.sortBy === 'smart_score') {
     // Ordenação por Propensão de Leitura e Engajamento com Priorização Regional:
-    // 1. Priorização de Zonas específicas selecionadas (ex: Centro + Zona Leste) -> +1000 pts
-    // 2. Priorização de Macrorregião selecionada -> +500 pts
-    // 3. WhatsApp Válido de SP/Brasil com celular (DDD 11 a 19 + 9 dígitos) -> +100 pts
-    // 4. Total de ações / campanhas participadas (frequência e engajamento) -> +25 pts / ação
-    // 5. Completude cadastral (endereço/CEP/bairro preenchidos) -> +30 pts
-    // 6. Recência da interação
+    // Apoiadores com mais ações (ex: super apoiadores com múltiplas ações) recebem peso forte (+50 pts / ação)
     orderBySql = `ORDER BY 
       (${zoneBonusSql}${macroBonusSql}(CASE WHEN l.whatsapp REGEXP '^(55)?(11|12|13|14|15|16|17|18|19)9[0-9]{8}$' THEN 100 ELSE 0 END) + 
-       (l.campaign_count * 25) + 
+       (l.campaign_count * 50) + 
        (CASE WHEN l.cep != '' AND l.cep IS NOT NULL AND l.endereco != '' AND l.endereco IS NOT NULL THEN 20 ELSE 0 END) +
        (CASE WHEN l.bairro != '' AND l.bairro IS NOT NULL THEN 10 ELSE 0 END) +
        (CASE WHEN l.nome != '' AND l.nome != 'Apoiador' AND l.nome != 'Sem Nome' AND l.nome != 'Apoiador Importado' THEN 10 ELSE 0 END)

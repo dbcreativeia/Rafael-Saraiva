@@ -1313,7 +1313,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   ) => {
     const selected = customCampaigns !== undefined ? customCampaigns : campaignFilter;
     const isSp = onlySp || (options?.macroRegion && options.macroRegion !== 'all') || (options?.spZones && options.spZones.length > 0) || options?.estado === 'SP';
-    const estadoToUse = options?.estado !== undefined ? options.estado : (isSp ? 'SP' : estadoFilter);
+    const estadoToUse = options?.estado !== undefined ? options.estado : (isSp ? 'SP' : (estadoFilter || ''));
     const cidadeToUse = options?.cidade !== undefined ? options.cidade : cidadeFilter;
 
     const params = new URLSearchParams({
@@ -3701,12 +3701,17 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   <div className="flex flex-wrap items-center gap-1.5">
                     {['10000', '50000', '100000', '250000', ''].map((preset) => {
                       const isSelected = exportModalLimit === preset;
-                      const label = preset === '' ? 'Todos' : `${parseInt(preset) / 1000}k`;
+                      const label = preset === '' ? 'Todos (1,1M)' : `${parseInt(preset) / 1000}k`;
                       return (
                         <button
                           key={preset || 'all'}
                           type="button"
-                          onClick={() => setExportModalLimit(preset)}
+                          onClick={() => {
+                            setExportModalLimit(preset);
+                            if (preset === '' || parseInt(preset) > 50000) {
+                              setExportModalFormat('csv');
+                            }
+                          }}
                           className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
                             isSelected
                               ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs font-black'
@@ -3719,10 +3724,40 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     })}
                   </div>
                 </div>
+
+                {/* Banner de Atalho para 100% da Base Sem Travamentos */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="text-xs font-black text-emerald-900">Exportar Base Integral (100% dos Leads Sem Restrições)</div>
+                      <div className="text-[11px] text-emerald-700">Remove todos os filtros de estado, celular e zonas para extrair todos os 1.096.878 contatos em streaming de alta velocidade.</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportModalLimit('');
+                      setExportModalOnlySp(false);
+                      setExportModalValidSpWaOnly(false);
+                      setExportModalMacroRegion('all');
+                      setExportModalSpZones([]);
+                      setExportModalCidade('');
+                      setExportModalSelectedBases([]);
+                      setExportModalFormat('csv');
+                    }}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    Ativar 100% Sem Filtros
+                  </button>
+                </div>
+
                 <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                   <span>
-                    O sistema selecionará exatamente os <strong>{exportModalLimit ? Number(exportModalLimit).toLocaleString('pt-BR') : 'todos os'}</strong> leads mais qualificados em ordem decrescente de probabilidade de resposta.
+                    {exportModalLimit 
+                      ? <>O sistema selecionará exatamente os <strong>{Number(exportModalLimit).toLocaleString('pt-BR')}</strong> leads mais qualificados em ordem decrescente de probabilidade de resposta.</>
+                      : <>Exportando <strong>todos os 1.096.878 leads</strong> do sistema via streaming contínuo ultra-rápido.</>}
                   </span>
                 </div>
               </div>
@@ -4126,22 +4161,29 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                     </div>
                   </label>
 
-                  <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                    exportModalFormat === 'xlsx'
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-950'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold transition-all ${
+                    (!exportModalLimit || parseInt(exportModalLimit) > 50000)
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'
+                      : exportModalFormat === 'xlsx'
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-950 cursor-pointer'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 cursor-pointer'
                   }`}>
                     <input
                       type="radio"
                       name="exportModalFormat"
                       value="xlsx"
-                      checked={exportModalFormat === 'xlsx'}
+                      disabled={!exportModalLimit || parseInt(exportModalLimit) > 50000}
+                      checked={exportModalFormat === 'xlsx' && Boolean(exportModalLimit) && parseInt(exportModalLimit) <= 50000}
                       onChange={() => setExportModalFormat('xlsx')}
                       className="text-indigo-600 focus:ring-indigo-500"
                     />
                     <div>
-                      <div className="font-black">Excel (.xlsx)</div>
-                      <div className="text-[10px] text-gray-500 font-normal">Planilha formatada padrão do Microsoft Excel.</div>
+                      <div className="font-black">Excel (.xlsx) {(!exportModalLimit || parseInt(exportModalLimit) > 50000) && '(Até 50k)'}</div>
+                      <div className="text-[10px] text-gray-500 font-normal">
+                        {(!exportModalLimit || parseInt(exportModalLimit) > 50000)
+                          ? 'Para mais de 50.000 ou todos os leads, use CSV para streaming ultra-rápido.'
+                          : 'Planilha formatada padrão do Microsoft Excel.'}
+                      </div>
                     </div>
                   </label>
                 </div>
@@ -4157,12 +4199,12 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   <span>Resumo da Configuração:</span>
                 </div>
                 <div>
-                  Exportando os top <strong>{exportModalLimit ? Number(exportModalLimit).toLocaleString('pt-BR') : 'todos os'}</strong> leads
+                  Exportando os top <strong>{exportModalLimit ? Number(exportModalLimit).toLocaleString('pt-BR') : 'todos os 1.096.878'}</strong> leads
                   {exportModalValidSpWaOnly ? ' com WhatsApp celular válido' : ''}
                   {exportModalSpZones.length > 0 ? ` nas zonas (${exportModalSpZones.map(z => z.replace('_', ' ').toUpperCase()).join(', ')})` : ''}
                   {exportModalMacroRegion !== 'all' ? ` na região ${exportModalMacroRegion}` : ''}
                   {exportModalOnlySp && exportModalSpZones.length === 0 && exportModalMacroRegion === 'all' ? ' no Estado de SP' : ''}
-                  {exportModalSmartScore ? ' ordenados por maior probabilidade de leitura.' : '.'}
+                  {exportModalSmartScore && exportModalLimit ? ' ordenados por maior probabilidade de leitura.' : ' com entrega instantânea.'}
                 </div>
               </div>
 
@@ -4200,8 +4242,8 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   type="button"
                   onClick={() => {
                     exportConsolidatedExcel(
-                      exportModalSelectedBases.length > 0 ? exportModalSelectedBases : undefined,
-                      exportModalFormat,
+                      exportModalSelectedBases.length > 0 ? exportModalSelectedBases : [],
+                      (!exportModalLimit || parseInt(exportModalLimit) > 50000) ? 'csv' : exportModalFormat,
                       exportModalOnlySp,
                       {
                         limit: exportModalLimit,
@@ -4210,7 +4252,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                         spZones: exportModalSpZones,
                         validSpWaOnly: exportModalValidSpWaOnly,
                         addressOnly: exportModalType === 'address',
-                        estado: exportModalOnlySp ? 'SP' : (estadoFilter || 'SP'),
+                        estado: exportModalOnlySp ? 'SP' : (estadoFilter || ''),
                         cidade: exportModalCidade,
                         criteriaMode: exportModalCriteriaMode
                       }
@@ -4220,7 +4262,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
                   className="flex-1 lg:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Baixar Lista ({exportModalFormat.toUpperCase()})</span>
+                  <span>Baixar Lista ({(!exportModalLimit || parseInt(exportModalLimit) > 50000) ? 'CSV' : exportModalFormat.toUpperCase()})</span>
                 </button>
               </div>
             </div>

@@ -11,7 +11,8 @@ import {
   FileText, 
   LogOut, 
   ShieldCheck,
-  Users
+  Users,
+  BarChart3
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -21,12 +22,19 @@ import { MaterialDobradaTab } from './admin/MaterialDobradaTab';
 import { JogoTab } from './admin/JogoTab';
 import { ProtocolosTab } from './admin/ProtocolosTab';
 import { CentralLeadsTab } from './admin/CentralLeadsTab';
+import { ResultadosEleitoraisTab } from './admin/ResultadosEleitoraisTab';
 import { ErrorBoundary } from './ErrorBoundary';
 
-export type AdminTab = 'LEADS' | 'APOIO' | 'MATERIAL' | 'MATERIAL_DOBRADA' | 'JOGO' | 'PROTOCOLOS';
+export type AdminTab = 'LEADS' | 'RESULTADOS_ELEITORAIS' | 'APOIO' | 'MATERIAL' | 'MATERIAL_DOBRADA' | 'JOGO' | 'PROTOCOLOS';
 
 export const AdminDashboard: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('admin_authenticated') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<AdminTab>('LEADS');
@@ -37,10 +45,20 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (password === 'castrar2026') {
       setIsAuthenticated(true);
+      try {
+        sessionStorage.setItem('admin_authenticated', 'true');
+      } catch {}
       setError('');
     } else {
       setError('Senha incorreta. Verifique e tente novamente.');
     }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    try {
+      sessionStorage.removeItem('admin_authenticated');
+    } catch {}
   };
 
   const handleManualRefresh = async () => {
@@ -153,8 +171,16 @@ export const AdminDashboard: React.FC = () => {
       tagColor: 'bg-blue-100 text-blue-700'
     },
     {
+      id: 'RESULTADOS_ELEITORAIS' as AdminTab,
+      label: 'Resultados 2026',
+      subtitle: 'Urnas & Eficiência',
+      icon: BarChart3,
+      activeColor: 'bg-amber-600 text-white shadow-md shadow-amber-500/20',
+      tagColor: 'bg-amber-100 text-amber-800'
+    },
+    {
       id: 'APOIO' as AdminTab,
-      label: 'Apoio',
+      label: 'Apoio Capital',
       subtitle: 'Pop-up São Paulo',
       icon: HeartHandshake,
       activeColor: 'bg-[#FF5500] text-white shadow-md shadow-orange-500/20',
@@ -163,7 +189,7 @@ export const AdminDashboard: React.FC = () => {
     {
       id: 'MATERIAL' as AdminTab,
       label: 'Material Campanha',
-      subtitle: 'Material Oficial',
+      subtitle: 'Oficial Rafael',
       icon: Package,
       activeColor: 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20',
       tagColor: 'bg-indigo-100 text-indigo-700'
@@ -178,16 +204,16 @@ export const AdminDashboard: React.FC = () => {
     },
     {
       id: 'JOGO' as AdminTab,
-      label: 'Jogo',
-      subtitle: 'Missão Resgate',
+      label: 'Jogo Resgate',
+      subtitle: 'Missão Animal',
       icon: Gamepad2,
       activeColor: 'bg-sky-600 text-white shadow-md shadow-sky-500/20',
       tagColor: 'bg-sky-100 text-sky-700'
     },
     {
       id: 'PROTOCOLOS' as AdminTab,
-      label: 'Protocolos',
-      subtitle: 'PLs & Assinaturas',
+      label: 'Protocolos & PLs',
+      subtitle: 'Assinaturas',
       icon: FileText,
       activeColor: 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20',
       tagColor: 'bg-emerald-100 text-emerald-700'
@@ -234,6 +260,7 @@ export const AdminDashboard: React.FC = () => {
 
               <Link
                 to="/"
+                onClick={handleLogout}
                 className="flex-1 sm:flex-initial bg-gray-900 hover:bg-black active:bg-slate-800 text-white font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-xs transition-all cursor-pointer min-h-[40px]"
               >
                 <LogOut className="w-4 h-4" />
@@ -248,9 +275,9 @@ export const AdminDashboard: React.FC = () => {
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-6">
         
-        {/* Navegação de Abas - Ordem estrita: Apoio, Material Campanha, Material Dobrada, Jogo, Protocolos */}
-        <div className="bg-white p-2 rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xs">
-          <div className="flex overflow-x-auto gap-1.5 sm:gap-2 pb-1 sm:pb-0 scrollbar-none">
+        {/* Navegação de Abas Principal */}
+        <div className="bg-white p-2 sm:p-2.5 rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xs">
+          <div className="flex overflow-x-auto gap-2 pb-1 sm:pb-0 scrollbar-thin">
             {tabsConfig.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -258,7 +285,7 @@ export const AdminDashboard: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 min-w-[140px] sm:min-w-[170px] py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl transition-all cursor-pointer text-left flex items-center gap-2.5 sm:gap-3 ${
+                  className={`flex-shrink-0 py-2.5 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl transition-all cursor-pointer text-left flex items-center gap-2.5 sm:gap-3 ${
                     isActive
                       ? tab.activeColor
                       : 'bg-gray-50/80 hover:bg-gray-100 text-gray-600 hover:text-dark border border-gray-100'
@@ -269,11 +296,11 @@ export const AdminDashboard: React.FC = () => {
                   }`}>
                     <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs sm:text-sm font-black uppercase tracking-tight truncate leading-tight">
+                  <div className="whitespace-nowrap">
+                    <div className="text-xs sm:text-sm font-black uppercase tracking-tight leading-tight">
                       {tab.label}
                     </div>
-                    <div className={`text-[10px] sm:text-[11px] truncate font-medium ${
+                    <div className={`text-[10px] sm:text-[11px] font-medium leading-tight mt-0.5 ${
                       isActive ? 'text-white/80' : 'text-gray-400'
                     }`}>
                       {tab.subtitle}
@@ -290,6 +317,12 @@ export const AdminDashboard: React.FC = () => {
           {activeTab === 'LEADS' && (
             <ErrorBoundary fallbackTitle="Erro ao carregar a Central de Leads">
               <CentralLeadsTab refreshTrigger={refreshTrigger} />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === 'RESULTADOS_ELEITORAIS' && (
+            <ErrorBoundary fallbackTitle="Erro ao carregar Resultados Eleitorais">
+              <ResultadosEleitoraisTab refreshTrigger={refreshTrigger} />
             </ErrorBoundary>
           )}
 
