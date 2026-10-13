@@ -21,7 +21,6 @@ import { ColinhaEleitoral } from './components/ColinhaEleitoral';
 
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Navbar } from './components/Navbar';
-import { SupportPopup } from './components/SupportPopup';
 import { trackEvent, generateEventId, sendCAPIEvent } from './analytics';
 
 function ScrollToTop() {
@@ -120,12 +119,12 @@ function LandingPage() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className="mb-8 md:mb-10 lg:mb-16 xl:mb-20 inline-block"
+              className="mb-8 md:mb-10 lg:mb-12 xl:mb-14 w-full max-w-md lg:max-w-lg xl:max-w-xl"
             >
               <img 
-                src="https://lh3.googleusercontent.com/d/1T7IJ8z_2QvLKXA3nRsEt30B71oidsOQL" 
+                src="https://lh3.googleusercontent.com/d/1M6hf4eQkOkt7qiVd6RqR_akBOzSKs2Qd" 
                 alt="Logo Rafael Saraiva" 
-                className="h-44 sm:h-48 md:h-52 lg:h-[22rem] xl:h-[26rem] 2xl:h-[28rem] w-auto drop-shadow-xl"
+                className="w-full h-auto object-contain drop-shadow-xl"
                 referrerPolicy="no-referrer"
               />
             </motion.div>
@@ -157,19 +156,6 @@ function LandingPage() {
               className="flex flex-col gap-6 md:gap-8 w-full max-w-md lg:max-w-lg relative z-20"
             >
               
-              {/* Botão Material Campanha */}
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
-                <Link
-                  to="/material"
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="relative w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-black py-4 md:py-5 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all transform hover:-translate-y-1 shadow-xl border border-white/20 text-center"
-                >
-                  <div className="flex items-center gap-3 text-lg md:text-xl uppercase tracking-wider">
-                    <span>Quero receber o material de campanha!</span>
-                  </div>
-                </Link>
-              </div>
 
               {/* Botão Jogo */}
               <div className="relative group">
@@ -245,7 +231,6 @@ function App() {
     <BrowserRouter>
       <ScrollToTop />
       <CookieConsent />
-      <SupportPopup />
       <Navbar />
       <FloatingWhatsApp />
       <Routes>

@@ -543,7 +543,7 @@ export const ColinhaEleitoral: React.FC = () => {
           {/* ========================================================= */}
           <div
             ref={printableCardRef}
-            className="w-full bg-gradient-to-br from-[#121622] via-[#d45f2d] to-[#e5a42f] text-black rounded-2xl overflow-hidden border-2 border-black shadow-xl flex flex-col font-sans relative"
+            className="w-full bg-gradient-to-br from-[#0a152e] via-[#1d4ed8] to-[#2563eb] text-black rounded-2xl overflow-hidden border-2 border-black shadow-xl flex flex-col font-sans relative"
           >
             {/* Standard Campaign Texture igual à Home */}
             <div className="absolute inset-0 opacity-[0.06] pointer-events-none overflow-hidden mix-blend-overlay z-0">
@@ -557,7 +557,7 @@ export const ColinhaEleitoral: React.FC = () => {
 
             {/* Header da Cédula */}
             <div className="relative z-10 bg-black/90 backdrop-blur-xs text-white px-4 py-3 flex items-center justify-between border-b border-white/20">
-              <div className="flex items-center gap-1.5 text-[#e5a42f]">
+              <div className="flex items-center gap-1.5 text-[#38bdf8]">
                 <PawPrint className="w-5 h-5 fill-current -rotate-12" />
                 <PawPrint className="w-3.5 h-3.5 fill-current rotate-12 opacity-80" />
               </div>
@@ -568,7 +568,7 @@ export const ColinhaEleitoral: React.FC = () => {
                 </h2>
                 <PawPrint className="w-4 h-4 fill-white text-white rotate-12" />
               </div>
-              <div className="flex items-center gap-1.5 text-[#e5a42f]">
+              <div className="flex items-center gap-1.5 text-[#38bdf8]">
                 <PawPrint className="w-3.5 h-3.5 fill-current -rotate-12 opacity-80" />
                 <PawPrint className="w-5 h-5 fill-current rotate-12" />
               </div>
@@ -1037,7 +1037,7 @@ export const ColinhaEleitoral: React.FC = () => {
         {/* 1. EXPORT CARD FOR DOWNLOAD & SOCIAL SHARING (EXACT 4:5 ASPECT RATIO) */}
         <div
           ref={exportCardRef}
-          className="w-[640px] h-[800px] bg-gradient-to-br from-[#121622] via-[#d45f2d] to-[#e5a42f] text-black overflow-hidden font-sans flex flex-col justify-between relative p-6"
+          className="w-[640px] h-[800px] bg-gradient-to-br from-[#0a152e] via-[#1d4ed8] to-[#2563eb] text-black overflow-hidden font-sans flex flex-col justify-between relative p-6"
           style={{ width: '640px', height: '800px', boxSizing: 'border-box' }}
         >
           {/* Fundo de Campanha igual à Home do site */}
@@ -1267,7 +1267,7 @@ export const ColinhaEleitoral: React.FC = () => {
         {/* 2. STORIES TEMPLATE (EXATO 4:5 PARA CONSISTÊNCIA TOTAL) */}
         <div
           ref={storiesCardRef}
-          className="w-[640px] h-[800px] bg-gradient-to-br from-[#121622] via-[#d45f2d] to-[#e5a42f] text-black overflow-hidden font-sans flex flex-col justify-between relative p-6"
+          className="w-[640px] h-[800px] bg-gradient-to-br from-[#0a152e] via-[#1d4ed8] to-[#2563eb] text-black overflow-hidden font-sans flex flex-col justify-between relative p-6"
           style={{ width: '640px', height: '800px', boxSizing: 'border-box' }}
         >
           {/* Fundo de Campanha igual à Home do site */}

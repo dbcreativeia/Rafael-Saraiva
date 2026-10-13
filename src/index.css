@@ -6,13 +6,13 @@
   --font-display: "Teko", sans-serif;
   --font-impact: "Anton", sans-serif;
   
-  --color-primary: #e5a42f;
-  --color-secondary: #d45f2d;
-  --color-accent: #e5a42f;
-  --color-dark: #121622;
-  --color-brand-orange: #d45f2d;
+  --color-primary: #2563eb;
+  --color-secondary: #1d4ed8;
+  --color-accent: #38bdf8;
+  --color-dark: #0a152e;
+  --color-brand-orange: #2563eb;
   --color-paper: #ffffff;
-  --color-brand-red: #d45f2d;
+  --color-brand-red: #1e40af;
 }
 
 html, body {

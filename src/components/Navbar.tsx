@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Gamepad2, BookOpen, Instagram, Facebook, Target, Package, ChevronDown } from 'lucide-react';
+import { Menu, X, Gamepad2, BookOpen, Instagram, Facebook, Target, ChevronDown } from 'lucide-react';
 import { trackEvent } from '../analytics';
 
 export function Navbar() {
@@ -34,7 +34,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-24 md:h-28 gap-4">
           <Link to="/" onClick={closeMenu} className="flex-shrink-0">
             <img 
-              src="https://lh3.googleusercontent.com/d/1edT-5JjmJI26Erh73KvuH2BXtnYm1lD5" 
+              src="https://lh3.googleusercontent.com/d/1M6hf4eQkOkt7qiVd6RqR_akBOzSKs2Qd" 
               alt="Rafael Saraiva" 
               className="h-10 md:h-12 w-auto object-contain drop-shadow-md"
               referrerPolicy="no-referrer"
@@ -43,9 +43,6 @@ export function Navbar() {
           
           <div className="hidden lg:block overflow-visible">
             <div className="flex items-center space-x-1 lg:space-x-3 xl:space-x-5">
-              <Link to="/material" className="whitespace-nowrap text-white/90 hover:text-white px-2 xl:px-3 py-2 rounded-md text-[11px] xl:text-sm font-bold uppercase tracking-wider flex items-center gap-1 xl:gap-2 transition-colors">
-                <Package className="w-4 h-4" /> Material de Campanha
-              </Link>
               
               <div className="relative group">
                 <Link to="/#mandato" className="whitespace-nowrap text-white/90 group-hover:text-white px-2 xl:px-3 py-2 rounded-md text-[11px] xl:text-sm font-bold uppercase tracking-wider flex items-center gap-1 xl:gap-2 transition-colors">
@@ -110,9 +107,6 @@ export function Navbar() {
       {isOpen && (
         <div className="lg:hidden absolute top-24 md:top-28 left-0 w-full max-h-[calc(100vh-6rem)] overflow-y-auto bg-dark/95 backdrop-blur-md shadow-xl border-b border-white/10">
           <div className="px-4 pt-2 pb-6 flex flex-col space-y-2">
-            <Link to="/material" onClick={closeMenu} className="text-white hover:bg-white/10 block px-4 py-3 rounded-md text-base font-bold uppercase tracking-wider flex items-center gap-3">
-              <Package className="w-5 h-5" /> Material de Campanha
-            </Link>
             
             <Link to="/#mandato" onClick={closeMenu} className="text-white hover:bg-white/10 block px-4 py-3 rounded-md text-base font-bold uppercase tracking-wider flex items-center gap-3">
               <Target className="w-5 h-5" /> O Mandato

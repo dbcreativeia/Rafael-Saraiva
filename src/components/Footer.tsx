@@ -22,24 +22,13 @@ export const Footer: React.FC = () => {
     <footer className="bg-dark text-white py-12 border-t border-white/10 relative z-20">
       <div className="container mx-auto px-6 max-w-7xl flex flex-col md:flex-row items-center justify-between gap-12 md:gap-8">
         
-        <div className="flex flex-col items-center md:items-start gap-6 order-2 md:order-1 max-w-sm text-center md:text-left">
-          <img 
-            src="https://lh3.googleusercontent.com/d/1zDGUKo-qyJF4gNW-oT7vJtATZ-zaw4aO" 
-            alt="Logo" 
-            className="h-16 md:h-20 w-auto object-contain"
-            referrerPolicy="no-referrer"
-          />
-          <div className="flex flex-col items-center md:items-start gap-3">
-            <p className="text-white/60 text-sm font-medium">
-              &copy; 2026 Deputado Rafael Saraiva
-            </p>
-            <p className="text-white/40 text-[10px] uppercase tracking-wider leading-relaxed">
-              PROPAGANDA ELEITORAL - CNPJ DO CANDIDATO: Eleicao 2026 Rafael Saraiva Gaia Deputado Estadual 68.283.115/0001-74
-            </p>
-            <Link to="/politica-de-privacidade" className="text-white/60 hover:text-white transition-colors text-sm font-medium mt-1">
-              Política de Privacidade
-            </Link>
-          </div>
+        <div className="flex flex-col items-center md:items-start gap-3 order-2 md:order-1 max-w-sm text-center md:text-left">
+          <p className="text-white/60 text-sm font-medium">
+            &copy; 2026 Deputado Rafael Saraiva
+          </p>
+          <Link to="/politica-de-privacidade" className="text-white/60 hover:text-white transition-colors text-sm font-medium">
+            Política de Privacidade
+          </Link>
         </div>
 
         <div className="flex flex-col items-center md:items-end gap-6 order-1 md:order-2 w-full md:w-auto">
