@@ -13,6 +13,7 @@ import {
   normalizeKey,
   isValidFullNameForMatching
 } from "./leadsConsolidation.js";
+import { GoogleGenAI } from "@google/genai";
 
 const PIXEL_ID = "909578061696893";
 
@@ -432,6 +433,548 @@ async function startServer() {
       return res.json({ success: true, message: "Base causa_animal_SP_2026_v2 removida do servidor com sucesso." });
     } catch (err: any) {
       return res.status(500).json({ error: "Erro ao limpar base causa animal: " + err.message });
+    }
+  });
+
+  // IA Eleitoral: Varrer dados e responder perguntas analíticas
+  app.post('/api/causa-animal/ai-query', async (req, res) => {
+    try {
+      const { question, contextData, conversationHistory } = req.body;
+      if (!question || typeof question !== 'string' || !question.trim()) {
+        return res.status(400).json({ error: "Pergunta não fornecida." });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Chave GEMINI_API_KEY não configurada no servidor." });
+      }
+
+      const ai = new GoogleGenAI({});
+
+      // Funções auxiliares para extração robusta e normalizada dos dados geográficos do TSE
+      function extractLocalDetails(loc: any) {
+        if (!loc || typeof loc !== 'object') return null;
+
+        const nomeEscola = loc.escola_local_de_votacao || loc.nome || loc.local || loc.escola || loc.escola_local || 'Local de Votação';
+        const endereco = loc.endereco || loc.endereco_do_local || loc.rua || loc.logradouro || 'Endereço cadastrado na Capital';
+
+        let bairro = loc.bairro_do_local || loc.bairro || loc.bairro_cadastrado_do_local || loc.nome_do_bairro;
+        if (!bairro || String(bairro) === 'undefined' || String(bairro) === 'Capital') {
+          bairro = 'Capital de São Paulo';
+        }
+
+        let zona = 'Zona Eleitoral da Capital';
+        if (loc.nome_da_zona && String(loc.nome_da_zona) !== 'undefined') {
+          zona = String(loc.nome_da_zona);
+        } else if (loc.nome_da_zona_regiao && String(loc.nome_da_zona_regiao) !== 'undefined') {
+          zona = String(loc.nome_da_zona_regiao);
+        } else if (loc.zona_eleitoral && String(loc.zona_eleitoral) !== 'undefined') {
+          zona = `Zona ${loc.zona_eleitoral}`;
+        } else if (loc.zona && String(loc.zona) !== 'undefined') {
+          zona = `Zona ${loc.zona}`;
+        }
+
+        const codigo = loc.codigo_do_local || loc.codigo_tse || loc.numero_local || loc.local_id || loc.codigo || '-';
+        const secoes = loc.secoes_cadastradas ?? loc.secoes ?? loc.total_secoes ?? loc.locais_de_votacao ?? '-';
+        const eleitores = loc.eleitores_aptos ?? loc.eleitorado_apto ?? loc.total_eleitores ?? 0;
+
+        let rafaelVotos = loc.rafael_votos ?? loc.votos_rafael;
+        if (rafaelVotos === undefined && loc.cargos) {
+          const est = loc.cargos.deputado_estadual || loc.cargos.estadual;
+          if (est) {
+            if (typeof est.total_rafael === 'number') rafaelVotos = est.total_rafael;
+            else if (Array.isArray(est.votos_candidatos) && est.votos_candidatos.length > 0) rafaelVotos = est.votos_candidatos[0];
+          }
+        }
+
+        let ninaVotos = loc.nina_votos ?? loc.votos_nina;
+        if (ninaVotos === undefined && loc.cargos) {
+          const fed = loc.cargos.deputado_federal || loc.cargos.federal;
+          if (fed) {
+            if (typeof fed.total_nina === 'number') ninaVotos = fed.total_nina;
+            else if (Array.isArray(fed.votos_candidatos) && fed.votos_candidatos.length > 5) ninaVotos = fed.votos_candidatos[5];
+          }
+        }
+
+        return {
+          nomeEscola,
+          endereco,
+          bairro,
+          zona,
+          codigo,
+          secoes,
+          eleitores,
+          rafaelVotos: (rafaelVotos !== undefined && rafaelVotos !== null) ? Number(rafaelVotos) : null,
+          ninaVotos: (ninaVotos !== undefined && ninaVotos !== null) ? Number(ninaVotos) : null
+        };
+      }
+
+      function extractBairroDetails(b: any) {
+        if (!b || typeof b !== 'object') return null;
+        const nomeBairro = b.bairro_do_local || b.bairro || b.bairro_cadastrado_do_local || 'Bairro na Capital';
+        const locais = b.locais_de_votacao ?? b.locais ?? '-';
+        const secoes = b.secoes_cadastradas ?? b.secoes ?? '-';
+        let rafaelVotos = b.rafael_votos ?? b.votos_rafael;
+        if (rafaelVotos === undefined && b.cargos) {
+          const est = b.cargos.deputado_estadual || b.cargos.estadual;
+          if (est && Array.isArray(est.votos_candidatos)) rafaelVotos = est.votos_candidatos[0];
+        }
+        return { nomeBairro, locais, secoes, rafaelVotos: rafaelVotos !== undefined ? Number(rafaelVotos) : null };
+      }
+
+      function extractZonaDetails(z: any) {
+        if (!z || typeof z !== 'object') return null;
+        let nomeZona = 'Zona Eleitoral';
+        if (z.nome_da_zona && String(z.nome_da_zona) !== 'undefined') nomeZona = String(z.nome_da_zona);
+        else if (z.nome_da_zona_regiao && String(z.nome_da_zona_regiao) !== 'undefined') nomeZona = String(z.nome_da_zona_regiao);
+        else if (z.zona_eleitoral && String(z.zona_eleitoral) !== 'undefined') nomeZona = `Zona ${z.zona_eleitoral}`;
+        else if (z.zona && String(z.zona) !== 'undefined') nomeZona = `Zona ${z.zona}`;
+
+        const locais = z.locais_de_votacao ?? z.locais ?? '-';
+        const secoes = z.secoes_cadastradas ?? z.secoes ?? '-';
+        let rafaelVotos = z.rafael_votos ?? z.votos_rafael;
+        if (rafaelVotos === undefined && z.cargos) {
+          const est = z.cargos.deputado_estadual || z.cargos.estadual;
+          if (est && Array.isArray(est.votos_candidatos)) rafaelVotos = est.votos_candidatos[0];
+        }
+        return { nomeZona, locais, secoes, rafaelVotos: rafaelVotos !== undefined ? Number(rafaelVotos) : null };
+      }
+
+      // Normalizacao e busca inteligente com tolerancia a erros de digitacao (Levenshtein)
+      const normalizeTextServer = (s: any) =>
+        String(s || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[^\w\s]/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const queryNormalized = normalizeTextServer(question);
+
+      function levenshteinServer(a: string, b: string): number {
+        if (a === b) return 0;
+        if (!a.length) return b.length;
+        if (!b.length) return a.length;
+        const matrix: number[][] = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+          for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
+            else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+          }
+        }
+        return matrix[b.length][a.length];
+      }
+
+      function scoreLocationMatchServer(loc: any, query: string): number {
+        if (!query) return 100;
+        const normQuery = normalizeTextServer(query);
+        if (!normQuery) return 100;
+
+        const schoolName = normalizeTextServer(loc.escola_local_de_votacao || loc.nome || loc.local || loc.escola || loc.nome_local || loc.denominacao || '');
+        const end = normalizeTextServer(loc.endereco || loc.endereco_do_local || loc.logradouro || loc.rua || '');
+        const bairro = normalizeTextServer(loc.bairro_do_local || loc.bairro || loc.bairro_cadastrado_do_local || '');
+        const zona = normalizeTextServer(loc.nome_da_zona || loc.zona_eleitoral || loc.zona || '');
+        const codigo = normalizeTextServer(loc.codigo_do_local || loc.codigo_tse || loc.codigo || '');
+
+        const combinedText = `${schoolName} ${end} ${bairro} ${zona} ${codigo}`.trim();
+        if (!combinedText) return 0;
+
+        let score = 0;
+        if (schoolName && schoolName.includes(normQuery)) {
+          score += 3000 + normQuery.length * 10;
+        } else if (combinedText.includes(normQuery)) {
+          score += 800 + normQuery.length * 5;
+        }
+
+        const queryTokens = normQuery.split(/\s+/).filter(Boolean);
+        const questionFillers = new Set([
+          'qual', 'quais', 'onde', 'votos', 'votacao', 'tem', 'para', 'com', 'que', 'quem',
+          'sob', 'sobre', 'me', 'fale', 'diz', 'mostrar', 'sao', 'paulo', 'sp', 'como',
+          'quantos', 'quanto', 'ficam', 'fica', 'teve', 'pontuou', 'obteve', 'resultados',
+          'resultado', 'informacao', 'informacoes', 'dados'
+        ]);
+        let activeTokens = queryTokens.filter(t => !questionFillers.has(t));
+        if (activeTokens.length === 0) activeTokens = queryTokens;
+
+        const queryNumbers = activeTokens.filter(t => /^\d+$/.test(t));
+        const textTokens = activeTokens.filter(t => !/^\d+$/.test(t));
+
+        // Matching street numbers (e.g., "293" in address "Rua Maria Cândida, 293")
+        if (queryNumbers.length > 0) {
+          let numMatches = 0;
+          for (const num of queryNumbers) {
+            const numRegex = new RegExp(`(?:^|\\D)${num}(?:\\D|$)`);
+            if (numRegex.test(combinedText)) {
+              numMatches++;
+              score += 500;
+            }
+          }
+          if (numMatches === 0 && textTokens.length === 0) {
+            return 0;
+          }
+        }
+
+        // Generic descriptor & title words
+        const genericWords = new Set([
+          'escola', 'escolas', 'esc', 'colegio', 'colegios', 'coleg', 'col',
+          'ee', 'emef', 'emei', 'cei', 'ceu', 'etec', 'fatec', 'senai', 'senac', 'ciep',
+          'unidade', 'local', 'votacao', 'predio', 'bloco', 'educacional', 'instituto', 'centro',
+          'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'no', 'na', 'nos', 'nas', 'com', 'por', 'para',
+          'rua', 'r', 'avenida', 'av', 'praca', 'prc', 'pza', 'pc', 'alameda', 'al',
+          'rodovia', 'rod', 'estrada', 'est', 'bairro', 'zona', 'secao', 'distrito', 'municipio', 'cidade',
+          'padre', 'pe', 'p', 'prof', 'professor', 'professora', 'profa',
+          'dr', 'dra', 'doutor', 'doutora', 'santo', 'santa', 'sto', 'sta', 'st', 'sao',
+          'dom', 'dona', 'presidente', 'pres', 'marechal', 'general', 'brigadeiro', 'almirante',
+          'coronel', 'major', 'capitao', 'tenente', 'sargento', 'vereador', 'deputado', 'governador',
+          'prefeito', 'ministro', 'pastor', 'bispo', 'irma', 'irmao', 'maestro', 'maestra', 'governo'
+        ]);
+
+        const properTokens = textTokens.filter(t => !genericWords.has(t));
+        const descriptorTokens = textTokens.filter(t => genericWords.has(t));
+
+        const serverSynonyms: Record<string, string[]> = {
+          'padre': ['pe', 'p'],
+          'pe': ['padre', 'p'],
+          'p': ['padre', 'pe'],
+          'professora': ['profa', 'prof', 'p'],
+          'professor': ['prof', 'professora', 'p'],
+          'prof': ['professor', 'professora', 'profa'],
+          'profa': ['professora', 'prof'],
+          'doutor': ['dr'],
+          'doutora': ['dra'],
+          'dr': ['doutor'],
+          'dra': ['doutora'],
+          'santo': ['sto', 'st'],
+          'santa': ['sta', 'st'],
+          'sto': ['santo', 'st'],
+          'sta': ['santa', 'st'],
+          'st': ['santo', 'santa', 'sto', 'sta'],
+          'sao': ['st', 'sto'],
+          'colegio': ['col', 'escola', 'colegio'],
+          'col': ['colegio'],
+          'escola': ['ee', 'emef', 'emei', 'cei', 'ceu', 'colegio', 'escola', 'esc'],
+          'ee': ['escola', 'estadual', 'estaduais'],
+          'emef': ['escola', 'municipal'],
+          'emei': ['escola', 'infantil'],
+          'cei': ['escola', 'creche', 'infantil'],
+          'rua': ['r'],
+          'r': ['rua'],
+          'avenida': ['av'],
+          'av': ['avenida']
+        };
+
+        function checkTokInStr(qTok: string, targetStr: string): number {
+          if (!targetStr) return 0;
+          const tokens = targetStr.split(/\s+/).filter(Boolean);
+          let maxS = 0;
+          for (const tTok of tokens) {
+            let s = 0;
+            if (tTok === qTok) s = 100;
+            else if (serverSynonyms[qTok]?.includes(tTok) || serverSynonyms[tTok]?.includes(qTok)) s = 90;
+            else if (qTok.length >= 3 && tTok.startsWith(qTok)) s = 85;
+            else if (qTok.length >= 4 && tTok.includes(qTok)) s = 70;
+            else if (qTok.length >= 4 && /^[a-z]+$/.test(qTok) && /^[a-z]+$/.test(tTok)) {
+              const maxDist = qTok.length >= 7 ? 2 : 1;
+              if (Math.abs(tTok.length - qTok.length) <= maxDist) {
+                const dist = levenshteinServer(qTok, tTok);
+                if (dist <= maxDist) s = 80 - dist * 15;
+              }
+            }
+            if (s > maxS) maxS = s;
+          }
+          return maxS;
+        }
+
+        if (properTokens.length > 0) {
+          let matchedProper = 0;
+          for (const pTok of properTokens) {
+            const inSchool = checkTokInStr(pTok, schoolName);
+            const inEnd = checkTokInStr(pTok, `${end} ${bairro}`);
+            const inTert = checkTokInStr(pTok, `${zona} ${codigo}`);
+
+            if (inSchool > 0) {
+              matchedProper++;
+              score += inSchool + 1500;
+            } else if (inEnd > 0) {
+              matchedProper++;
+              score += inEnd + 300;
+            } else if (inTert > 0) {
+              matchedProper++;
+              score += inTert + 100;
+            }
+          }
+          if (matchedProper === 0) return 0;
+          if (matchedProper === properTokens.length) score += 400;
+        }
+
+        if (descriptorTokens.length > 0) {
+          let matchedDesc = 0;
+          for (const dTok of descriptorTokens) {
+            const inSchool = checkTokInStr(dTok, schoolName);
+            const inEnd = checkTokInStr(dTok, `${end} ${bairro}`);
+            const inTert = checkTokInStr(dTok, `${zona} ${codigo}`);
+
+            if (inSchool > 0) {
+              matchedDesc++;
+              score += inSchool + 400;
+            } else if (inEnd > 0) {
+              matchedDesc++;
+              score += inEnd + 80;
+            } else if (inTert > 0) {
+              matchedDesc++;
+              score += inTert + 20;
+            }
+          }
+          if (properTokens.length === 0 && matchedDesc === 0) return 0;
+        }
+
+        return Math.max(0, score);
+      }
+
+      let matchedLocais: any[] = Array.isArray(contextData?.matchedLocais) ? contextData.matchedLocais : [];
+      let matchedBairros: any[] = Array.isArray(contextData?.matchedBairros) ? contextData.matchedBairros : [];
+      let matchedZonas: any[] = Array.isArray(contextData?.matchedZonas) ? contextData.matchedZonas : [];
+
+      if (matchedLocais.length === 0 && causaAnimalBases.locais && Array.isArray(causaAnimalBases.locais) && causaAnimalBases.locais.length > 0) {
+        const scoredLocais = causaAnimalBases.locais
+          .map((loc: any) => ({ loc, score: scoreLocationMatchServer(loc, question) }))
+          .filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        matchedLocais = scoredLocais.slice(0, 15).map(s => s.loc);
+      }
+
+      if (matchedBairros.length === 0 && causaAnimalBases.bairros && Array.isArray(causaAnimalBases.bairros) && causaAnimalBases.bairros.length > 0) {
+        const scoredBairros = causaAnimalBases.bairros
+          .map((bai: any) => {
+            const bName = normalizeTextServer(bai.bairro_do_local || bai.bairro || bai.bairro_cadastrado_do_local || '');
+            let score = 0;
+            if (bName && queryNormalized.includes(bName)) score = 500;
+            else {
+              const queryTokens = queryNormalized.split(/\s+/).filter(t => t.length >= 3);
+              for (const tok of queryTokens) {
+                if (bName.includes(tok)) score += 100;
+                else if (tok.length >= 4 && bName.length >= 4) {
+                  const dist = levenshteinServer(tok, bName);
+                  if (dist <= (tok.length >= 7 ? 2 : 1)) score += 80;
+                }
+              }
+            }
+            return { bai, score };
+          })
+          .filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        matchedBairros = scoredBairros.slice(0, 10).map(s => s.bai);
+      }
+
+      if (matchedZonas.length === 0 && causaAnimalBases.zonas && Array.isArray(causaAnimalBases.zonas) && causaAnimalBases.zonas.length > 0) {
+        const scoredZonas = causaAnimalBases.zonas
+          .map((zon: any) => {
+            const zName = normalizeTextServer(`${zon.nome_da_zona || zon.nome_da_zona_regiao || zon.zona_eleitoral || zon.zona || ''}`);
+            let score = 0;
+            if (zName && queryNormalized.includes(zName)) score = 500;
+            else {
+              const queryTokens = queryNormalized.split(/\s+/).filter(t => t.length >= 2);
+              for (const tok of queryTokens) {
+                if (zName.includes(tok)) score += 100;
+              }
+            }
+            return { zon, score };
+          })
+          .filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        matchedZonas = scoredZonas.slice(0, 10).map(s => s.zon);
+      }
+
+      // Contexto factual e infraestrutura de dados disponível
+      let contextText = `=== DADOS OFICIAIS CONSOLIDADOS E BASE GEOGRÁFICA (ELEIÇÕES SP - TSE) ===\n`;
+      contextText += `MAPEAMENTO GEOGRÁFICO INTEGRAL EM NÍVEL DE RUA, ESCOLA E ZONA ELEITORAL:\n`;
+      contextText += `- Total de Municípios no Estado: 645\n`;
+      contextText += `- Total de Colégios Eleitorais / Escolas de Votação Cadastrados na Capital: 2.057 com nome oficial da escola, endereço completo com rua e número, bairro, CEP, zona eleitoral, seções e votos.\n`;
+      contextText += `- Total de Bairros Mapeados na Capital: 899\n`;
+      contextText += `- Total de Zonas Eleitorais na Capital: 58\n`;
+      contextText += `- Total de Seções Eleitorais na Capital: 26.683\n`;
+      contextText += `- CRM e Mobilização Territorial: Base de apoiadores com georreferenciamento de rua, bairro, CEP e cidade.\n\n`;
+
+      if (matchedLocais.length > 0) {
+        contextText += `=== COLÉGIOS ELEITORAIS E ESCOLAS LOCALIZADOS PARA A CONSULTA DO USUÁRIO (${matchedLocais.length} escolas/locais) ===\n`;
+        matchedLocais.forEach((rawLoc: any, idx: number) => {
+          const loc = extractLocalDetails(rawLoc);
+          if (!loc) return;
+          contextText += `${idx + 1}. **${loc.nomeEscola}**${loc.codigo !== '-' ? ` (Código TSE: ${loc.codigo})` : ''}\n`;
+          contextText += `   - Endereço / Rua: ${loc.endereco}\n`;
+          contextText += `   - Bairro: ${loc.bairro}\n`;
+          contextText += `   - Zona Eleitoral: ${loc.zona}\n`;
+          contextText += `   - Seções Cadastradas: ${loc.secoes}\n`;
+          if (loc.eleitores > 0) {
+            contextText += `   - Eleitores Aptos: ${loc.eleitores.toLocaleString('pt-BR')}\n`;
+          }
+          if (loc.rafaelVotos !== null && !isNaN(loc.rafaelVotos)) {
+            contextText += `   - Votos de Rafael Saraiva (44077): ${loc.rafaelVotos.toLocaleString('pt-BR')} votos\n`;
+          }
+          if (loc.ninaVotos !== null && !isNaN(loc.ninaVotos)) {
+            contextText += `   - Votos de Nina Passadore (4407): ${loc.ninaVotos.toLocaleString('pt-BR')} votos\n`;
+          }
+        });
+        contextText += `\n`;
+      }
+
+      if (matchedBairros.length > 0) {
+        contextText += `=== BAIRROS LOCALIZADOS PARA A CONSULTA (${matchedBairros.length} bairros) ===\n`;
+        matchedBairros.forEach((rawB: any, idx: number) => {
+          const b = extractBairroDetails(rawB);
+          if (!b) return;
+          contextText += `${idx + 1}. **${b.nomeBairro}** | Colégios Eleitorais: ${b.locais} | Seções: ${b.secoes}`;
+          if (b.rafaelVotos !== null && !isNaN(b.rafaelVotos)) contextText += ` | Votos Rafael (44077): ${b.rafaelVotos.toLocaleString('pt-BR')}`;
+          contextText += `\n`;
+        });
+        contextText += `\n`;
+      }
+
+      if (matchedZonas.length > 0) {
+        contextText += `=== ZONAS ELEITORAIS LOCALIZADAS PARA A CONSULTA (${matchedZonas.length} zonas) ===\n`;
+        matchedZonas.forEach((rawZ: any, idx: number) => {
+          const z = extractZonaDetails(rawZ);
+          if (!z) return;
+          contextText += `${idx + 1}. **${z.nomeZona}** | Escolas/Locais: ${z.locais} | Seções: ${z.secoes}`;
+          if (z.rafaelVotos !== null && !isNaN(z.rafaelVotos)) contextText += ` | Votos Rafael (44077): ${z.rafaelVotos.toLocaleString('pt-BR')}`;
+          contextText += `\n`;
+        });
+        contextText += `\n`;
+      }
+
+      contextText += `PRINCIPAIS CANDIDATOS DA BANDEIRA ANIMAL E MONITORADOS:\n`;
+      contextText += `- Rafael Saraiva (UNIÃO - 44077): 105.174 votos válidos no Estado de SP (pontuou em 630 dos 645 municípios); 32.407 votos na Capital em 16.878 seções eleitorais e 2.057 locais de votação; 72.767 votos no Interior/Litoral/Grande SP. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Delegado Bruno Lima (PODE - 2011 - Federal): 217.814 votos no Estado nos 630 municípios de Rafael (1º lugar em Atuação Animal no Estado); 49.609 votos na Capital nas 16.878 urnas de Rafael. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Felipe Becari (PODE - 2007 - Federal): 162.852 votos no Estado nos municípios de Rafael; 42.053 votos na Capital nas urnas de Rafael. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Bruno Ganem (PODE - 2010 - Federal): 64.181 votos no Estado nos municípios de Rafael (forte no Interior: RMC/Indaiatuba/Campinas); 11.325 votos na Capital. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Richard Selvagem (MDB - 1526 - Federal): 50.936 votos no Estado nos municípios de Rafael; 8.768 votos na Capital. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Nina Passadore (UNIÃO - 4407 - Federal - Mesma dobrada de partido de Rafael): 26.288 votos no Estado nos municípios de Rafael; 6.564 votos na Capital. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Dra. Ana Veterinária (PSD - 5505 - Federal): 8.330 votos no Estado nos municípios de Rafael. Critério: Atuação/campanha animal documentada.\n`;
+      contextText += `- Dr. Edson da Paiol (PODE - 20007 - Estadual): Grande adversário eleitoral na capital e interior. Votos equivalentes com Felipe Becari em 20 municípios e em 5.635 seções da Capital.\n`;
+      contextText += `- Professora Luciene Cavalcante (PSOL - 5089 - Federal): 253.457 votos no Estado nos municípios de Rafael; 53.542 votos na Capital nas urnas de Rafael. Critério: Adesão pública à Pauta Animalista 2026 (não confunda com atuação animal documentada; é deputada de bancada com grande votação partidária geral).\n`;
+      contextText += `- Alencar Santana (PT - 1358 - Federal): 160.150 votos no Estado nos municípios de Rafael. Critério: Adesão pública à Pauta Animalista 2026.\n`;
+      contextText += `- Edinho Silva (PT - 1316 - Federal): 115.261 votos no Estado nos municípios de Rafael. Critério: Adesão pública à Pauta Animalista 2026.\n`;
+      contextText += `- Nilto Tatto (PT - 1353 - Federal): 114.029 votos no Estado nos municípios de Rafael; 32.089 votos na Capital. Critério: Adesão pública à Pauta Animalista 2026.\n`;
+      contextText += `- Rodrigo Gambale (PODE - 2077 - Federal): 106.652 votos no Estado nos municípios de Rafael. Critério: Adesão pública à Pauta Animalista 2026.\n`;
+      contextText += `- Nabil Bonduki (PT - 1373 - Federal): 46.065 votos no Estado nos municípios de Rafael; 22.713 na Capital. Critério: Adesão pública à Pauta Animalista 2026.\n\n`;
+
+      if (contextData) {
+        contextText += `=== CONTEXTO DINÂMICO ENVIADO PELO USUÁRIO ===\n`;
+        if (contextData.currentEstadualCand) {
+          contextText += `Candidato Estadual em foco: ${contextData.currentEstadualCand.nome} (${contextData.currentEstadualCand.numero} - ${contextData.currentEstadualCand.partido})\n`;
+        }
+        if (contextData.totalEstadualVotosEstado) {
+          contextText += `Total votos no Estado: ${contextData.totalEstadualVotosEstado.toLocaleString('pt-BR')} em ${contextData.munCountWithEstadual || 630} municípios.\n`;
+        }
+        if (contextData.totalEstadualVotosCapital) {
+          contextText += `Total votos na Capital: ${contextData.totalEstadualVotosCapital.toLocaleString('pt-BR')} em ${contextData.secoesCountWithEstadual || 16878} seções.\n`;
+        }
+        if (contextData.topFederaisEstado && Array.isArray(contextData.topFederaisEstado)) {
+          contextText += `Ranking Top Federais no Estado (nas cidades do candidato):\n`;
+          contextData.topFederaisEstado.slice(0, 10).forEach((t: any, i: number) => {
+            contextText += `  ${i+1}º ${t.nome} (${t.partido} - ${t.numero}): ${Number(t.votos).toLocaleString('pt-BR')} votos [${t.criterio}]\n`;
+          });
+        }
+        if (contextData.topFederaisCapital && Array.isArray(contextData.topFederaisCapital)) {
+          contextText += `Ranking Top Federais na Capital (nas urnas do candidato):\n`;
+          contextData.topFederaisCapital.slice(0, 10).forEach((t: any, i: number) => {
+            contextText += `  ${i+1}º ${t.nome} (${t.partido} - ${t.numero}): ${Number(t.votos).toLocaleString('pt-BR')} votos [${t.criterio}]\n`;
+          });
+        }
+        if (contextData.extraNotes) {
+          contextText += `Notas territoriais: ${contextData.extraNotes}\n`;
+        }
+      }
+
+      const systemInstruction = `Você é o Analista Eleitoral Especialista em Inteligência Geográfica das Eleições Gerais de SP (Foco: Causa Animal, Rafael Saraiva e Candidaturas Monitoradas).
+Seu papel é responder dúvidas de estrategistas de campanha e coordenadores políticos de forma direta, analítica, fundamentada, inteligente e proativa.
+
+IMPORTANTE - CAPACIDADES GEOGRÁFICAS E INFRAESTRUTURA DE DADOS COMPLETA DA CAPITAL DE SP:
+O sistema POSSUI SIM o mapeamento oficial completo dos 2.057 Colégios Eleitorais / Escolas de Votação da Capital de SP, com o nome oficial da escola, o endereço de rua completo, o bairro, o CEP, a zona eleitoral, as seções e a votação de cada candidato.
+Também possui o cadastro oficial de 899 Bairros, 58 Zonas Eleitorais e 26.683 Seções Eleitorais na Capital de São Paulo, além do mapa de mobilização e apoiadores por rua/CEP no CRM.
+
+REGRA DE BUSCA PROATIVA DE COLÉGIOS E ENDEREÇOS (CRÍTICA):
+1. SE O USUÁRIO PERGUNTAR POR UM COLÉGIO, ESCOLA, RUA OU BAIRRO (ex: "Colégio Batalha", "Escola Anchieta", "Padre Anchieta", "Rua Maria Cândida"):
+   - JAMAIS responda de forma seca dizendo "não localizamos um registro com este nome exato".
+   - Apresente PROATIVAMENTE todos os colégios e locais de votação trazidos na lista do contexto que contêm ou se aproximam do termo buscado (mesmo com variações de grafia, abreviações, siglas ou sufixos como "COL. BATALHA", "COLEGIO BATALHA - UNIDADE II", "EE BATALHA").
+   - Para CADA local/colégio correspondente, exiba os dados completos:
+     * **Nome da Escola/Colégio**
+     * **Endereço Completo de Rua**
+     * **Bairro e Zona Eleitoral**
+     * **Número de Seções e Eleitores Aptos**
+     * **Votação dos Candidatos (Rafael Saraiva, Nina Passadore, etc.)**
+   - Se houver 2 ou mais unidades ou escolas encontradas, apresente os resultados de todas elas de forma organizada (em tópicos ou tabela comparativa) e pergunte amigavelmente de forma proativa sobre qual unidade ou região específica o usuário deseja detalhar ou comparar mais a fundo!
+
+REGRAS DE OURO DA ANÁLISE ELEITORAL:
+1. SIGILO CONSTITUCIONAL DO VOTO (Art. 14 da CF/88):
+   - A urna eletrônica brasileira é 100% sigilosa. O TSE NÃO armazena o voto individual cruzado entre federal e estadual.
+   - NUNCA diga que o eleitor de Rafael votou em X ou Y.
+   - DIGA SEMPRE: "Nos mesmos colégios eleitorais / urnas da Capital ou municípios do Estado onde Rafael Saraiva obteve votos, os federais mais votados foram...". É uma métrica de co-ocorrência geográfica e preferência territorial.
+2. POR QUE A SOMA SUPERA OS VOTOS DE RAFAEL:
+   - Em cada urna votam de 300 a 400 eleitores, e em cada cidade votam dezenas de milhares. Quando somamos os votos de um deputado federal em todas as 16.878 urnas ou 630 municípios de Rafael, contabilizamos TODOS os eleitores dessas urnas/cidades, e não só quem votou em Rafael.
+3. CRITÉRIOS DE INCLUSÃO (DISTINÇÃO OBRIGATÓRIA):
+   - 'Atuação/Campanha Animal Documentada': Candidatos com mandato e histórico focado na causa (Delegado Bruno Lima, Felipe Becari, Bruno Ganem, Richard Selvagem, Nina Passadore, Dra. Ana Veterinária).
+   - 'Adesão Pública à Pauta Animalista 2026': Deputados de bancadas partidárias amplas (PSOL, PT) que assinaram termo formal de apoio (Profa. Luciene Cavalcante, Alencar Santana, Nilto Tatto, Edinho Silva). Esses nomes têm alta votação partidária geral.
+4. ESTILO DA RESPOSTA:
+   - Responda em português brasileiro culto, claro, proativo e acolhedor.
+   - Destaque números, escolas, endereços de rua, bairros, zonas e nomes em **negrito**.
+   - Use tópicos com marcadores e pequenas tabelas comparativas quando ajudar a clareza.
+   - Sempre que o usuário mencionar uma rua, bairro ou escola, liste as escolas/locais eleitorais correspondentes com endereço, zona e votos.`;
+
+      let promptPayload = `${contextText}\n\n=== PERGUNTA DO USUÁRIO ===\n${question.trim()}`;
+
+      if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+        promptPayload += `\n\n=== HISTÓRICO RECENTE DA CONVERSA ===\n`;
+        conversationHistory.slice(-4).forEach(h => {
+          promptPayload += `${h.role === 'user' ? 'Usuário' : 'Analista IA'}: ${h.text}\n`;
+        });
+      }
+
+      let generatedText = '';
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+      let lastErr: any = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: promptPayload,
+            config: {
+              systemInstruction: systemInstruction,
+              temperature: 0.2
+            }
+          });
+          if (response && response.text) {
+            generatedText = response.text;
+            break;
+          }
+        } catch (mErr: any) {
+          console.warn(`Model ${modelName} call failed, attempting fallback to next model:`, mErr?.message || mErr);
+          lastErr = mErr;
+        }
+      }
+
+      if (!generatedText) {
+        throw new Error(lastErr?.message || "Não foi possível obter resposta com os modelos de IA disponíveis.");
+      }
+
+      return res.json({
+        success: true,
+        answer: generatedText,
+        question: question.trim(),
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error("Erro na rota /api/causa-animal/ai-query:", err);
+      return res.status(500).json({
+        error: "Falha ao processar consulta pela IA: " + (err?.message || "Erro desconhecido")
+      });
     }
   });
 
