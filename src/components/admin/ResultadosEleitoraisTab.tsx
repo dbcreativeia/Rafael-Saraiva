@@ -27,6 +27,7 @@ import {
   PieChart as PieChartIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { matchesSearchTerm, scoreSearchMatch } from '../../utils/searchUtils';
 import {
   BarChart,
   Bar,
@@ -393,42 +394,74 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
   // Filtered & Sorted records
   const processedRecords = useMemo(() => {
     let list = [...rawRecords];
-    const term = searchTerm.toLowerCase().trim();
 
-    if (term) {
-      list = list.filter(item => {
-        if (activeBase === 'municipios') {
-          return (
-            (item.municipio && String(item.municipio).toLowerCase().includes(term)) ||
-            (item.codigo_tse && String(item.codigo_tse).toLowerCase().includes(term))
-          );
-        }
-        if (activeBase === 'zonas') {
-          return (
-            (item.nome_da_zona_regiao && String(item.nome_da_zona_regiao).toLowerCase().includes(term)) ||
-            (item.zona_eleitoral && String(item.zona_eleitoral).toLowerCase().includes(term))
-          );
-        }
-        if (activeBase === 'bairros') {
-          return (
-            item.bairro_cadastrado_do_local && String(item.bairro_cadastrado_do_local).toLowerCase().includes(term)
-          );
-        }
+    if (searchTerm.trim()) {
+      const getItemFields = (item: any) => {
+        if (activeBase === 'municipios') return { primary: [item.municipio], secondary: [item.codigo_tse] };
+        if (activeBase === 'zonas') return { primary: [item.nome_da_zona_regiao, item.nome_da_zona], secondary: [item.zona_eleitoral] };
+        if (activeBase === 'bairros') return { primary: [item.bairro_cadastrado_do_local, item.bairro_do_local, item.bairro] };
         if (activeBase === 'locais') {
-          return (
-            (item.escola_local_de_votacao && String(item.escola_local_de_votacao).toLowerCase().includes(term)) ||
-            (item.bairro_do_local && String(item.bairro_do_local).toLowerCase().includes(term)) ||
-            (item.endereco && String(item.endereco).toLowerCase().includes(term)) ||
-            (item.nome_da_zona && String(item.nome_da_zona).toLowerCase().includes(term)) ||
-            (item.codigo_do_local && String(item.codigo_do_local).toLowerCase().includes(term)) ||
-            (item.zona_eleitoral && String(item.zona_eleitoral).toLowerCase().includes(term))
-          );
+          return {
+            primary: [item.escola_local_de_votacao, item.local, item.nome],
+            secondary: [item.bairro_do_local, item.endereco, item.bairro],
+            tertiary: [item.nome_da_zona, item.codigo_do_local, item.zona_eleitoral]
+          };
         }
-        return true;
+        return [item.nome, item.descricao];
+      };
+
+      const scored = list.map(item => ({
+        item,
+        score: scoreSearchMatch(getItemFields(item), searchTerm)
+      }));
+
+      let scoredList = scored.filter(s => s.score > 0);
+
+      if (zonaFilter && (activeBase === 'locais' || activeBase === 'zonas')) {
+        scoredList = scoredList.filter(s => {
+          if (activeBase === 'zonas') return s.item.nome_da_zona_regiao === zonaFilter || s.item.zona_eleitoral === zonaFilter;
+          if (activeBase === 'locais') return s.item.nome_da_zona === zonaFilter || s.item.zona_eleitoral === zonaFilter;
+          return true;
+        });
+      }
+
+      if (bairroFilter && (activeBase === 'locais' || activeBase === 'bairros')) {
+        scoredList = scoredList.filter(s => {
+          if (activeBase === 'bairros') return s.item.bairro_cadastrado_do_local === bairroFilter;
+          if (activeBase === 'locais') return s.item.bairro_do_local === bairroFilter;
+          return true;
+        });
+      }
+
+      scoredList.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        switch (sortBy) {
+          case 'rafael_votos_desc':
+            return (b.item.rafael_votos || 0) - (a.item.rafael_votos || 0);
+          case 'rafael_validos_desc':
+            return (b.item.rafael_validos || 0) - (a.item.rafael_validos || 0);
+          case 'nina_votos_desc':
+            return (b.item.nina_votos || 0) - (a.item.nina_votos || 0);
+          case 'nina_validos_desc':
+            return (b.item.nina_validos || 0) - (a.item.nina_validos || 0);
+          case 'eleitores_desc':
+            return (b.item.eleitores_aptos || 0) - (a.item.eleitores_aptos || 0);
+          case 'nome_asc': {
+            const nameA = a.item.municipio || a.item.nome_da_zona_regiao || a.item.bairro_cadastrado_do_local || a.item.escola_local_de_votacao || '';
+            const nameB = b.item.municipio || b.item.nome_da_zona_regiao || b.item.bairro_cadastrado_do_local || b.item.escola_local_de_votacao || '';
+            return String(nameA).localeCompare(String(nameB));
+          }
+          case 'abstencao_asc':
+            return (a.item.abstencao || 0) - (b.item.abstencao || 0);
+          default:
+            return 0;
+        }
       });
+
+      return scoredList.map(s => s.item);
     }
 
-    // Specific filters for bairros/locais
+    // Specific filters for bairros/locais when NOT searching
     if (zonaFilter && (activeBase === 'locais' || activeBase === 'zonas')) {
       list = list.filter(item => {
         if (activeBase === 'zonas') return item.nome_da_zona_regiao === zonaFilter || item.zona_eleitoral === zonaFilter;
@@ -445,7 +478,7 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
       });
     }
 
-    // Sorting
+    // Sorting when NOT searching
     list.sort((a, b) => {
       switch (sortBy) {
         case 'rafael_votos_desc':

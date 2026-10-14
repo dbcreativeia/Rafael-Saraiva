@@ -19,6 +19,7 @@ import {
   Loader2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { matchesSearchTerm, scoreSearchMatch } from '../../utils/searchUtils';
 import {
   BarChart,
   Bar,
@@ -204,10 +205,50 @@ export const CruzamentoLeadsVotos: React.FC<Props> = ({ electoralData }) => {
   // Filtered and Sorted
   const filteredRecords = useMemo(() => {
     let list = [...crossRecords];
-    const term = searchTerm.toLowerCase().trim();
 
-    if (term) {
-      list = list.filter(r => r.nome && String(r.nome).toLowerCase().includes(term));
+    if (searchTerm.trim()) {
+      const scored = list.map(r => ({
+        item: r,
+        score: scoreSearchMatch([r.nome, r.codigo], searchTerm)
+      }));
+
+      let scoredList = scored.filter(s => s.score > 0);
+
+      if (filterLeadsTier === 'WITH_LEADS') {
+        scoredList = scoredList.filter(s => s.item.leads > 0);
+      } else if (filterLeadsTier === 'HIGH_LEADS') {
+        scoredList = scoredList.filter(s => s.item.leads >= 15);
+      } else if (filterLeadsTier === 'NO_LEADS') {
+        scoredList = scoredList.filter(s => s.item.leads === 0);
+      }
+
+      if (filterCategory !== 'ALL') {
+        scoredList = scoredList.filter(s => s.item.category === filterCategory);
+      }
+
+      scoredList.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        switch (sortBy) {
+          case 'leads_desc':
+            return b.item.leads - a.item.leads;
+          case 'multiplier_desc':
+            return (b.item.votosPorLeadRafael || 0) - (a.item.votosPorLeadRafael || 0);
+          case 'rafael_votos_desc':
+            return b.item.rafaelVotos - a.item.rafaelVotos;
+          case 'rafael_validos_desc':
+            return b.item.rafaelValidos - a.item.rafaelValidos;
+          case 'nina_votos_desc':
+            return b.item.ninaVotos - a.item.ninaVotos;
+          case 'eleitores_desc':
+            return b.item.eleitores - a.item.eleitores;
+          case 'nome_asc':
+            return String(a.item.nome).localeCompare(String(b.item.nome));
+          default:
+            return 0;
+        }
+      });
+
+      return scoredList.map(s => s.item);
     }
 
     if (filterLeadsTier === 'WITH_LEADS') {
@@ -222,7 +263,7 @@ export const CruzamentoLeadsVotos: React.FC<Props> = ({ electoralData }) => {
       list = list.filter(r => r.category === filterCategory);
     }
 
-    // Sort
+    // Sort when NOT searching
     list.sort((a, b) => {
       switch (sortBy) {
         case 'leads_desc':

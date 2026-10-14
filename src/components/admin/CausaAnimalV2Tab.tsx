@@ -43,8 +43,9 @@ import {
   loadCausaAnimalLocally,
   clearCausaAnimalLocally
 } from '../../utils/causaAnimalStorage';
+import { matchesSearchTerm, scoreSearchMatch } from '../../utils/searchUtils';
 
-export type SubTabV2 = 'municipios' | 'zonas' | 'bairros' | 'locais' | 'secoes' | 'candidatos' | 'cruzamentos' | 'metodologia';
+export type SubTabV2 = 'municipios' | 'zonas' | 'bairros' | 'locais' | 'secoes' | 'candidatos' | 'cruzamentos' | 'ia' | 'metodologia';
 export type CargoType = 'deputado_estadual' | 'deputado_federal';
 export type UniverseType =
   | 'criterio_atuacao'
@@ -58,6 +59,14 @@ export type UniverseType =
 interface Props {
   refreshTrigger?: number;
 }
+
+// Helper to safely retrieve array of records from a base object (supports both array and { registros: [...] })
+export const getRegistrosList = (baseObj: any): any[] => {
+  if (!baseObj) return [];
+  if (Array.isArray(baseObj)) return baseObj;
+  if (Array.isArray(baseObj.registros)) return baseObj.registros;
+  return [];
+};
 
 export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
   const [data, setData] = useState<CausaAnimalDatasetV2 | null>(null);
@@ -81,10 +90,17 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
   const [candidateCargoFilter, setCandidateCargoFilter] = useState<'todos' | 'deputado_estadual' | 'deputado_federal'>('todos');
   const [candidateSearchTerm, setCandidateSearchTerm] = useState<string>('');
 
-  // Estados para Cruzamento e Comparação Federal x Estadual
+  // Estados para Cruzamento e Comparação Federal x Estadual (Suporte a múltiplos candidatos)
   const [crossPreset, setCrossPreset] = useState<'becari_paiol' | 'rafael_becari' | 'rafael_federal' | 'custom'>('becari_paiol');
-  const [crossEstadualId, setCrossEstadualId] = useState<string>('250002545145'); // Dr. Edson da Paiol
-  const [crossFederalId, setCrossFederalId] = useState<string>('250002544326'); // Felipe Becari
+  const [crossEstadualIds, setCrossEstadualIds] = useState<string[]>(['250002545145']); // Padrão: Dr. Edson da Paiol
+  const [crossFederalIds, setCrossFederalIds] = useState<string[]>(['250002544326']); // Padrão: Felipe Becari
+  const [isEstadualPickerOpen, setIsEstadualPickerOpen] = useState<boolean>(false);
+  const [isFederalPickerOpen, setIsFederalPickerOpen] = useState<boolean>(false);
+  const [estadualSearch, setEstadualSearch] = useState<string>('');
+  const [federalSearch, setFederalSearch] = useState<string>('');
+
+  const crossEstadualId = crossEstadualIds[0] || '250002533758';
+  const crossFederalId = crossFederalIds[0] || '250002544326';
   const [crossViewMode, setCrossViewMode] = useState<'tabela_territorial' | 'ranking_covotacao'>('tabela_territorial');
   const [crossLevel, setCrossLevel] = useState<'municipios' | 'secoes'>('municipios');
   const [crossFilterMode, setCrossFilterMode] = useState<'todos' | 'equivalentes' | 'proximos' | 'ambos_positivos'>('todos');
@@ -92,7 +108,29 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
   const [crossPage, setCrossPage] = useState<number>(1);
   const crossPageSize = 50;
 
-  // Hierarchical navigation Capital (Zona -> Local -> Seções)
+  // Estados específicos para Co-votação e Análise Estadual SP
+  const [crossCoSortBy, setCrossCoSortBy] = useState<'estado' | 'capital'>('estado');
+  const [crossCoCriterion, setCrossCoCriterion] = useState<'todos' | 'atuacao'>('todos');
+  const [card3Scope, setCard3Scope] = useState<'estado' | 'capital'>('estado');
+
+  // Estados para Assistente IA Eleitoral
+  const [aiQuery, setAiQuery] = useState<string>('');
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiCopiedId, setAiCopiedId] = useState<string | null>(null);
+  const [aiHistory, setAiHistory] = useState<Array<{
+    id: string;
+    question: string;
+    answer: string;
+    timestamp: string;
+  }>>([
+    {
+      id: 'default-welcome',
+      question: 'Como funciona o Assistente de IA Eleitoral?',
+      answer: `Olá! Eu sou o **Assistente de Inteligência Artificial** especializado nos dados eleitorais oficiais de São Paulo (Causa Animal e Candidaturas Monitoradas).\n\nVocê pode me fazer qualquer pergunta sobre:\n- **Votações e Desempenho Territorial:** votos em municípios, zonas da Capital, bairros, locais de votação e seções eleitorais.\n- **Cruzamento Federal x Estadual:** co-votação nas mesmas urnas e cidades, equivalência de votos e dobradinhas.\n- **Liderança por Região:** quem foi o 1º colocado em cada cidade, zona ou escola.\n- **Regras Oficiais do TSE:** sigilo constitucional do voto (Art. 14 da CF/88), por que a soma das urnas supera os votos individuais e distinção de critérios.\n\nExperimente clicar em uma das **perguntas sugeridas abaixo** ou digite sua própria dúvida!`,
+      timestamp: 'Início'
+    }
+  ]);
   const [navZona, setNavZona] = useState<string>('');
   const [navLocalId, setNavLocalId] = useState<string>('');
 
@@ -225,12 +263,11 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
   // Map of local_id -> local entity for quick lookups in seções
   const locaisMap = useMemo(() => {
     const map = new Map<string, TerritorialRecord>();
-    if (data?.bases?.locais?.registros) {
-      data.bases.locais.registros.forEach(l => {
-        const id = l.local_id || `${l.zona}:${l.local || l.numero_local}`;
-        map.set(id, l);
-      });
-    }
+    const list = getRegistrosList(data?.bases?.locais);
+    list.forEach(l => {
+      const id = l.local_id || `${l.zona}:${l.local || l.numero_local}`;
+      map.set(id, l);
+    });
     return map;
   }, [data]);
 
@@ -471,13 +508,13 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
       const crit = getCandidateCriterion(cand);
       if (candidateCriterionFilter !== 'todos' && crit !== candidateCriterionFilter) return false;
       if (candidateSearchTerm.trim()) {
-        const q = candidateSearchTerm.toLowerCase();
-        const match =
-          cand.nome_urna?.toLowerCase().includes(q) ||
-          cand.nome?.toLowerCase().includes(q) ||
-          cand.nome_civil?.toLowerCase().includes(q) ||
-          cand.numero?.includes(q) ||
-          cand.partido?.toLowerCase().includes(q);
+        const match = matchesSearchTerm([
+          cand.nome_urna,
+          cand.nome,
+          cand.nome_civil,
+          cand.numero,
+          cand.partido
+        ], candidateSearchTerm);
         if (!match) return false;
       }
       return true;
@@ -485,20 +522,23 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
   }, [data, candidateCargoFilter, candidateCriterionFilter, candidateSearchTerm]);
 
   // Candidatos selecionados no comparador cruzado
-  const crossEstadualCand = useMemo(() => {
-    return candidatosEstaduais.find(c => String(c.id) === String(crossEstadualId)) || null;
-  }, [candidatosEstaduais, crossEstadualId]);
+  const crossEstadualCands = useMemo(() => {
+    return candidatosEstaduais.filter(c => crossEstadualIds.includes(String(c.id)));
+  }, [candidatosEstaduais, crossEstadualIds]);
 
-  const crossFederalCand = useMemo(() => {
-    return candidatosFederais.find(c => String(c.id) === String(crossFederalId)) || null;
-  }, [candidatosFederais, crossFederalId]);
+  const crossFederalCands = useMemo(() => {
+    return candidatosFederais.filter(c => crossFederalIds.includes(String(c.id)));
+  }, [candidatosFederais, crossFederalIds]);
 
-  // Estatísticas comparativas Federal x Estadual
+  const crossEstadualCand = crossEstadualCands[0] || null;
+  const crossFederalCand = crossFederalCands[0] || null;
+
+  // Estatísticas comparativas Federal x Estadual (Suporta Seleção Múltipla)
   const crossComparisonStats = useMemo(() => {
-    const estIdx = mapEstadual[crossEstadualId];
-    const fedIdx = mapFederal[crossFederalId];
+    const estIndices = crossEstadualIds.map(id => mapEstadual[id]).filter(idx => idx !== undefined);
+    const fedIndices = crossFederalIds.map(id => mapFederal[id]).filter(idx => idx !== undefined);
 
-    if (estIdx === undefined || fedIdx === undefined) {
+    if (estIndices.length === 0 || fedIndices.length === 0) {
       return {
         munExact: 0,
         munClose: 0,
@@ -517,8 +557,12 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
     let totalEstMun = 0, totalFedMun = 0;
 
     const munRows = (data?.bases?.municipios?.registros || []).map(m => {
-      const vEst = m.cargos?.deputado_estadual?.votos_candidatos?.[estIdx] || 0;
-      const vFed = m.cargos?.deputado_federal?.votos_candidatos?.[fedIdx] || 0;
+      const vEstVec = m.cargos?.deputado_estadual?.votos_candidatos || [];
+      const vFedVec = m.cargos?.deputado_federal?.votos_candidatos || [];
+
+      const vEst = estIndices.reduce((sum, idx) => sum + (vEstVec[idx] || 0), 0);
+      const vFed = fedIndices.reduce((sum, idx) => sum + (vFedVec[idx] || 0), 0);
+
       totalEstMun += vEst;
       totalFedMun += vFed;
 
@@ -547,8 +591,12 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
 
     let secExact = 0, secClose = 0, secBoth = 0;
     const secRows = (data?.bases?.secoes?.registros || []).map(s => {
-      const vEst = s.cargos?.deputado_estadual?.votos_candidatos?.[estIdx] || 0;
-      const vFed = s.cargos?.deputado_federal?.votos_candidatos?.[fedIdx] || 0;
+      const vEstVec = s.cargos?.deputado_estadual?.votos_candidatos || [];
+      const vFedVec = s.cargos?.deputado_federal?.votos_candidatos || [];
+
+      const vEst = estIndices.reduce((sum, idx) => sum + (vEstVec[idx] || 0), 0);
+      const vFed = fedIndices.reduce((sum, idx) => sum + (vFedVec[idx] || 0), 0);
+
       const diff = Math.abs(vEst - vFed);
       const isExact = vEst === vFed && vEst > 0;
       const isBoth = vEst > 0 && vFed > 0;
@@ -588,12 +636,20 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
       totalEstadual: totalEstMun,
       totalFederal: totalFedMun,
     };
-  }, [data, crossEstadualId, crossFederalId, mapEstadual, mapFederal, locaisMap]);
+  }, [data, crossEstadualIds, crossFederalIds, mapEstadual, mapFederal, locaisMap]);
 
-  // Ranking de Co-votação: Quem votou no Estadual X votou em quem para Federal?
-  const coVotingStats = useMemo(() => {
-    const estIdx = mapEstadual[crossEstadualId];
-    if (estIdx === undefined) return [];
+  // Resumo Geral e Ranking de Co-votação: Quem votou nos Estaduais selecionados votou em quem para Federal?
+  const coVotingSummary = useMemo(() => {
+    const estIndices = crossEstadualIds.map(id => mapEstadual[id]).filter(idx => idx !== undefined);
+    if (estIndices.length === 0) {
+      return {
+        totalEstadualVotosCapital: 0,
+        totalEstadualVotosEstado: 0,
+        secoesCountWithEstadual: 0,
+        munCountWithEstadual: 0,
+        items: []
+      };
+    }
 
     const fedTotalsInSecoes: Record<string, number> = {};
     const fedTotalsInMun: Record<string, number> = {};
@@ -604,11 +660,15 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
 
     let totalEstadualVotosCapital = 0;
     let totalEstadualVotosEstado = 0;
+    let secoesCountWithEstadual = 0;
+    let munCountWithEstadual = 0;
 
     (data?.bases?.secoes?.registros || []).forEach(s => {
-      const vEst = s.cargos?.deputado_estadual?.votos_candidatos?.[estIdx] || 0;
-      if (vEst > 0) {
-        totalEstadualVotosCapital += vEst;
+      const vEstVec = s.cargos?.deputado_estadual?.votos_candidatos || [];
+      const vEstSum = estIndices.reduce((sum, idx) => sum + (vEstVec[idx] || 0), 0);
+      if (vEstSum > 0) {
+        secoesCountWithEstadual++;
+        totalEstadualVotosCapital += vEstSum;
         const fedVector = s.cargos?.deputado_federal?.votos_candidatos;
         if (Array.isArray(fedVector)) {
           candidatosFederais.forEach(c => {
@@ -622,9 +682,11 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
     });
 
     (data?.bases?.municipios?.registros || []).forEach(m => {
-      const vEst = m.cargos?.deputado_estadual?.votos_candidatos?.[estIdx] || 0;
-      if (vEst > 0) {
-        totalEstadualVotosEstado += vEst;
+      const vEstVec = m.cargos?.deputado_estadual?.votos_candidatos || [];
+      const vEstSum = estIndices.reduce((sum, idx) => sum + (vEstVec[idx] || 0), 0);
+      if (vEstSum > 0) {
+        munCountWithEstadual++;
+        totalEstadualVotosEstado += vEstSum;
         const fedVector = m.cargos?.deputado_federal?.votos_candidatos;
         if (Array.isArray(fedVector)) {
           candidatosFederais.forEach(c => {
@@ -637,7 +699,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
       }
     });
 
-    return candidatosFederais.map(fed => {
+    const items = candidatosFederais.map(fed => {
       const vSec = fedTotalsInSecoes[fed.id] || 0;
       const vMun = fedTotalsInMun[fed.id] || 0;
       return {
@@ -645,9 +707,239 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         votosCapitalNasUrnasDoEstadual: vSec,
         votosEstadoNasCidadesDoEstadual: vMun,
         pctSobreVotosCapitalDoEstadual: totalEstadualVotosCapital > 0 ? (vSec / totalEstadualVotosCapital) : 0,
+        pctSobreVotosEstadoDoEstadual: totalEstadualVotosEstado > 0 ? (vMun / totalEstadualVotosEstado) : 0,
       };
-    }).sort((a, b) => b.votosCapitalNasUrnasDoEstadual - a.votosCapitalNasUrnasDoEstadual);
-  }, [data, crossEstadualId, candidatosFederais, mapEstadual, mapFederal]);
+    });
+
+    return {
+      totalEstadualVotosCapital,
+      totalEstadualVotosEstado,
+      secoesCountWithEstadual,
+      munCountWithEstadual,
+      items
+    };
+  }, [data, crossEstadualIds, candidatosFederais, mapEstadual, mapFederal]);
+
+  // Ranking ordenado e filtrado de co-votação
+  const coVotingStats = useMemo(() => {
+    let list = [...coVotingSummary.items];
+    if (crossCoCriterion === 'atuacao') {
+      list = list.filter(item => item.candidato.criterio?.includes('Atuação'));
+    }
+    list.sort((a, b) => {
+      if (crossCoSortBy === 'estado') {
+        return b.votosEstadoNasCidadesDoEstadual - a.votosEstadoNasCidadesDoEstadual;
+      }
+      return b.votosCapitalNasUrnasDoEstadual - a.votosCapitalNasUrnasDoEstadual;
+    });
+    return list;
+  }, [coVotingSummary.items, crossCoCriterion, crossCoSortBy]);
+
+  // Submissão de pergunta para a IA Eleitoral
+  const handleAskAi = async (overrideQuestion?: string) => {
+    const q = (overrideQuestion !== undefined ? overrideQuestion : aiQuery).trim();
+    if (!q) return;
+
+    setAiLoading(true);
+    setAiError(null);
+    if (!overrideQuestion) {
+      setAiQuery('');
+    }
+    setActiveTab('ia');
+
+    const tempId = 'msg-' + Date.now();
+    const newEntry = {
+      id: tempId,
+      question: q,
+      answer: '',
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setAiHistory(prev => [...prev, newEntry]);
+
+    try {
+      // Busca client-side de colégios eleitorais, bairros e zonas para nutrir o contexto da IA
+      const qLower = q.toLowerCase();
+      const qStopWords = new Set(['qual', 'quais', 'onde', 'votos', 'votação', 'tem', 'para', 'com', 'que', 'quem', 'rua', 'avenida', 'av', 'praça', 'bairro', 'escola', 'colégio', 'zona', 'seção', 'seções', 'capital', 'eleitoral', 'sob', 'sobre', 'me', 'fale', 'diz', 'mostrar', 'são', 'paulo', 'sp']);
+      const qWords = qLower.replace(/[^\w\sà-ú]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !qStopWords.has(w));
+
+      let matchedLocais: any[] = [];
+      let matchedBairros: any[] = [];
+      let matchedZonas: any[] = [];
+
+      const rawLocais = getRegistrosList(data?.bases?.locais);
+      if (rawLocais.length > 0) {
+        const scoredLocais = rawLocais.map(loc => {
+          const score = scoreSearchMatch({
+            primary: [
+              loc.nome,
+              loc.escola_local_de_votacao,
+              loc.local,
+              loc.escola,
+              loc.nome_local,
+              loc.nome_do_local,
+              loc.local_votacao,
+              loc.nm_local_votacao,
+              loc.nm_escola,
+              loc.denominacao
+            ],
+            secondary: [
+              loc.endereco,
+              loc.endereco_do_local,
+              loc.logradouro,
+              loc.rua,
+              loc.bairro,
+              loc.bairro_do_local,
+              loc.bairro_cadastrado_do_local
+            ],
+            tertiary: [
+              loc.zona,
+              loc.nome_da_zona,
+              loc.codigo_do_local,
+              loc.codigo_tse,
+              loc.local_id
+            ]
+          }, q);
+          return { loc, score };
+        });
+
+        const topMatches = scoredLocais
+          .filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 25)
+          .map(s => s.loc);
+
+        matchedLocais = topMatches.map(loc => {
+          const escola = loc.escola_local_de_votacao || loc.nome || loc.local || loc.escola || 'Local de Votação';
+          const end = loc.endereco || loc.endereco_do_local || loc.rua || loc.logradouro || 'Endereço cadastrado na Capital';
+          
+          let bai = loc.bairro_do_local || loc.bairro || loc.bairro_cadastrado_do_local || 'Capital de São Paulo';
+          if (bai === 'Capital' || bai === 'undefined') bai = 'Capital de São Paulo';
+
+          let zon = 'Zona Eleitoral da Capital';
+          if (loc.nome_da_zona && String(loc.nome_da_zona) !== 'undefined') zon = String(loc.nome_da_zona);
+          else if (loc.nome_da_zona_regiao && String(loc.nome_da_zona_regiao) !== 'undefined') zon = String(loc.nome_da_zona_regiao);
+          else if (loc.zona_eleitoral && String(loc.zona_eleitoral) !== 'undefined') zon = `Zona ${loc.zona_eleitoral}`;
+          else if (loc.zona && String(loc.zona) !== 'undefined') zon = `Zona ${loc.zona}`;
+
+          const cod = loc.codigo_do_local || loc.codigo_tse || loc.numero_local || loc.local_id || '-';
+          const sec = loc.secoes_cadastradas ?? loc.secoes ?? loc.total_secoes ?? loc.locais_de_votacao ?? '-';
+          const aptos = loc.eleitores_aptos ?? loc.eleitorado_apto ?? 0;
+
+          let rv = loc.rafael_votos ?? loc.votos_rafael;
+          if (rv === undefined && loc.cargos?.deputado_estadual) {
+            rv = loc.cargos.deputado_estadual.votos_candidatos?.[0];
+          }
+
+          let nv = loc.nina_votos ?? loc.votos_nina;
+          if (nv === undefined && loc.cargos?.deputado_federal) {
+            nv = loc.cargos.deputado_federal.votos_candidatos?.[5];
+          }
+
+          return {
+            escola_local_de_votacao: escola,
+            endereco: end,
+            bairro_do_local: bai,
+            nome_da_zona: zon,
+            codigo_do_local: cod,
+            secoes_cadastradas: sec,
+            eleitores_aptos: aptos,
+            rafael_votos: rv !== undefined ? Number(rv) : undefined,
+            nina_votos: nv !== undefined ? Number(nv) : undefined
+          };
+        });
+      }
+
+      const rawBairros = getRegistrosList(data?.bases?.bairros);
+      if (rawBairros.length > 0) {
+        matchedBairros = rawBairros.filter(b => {
+          return matchesSearchTerm([b.bairro_do_local, b.bairro, b.bairro_cadastrado_do_local], q);
+        }).slice(0, 10).map(b => ({
+          bairro_do_local: b.bairro_do_local || b.bairro || b.bairro_cadastrado_do_local || 'Bairro na Capital',
+          locais_de_votacao: b.locais_de_votacao ?? b.locais ?? '-',
+          secoes_cadastradas: b.secoes_cadastradas ?? b.secoes ?? '-',
+          rafael_votos: b.rafael_votos ?? b.votos_rafael
+        }));
+      }
+
+      const rawZonas = getRegistrosList(data?.bases?.zonas);
+      if (rawZonas.length > 0) {
+        matchedZonas = rawZonas.filter(z => {
+          return matchesSearchTerm([z.nome_da_zona, z.nome_da_zona_regiao, z.zona_eleitoral, z.zona], q);
+        }).slice(0, 10).map(z => {
+          let nomeZ = 'Zona Eleitoral';
+          if (z.nome_da_zona && String(z.nome_da_zona) !== 'undefined') nomeZ = String(z.nome_da_zona);
+          else if (z.nome_da_zona_regiao && String(z.nome_da_zona_regiao) !== 'undefined') nomeZ = String(z.nome_da_zona_regiao);
+          else if (z.zona_eleitoral && String(z.zona_eleitoral) !== 'undefined') nomeZ = `Zona ${z.zona_eleitoral}`;
+          else if (z.zona && String(z.zona) !== 'undefined') nomeZ = `Zona ${z.zona}`;
+
+          return {
+            nome_da_zona: nomeZ,
+            locais_de_votacao: z.locais_de_votacao ?? z.locais ?? '-',
+            secoes_cadastradas: z.secoes_cadastradas ?? z.secoes ?? '-',
+            rafael_votos: z.rafael_votos ?? z.votos_rafael
+          };
+        });
+      }
+
+      // Monta dados contextuais do estado atual da tela para alimentar a IA com dados exatos
+      const contextData = {
+        currentEstadualCand: crossEstadualCand ? {
+          nome: crossEstadualCand.nome_urna,
+          numero: crossEstadualCand.numero,
+          partido: crossEstadualCand.partido
+        } : undefined,
+        totalEstadualVotosEstado: coVotingSummary.totalEstadualVotosEstado || 105174,
+        totalEstadualVotosCapital: coVotingSummary.totalEstadualVotosCapital || 32407,
+        munCountWithEstadual: coVotingSummary.munCountWithEstadual || 630,
+        secoesCountWithEstadual: coVotingSummary.secoesCountWithEstadual || 16878,
+        topFederaisEstado: coVotingStats.slice(0, 12).map(x => ({
+          nome: x.candidato.nome_urna,
+          numero: x.candidato.numero,
+          partido: x.candidato.partido,
+          votos: x.votosEstadoNasCidadesDoEstadual,
+          criterio: x.candidato.criterio
+        })),
+        topFederaisCapital: coVotingStats.slice(0, 12).map(x => ({
+          nome: x.candidato.nome_urna,
+          numero: x.candidato.numero,
+          partido: x.candidato.partido,
+          votos: x.votosCapitalNasUrnasDoEstadual,
+          criterio: x.candidato.criterio
+        })),
+        matchedLocais,
+        matchedBairros,
+        matchedZonas
+      };
+
+      const res = await fetch('/api/causa-animal/ai-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: q,
+          contextData,
+          conversationHistory: aiHistory.slice(-4).map(h => ([
+            { role: 'user', text: h.question },
+            { role: 'model', text: h.answer }
+          ])).flat()
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Erro HTTP ${res.status}`);
+      }
+
+      const resData = await res.json();
+      setAiHistory(prev => prev.map(item => item.id === tempId ? { ...item, answer: resData.answer || 'Nenhuma resposta gerada.' } : item));
+    } catch (err: any) {
+      console.error("Erro na consulta à IA:", err);
+      setAiError(err.message || 'Erro ao comunicar com a IA');
+      setAiHistory(prev => prev.map(item => item.id === tempId ? { ...item, answer: `❌ Ocorreu um erro ao consultar os dados eleitorais: ${err.message || 'Falha na comunicação'}. Por favor, verifique se a chave de IA está ativa e tente novamente.` } : item));
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Handle File Upload and Strict Validation
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -821,176 +1113,288 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
 
   // 1. MUNICÍPIOS (645)
   const processedMunicipios = useMemo(() => {
-    if (!data?.bases?.municipios?.registros) return [];
-    let list = [...data.bases.municipios.registros];
-    const term = searchTerm.toLowerCase().trim();
+    const raw = getRegistrosList(data?.bases?.municipios);
+    if (raw.length === 0) return [];
+    let list = [...raw];
 
-    if (term) {
-      list = list.filter(m => {
+    if (searchTerm.trim()) {
+      const scored = list.map(m => {
         const top = getTopCandidatesForRecord(m);
-        return (
-          (m.municipio && m.municipio.toLowerCase().includes(term)) ||
-          (m.codigo_tse && String(m.codigo_tse).includes(term)) ||
-          (top.topEst.cand?.nome_urna && top.topEst.cand.nome_urna.toLowerCase().includes(term)) ||
-          (top.topFed.cand?.nome_urna && top.topFed.cand.nome_urna.toLowerCase().includes(term))
-        );
+        return {
+          item: m,
+          score: scoreSearchMatch([m.municipio, m.codigo_tse, top.topEst.cand?.nome_urna, top.topFed.cand?.nome_urna], searchTerm)
+        };
+      });
+
+      list = scored
+        .filter(s => s.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (sortBy === 'top_est_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topEst.votos - topA.topEst.votos;
+          }
+          if (sortBy === 'top_fed_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topFed.votos - topA.topFed.votos;
+          }
+          const statsA = extractVotes(a.item);
+          const statsB = extractVotes(b.item);
+          if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+          if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+          if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+          return String(a.item.municipio || '').localeCompare(String(b.item.municipio || ''));
+        })
+        .map(s => s.item);
+    } else {
+      list.sort((a, b) => {
+        if (sortBy === 'top_est_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topEst.votos - topA.topEst.votos;
+        }
+        if (sortBy === 'top_fed_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topFed.votos - topA.topFed.votos;
+        }
+        const statsA = extractVotes(a);
+        const statsB = extractVotes(b);
+        if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+        if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+        if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+        return String(a.municipio || '').localeCompare(String(b.municipio || ''));
       });
     }
-
-    list.sort((a, b) => {
-      if (sortBy === 'top_est_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topEst.votos - topA.topEst.votos;
-      }
-      if (sortBy === 'top_fed_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topFed.votos - topA.topFed.votos;
-      }
-      const statsA = extractVotes(a);
-      const statsB = extractVotes(b);
-      if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
-      if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
-      if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
-      return String(a.municipio || '').localeCompare(String(b.municipio || ''));
-    });
 
     return list;
   }, [data, searchTerm, sortBy, selectedCargo, selectedUniverse, selectedCandidateId]);
 
   // 2. ZONAS DA CAPITAL (57)
   const processedZonas = useMemo(() => {
-    if (!data?.bases?.zonas?.registros) return [];
-    let list = [...data.bases.zonas.registros];
-    const term = searchTerm.toLowerCase().trim();
+    const raw = getRegistrosList(data?.bases?.zonas);
+    if (raw.length === 0) return [];
+    let list = [...raw];
 
-    if (term) {
-      list = list.filter(z => {
+    if (searchTerm.trim()) {
+      const scored = list.map(z => {
         const top = getTopCandidatesForRecord(z);
-        return (
-          (z.nome && z.nome.toLowerCase().includes(term)) ||
-          (z.zona && String(z.zona).includes(term)) ||
-          (top.topEst.cand?.nome_urna && top.topEst.cand.nome_urna.toLowerCase().includes(term)) ||
-          (top.topFed.cand?.nome_urna && top.topFed.cand.nome_urna.toLowerCase().includes(term))
-        );
+        return {
+          item: z,
+          score: scoreSearchMatch([z.nome, z.zona, z.nome_da_zona, z.nome_da_zona_regiao, z.zona_eleitoral, top.topEst.cand?.nome_urna, top.topFed.cand?.nome_urna], searchTerm)
+        };
+      });
+
+      list = scored
+        .filter(s => s.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (sortBy === 'top_est_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topEst.votos - topA.topEst.votos;
+          }
+          if (sortBy === 'top_fed_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topFed.votos - topA.topFed.votos;
+          }
+          const statsA = extractVotes(a.item);
+          const statsB = extractVotes(b.item);
+          if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+          if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+          if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+          return String(a.item.nome || a.item.zona || '').localeCompare(String(b.item.nome || b.item.zona || ''));
+        })
+        .map(s => s.item);
+    } else {
+      list.sort((a, b) => {
+        if (sortBy === 'top_est_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topEst.votos - topA.topEst.votos;
+        }
+        if (sortBy === 'top_fed_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topFed.votos - topA.topFed.votos;
+        }
+        const statsA = extractVotes(a);
+        const statsB = extractVotes(b);
+        if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+        if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+        if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+        return String(a.nome || a.zona || '').localeCompare(String(b.nome || b.zona || ''));
       });
     }
-
-    list.sort((a, b) => {
-      if (sortBy === 'top_est_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topEst.votos - topA.topEst.votos;
-      }
-      if (sortBy === 'top_fed_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topFed.votos - topA.topFed.votos;
-      }
-      const statsA = extractVotes(a);
-      const statsB = extractVotes(b);
-      if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
-      if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
-      if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
-      return String(a.nome || a.zona || '').localeCompare(String(b.nome || b.zona || ''));
-    });
 
     return list;
   }, [data, searchTerm, sortBy, selectedCargo, selectedUniverse, selectedCandidateId]);
 
   // 3. BAIRROS DOS LOCAIS (899)
   const processedBairros = useMemo(() => {
-    if (!data?.bases?.bairros?.registros) return [];
-    let list = [...data.bases.bairros.registros];
-    const term = searchTerm.toLowerCase().trim();
+    const raw = getRegistrosList(data?.bases?.bairros);
+    if (raw.length === 0) return [];
+    let list = [...raw];
 
-    if (term) {
-      list = list.filter(b => {
+    if (searchTerm.trim()) {
+      const scored = list.map(b => {
         const top = getTopCandidatesForRecord(b);
-        return (
-          (b.bairro && b.bairro.toLowerCase().includes(term)) ||
-          (top.topEst.cand?.nome_urna && top.topEst.cand.nome_urna.toLowerCase().includes(term)) ||
-          (top.topFed.cand?.nome_urna && top.topFed.cand.nome_urna.toLowerCase().includes(term))
-        );
+        return {
+          item: b,
+          score: scoreSearchMatch([b.bairro, b.bairro_do_local, b.bairro_cadastrado_do_local, top.topEst.cand?.nome_urna, top.topFed.cand?.nome_urna], searchTerm)
+        };
+      });
+
+      list = scored
+        .filter(s => s.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (sortBy === 'top_est_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topEst.votos - topA.topEst.votos;
+          }
+          if (sortBy === 'top_fed_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topFed.votos - topA.topFed.votos;
+          }
+          const statsA = extractVotes(a.item);
+          const statsB = extractVotes(b.item);
+          if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+          if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+          if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+          return String(a.item.bairro || '').localeCompare(String(b.item.bairro || ''));
+        })
+        .map(s => s.item);
+    } else {
+      list.sort((a, b) => {
+        if (sortBy === 'top_est_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topEst.votos - topA.topEst.votos;
+        }
+        if (sortBy === 'top_fed_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topFed.votos - topA.topFed.votos;
+        }
+        const statsA = extractVotes(a);
+        const statsB = extractVotes(b);
+        if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+        if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+        if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+        return String(a.bairro || '').localeCompare(String(b.bairro || ''));
       });
     }
-
-    list.sort((a, b) => {
-      if (sortBy === 'top_est_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topEst.votos - topA.topEst.votos;
-      }
-      if (sortBy === 'top_fed_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topFed.votos - topA.topFed.votos;
-      }
-      const statsA = extractVotes(a);
-      const statsB = extractVotes(b);
-      if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
-      if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
-      if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
-      return String(a.bairro || '').localeCompare(String(b.bairro || ''));
-    });
 
     return list;
   }, [data, searchTerm, sortBy, selectedCargo, selectedUniverse, selectedCandidateId]);
 
   // 4. LOCAIS DE VOTAÇÃO (2.057)
   const processedLocais = useMemo(() => {
-    if (!data?.bases?.locais?.registros) return [];
-    let list = [...data.bases.locais.registros];
-    const term = searchTerm.toLowerCase().trim();
+    const raw = getRegistrosList(data?.bases?.locais);
+    if (raw.length === 0) return [];
+    let list = [...raw];
 
     if (navZona) {
       const padZ = navZona.padStart(4, '0');
       list = list.filter(l => String(l.zona).padStart(4, '0') === padZ);
     }
 
-    if (term) {
-      list = list.filter(l => {
+    if (searchTerm.trim()) {
+      const scored = list.map(l => {
         const top = getTopCandidatesForRecord(l);
-        return (
-          (l.nome && l.nome.toLowerCase().includes(term)) ||
-          (l.bairro && l.bairro.toLowerCase().includes(term)) ||
-          (l.endereco && l.endereco.toLowerCase().includes(term)) ||
-          (l.zona && String(l.zona).includes(term)) ||
-          (l.local && String(l.local).includes(term)) ||
-          (top.topEst.cand?.nome_urna && top.topEst.cand.nome_urna.toLowerCase().includes(term)) ||
-          (top.topFed.cand?.nome_urna && top.topFed.cand.nome_urna.toLowerCase().includes(term))
-        );
+        const score = scoreSearchMatch({
+          primary: [
+            l.nome,
+            l.escola_local_de_votacao,
+            l.local,
+            l.escola,
+            l.nome_local,
+            l.nome_do_local,
+            l.local_votacao,
+            l.nm_local_votacao,
+            l.nm_escola,
+            l.denominacao
+          ],
+          secondary: [
+            l.endereco,
+            l.endereco_do_local,
+            l.logradouro,
+            l.rua,
+            l.bairro,
+            l.bairro_do_local,
+            l.bairro_cadastrado_do_local,
+            top.topEst.cand?.nome_urna,
+            top.topFed.cand?.nome_urna
+          ],
+          tertiary: [
+            l.zona,
+            l.nome_da_zona,
+            l.codigo_do_local,
+            l.codigo_tse,
+            l.local_id,
+            l.numero_local
+          ]
+        }, searchTerm);
+        return { item: l, score };
+      });
+
+      list = scored
+        .filter(s => s.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (sortBy === 'top_est_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topEst.votos - topA.topEst.votos;
+          }
+          if (sortBy === 'top_fed_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topFed.votos - topA.topFed.votos;
+          }
+          const statsA = extractVotes(a.item);
+          const statsB = extractVotes(b.item);
+          if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+          if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+          if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+          return String(a.item.nome || '').localeCompare(String(b.item.nome || ''));
+        })
+        .map(s => s.item);
+    } else {
+      list.sort((a, b) => {
+        if (sortBy === 'top_est_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topEst.votos - topA.topEst.votos;
+        }
+        if (sortBy === 'top_fed_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topFed.votos - topA.topFed.votos;
+        }
+        const statsA = extractVotes(a);
+        const statsB = extractVotes(b);
+        if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+        if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+        if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+        return String(a.nome || '').localeCompare(String(b.nome || ''));
       });
     }
-
-    list.sort((a, b) => {
-      if (sortBy === 'top_est_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topEst.votos - topA.topEst.votos;
-      }
-      if (sortBy === 'top_fed_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topFed.votos - topA.topFed.votos;
-      }
-      const statsA = extractVotes(a);
-      const statsB = extractVotes(b);
-      if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
-      if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
-      if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
-      return String(a.nome || '').localeCompare(String(b.nome || ''));
-    });
 
     return list;
   }, [data, navZona, searchTerm, sortBy, selectedCargo, selectedUniverse, selectedCandidateId]);
 
   // 5. SEÇÕES ELEITORAIS (26.683) - Virtualized / Paginated
   const processedSecoes = useMemo(() => {
-    if (!data?.bases?.secoes?.registros) return [];
-    let list = [...data.bases.secoes.registros];
-    const term = searchTerm.toLowerCase().trim();
+    const raw = getRegistrosList(data?.bases?.secoes);
+    if (raw.length === 0) return [];
+    let list = [...raw];
 
     if (navZona) {
       const padZ = navZona.padStart(4, '0');
@@ -1001,64 +1405,100 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
       list = list.filter(s => s.local_id === navLocalId);
     }
 
-    if (term) {
-      list = list.filter(s => {
+    if (searchTerm.trim()) {
+      const scored = list.map(s => {
         const local = locaisMap.get(s.local_id || `${s.zona}:${s.local}`);
         const top = getTopCandidatesForRecord(s);
-        return (
-          (s.secao && String(s.secao).includes(term)) ||
-          (s.local_id && s.local_id.toLowerCase().includes(term)) ||
-          (local?.nome && local.nome.toLowerCase().includes(term)) ||
-          (local?.bairro && local.bairro.toLowerCase().includes(term)) ||
-          (local?.endereco && local.endereco.toLowerCase().includes(term)) ||
-          (top.topEst.cand?.nome_urna && top.topEst.cand.nome_urna.toLowerCase().includes(term)) ||
-          (top.topFed.cand?.nome_urna && top.topFed.cand.nome_urna.toLowerCase().includes(term))
-        );
+        const score = scoreSearchMatch({
+          primary: [
+            local?.nome,
+            s.escola,
+            s.nome_local,
+            s.secao
+          ],
+          secondary: [
+            s.bairro,
+            s.endereco,
+            local?.bairro,
+            local?.endereco,
+            top.topEst.cand?.nome_urna,
+            top.topFed.cand?.nome_urna
+          ],
+          tertiary: [
+            s.zona,
+            s.local_id,
+            s.local
+          ]
+        }, searchTerm);
+        return { item: s, score };
+      });
+
+      list = scored
+        .filter(s => s.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (sortBy === 'top_est_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topEst.votos - topA.topEst.votos;
+          }
+          if (sortBy === 'top_fed_desc') {
+            const topA = getTopCandidatesForRecord(a.item);
+            const topB = getTopCandidatesForRecord(b.item);
+            return topB.topFed.votos - topA.topFed.votos;
+          }
+          const statsA = extractVotes(a.item);
+          const statsB = extractVotes(b.item);
+          if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+          if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+          if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+          return String(a.item.secao || '').localeCompare(String(b.item.secao || ''));
+        })
+        .map(s => s.item);
+    } else {
+      list.sort((a, b) => {
+        if (sortBy === 'top_est_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topEst.votos - topA.topEst.votos;
+        }
+        if (sortBy === 'top_fed_desc') {
+          const topA = getTopCandidatesForRecord(a);
+          const topB = getTopCandidatesForRecord(b);
+          return topB.topFed.votos - topA.topFed.votos;
+        }
+        const statsA = extractVotes(a);
+        const statsB = extractVotes(b);
+        if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
+        if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
+        if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
+        return String(a.secao || '').localeCompare(String(b.secao || ''));
       });
     }
-
-    list.sort((a, b) => {
-      if (sortBy === 'top_est_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topEst.votos - topA.topEst.votos;
-      }
-      if (sortBy === 'top_fed_desc') {
-        const topA = getTopCandidatesForRecord(a);
-        const topB = getTopCandidatesForRecord(b);
-        return topB.topFed.votos - topA.topFed.votos;
-      }
-      const statsA = extractVotes(a);
-      const statsB = extractVotes(b);
-      if (sortBy === 'votos_desc') return statsB.votos - statsA.votos;
-      if (sortBy === 'validos_desc') return (statsB.pctValidos || 0) - (statsA.pctValidos || 0);
-      if (sortBy === 'aptos_desc') return (statsB.pctAptos || 0) - (statsA.pctAptos || 0);
-      return String(a.secao || '').localeCompare(String(b.secao || ''));
-    });
 
     return list;
   }, [data, navZona, navLocalId, searchTerm, sortBy, selectedCargo, selectedUniverse, selectedCandidateId, locaisMap]);
 
   // Resumos de liderança calculados para cada nível territorial
   const municipiosLeadership = useMemo(() => {
-    return computeLeadershipSummary(data?.bases?.municipios?.registros || []);
+    return computeLeadershipSummary(getRegistrosList(data?.bases?.municipios));
   }, [data, selectedUniverse, criteriaIndices]);
 
   const zonasLeadership = useMemo(() => {
-    return computeLeadershipSummary(data?.bases?.zonas?.registros || []);
+    return computeLeadershipSummary(getRegistrosList(data?.bases?.zonas));
   }, [data, selectedUniverse, criteriaIndices]);
 
   const bairrosLeadership = useMemo(() => {
-    return computeLeadershipSummary(data?.bases?.bairros?.registros || []);
+    return computeLeadershipSummary(getRegistrosList(data?.bases?.bairros));
   }, [data, selectedUniverse, criteriaIndices]);
 
   const locaisLeadership = useMemo(() => {
-    return computeLeadershipSummary(data?.bases?.locais?.registros || []);
+    return computeLeadershipSummary(getRegistrosList(data?.bases?.locais));
   }, [data, selectedUniverse, criteriaIndices]);
 
   const secoesLeadership = useMemo(() => {
     if (activeTab !== 'secoes') return { topEstLeaders: [], topFedLeaders: [], totalRecords: 0 };
-    return computeLeadershipSummary(data?.bases?.secoes?.registros || []);
+    return computeLeadershipSummary(getRegistrosList(data?.bases?.secoes));
   }, [data, selectedUniverse, criteriaIndices, activeTab]);
 
   // Paginated seções slice
@@ -1175,6 +1615,151 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         </div>
       </div>
     );
+  };
+
+  const copyAiAnswer = (id: string, text: string) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setAiCopiedId(id);
+      setTimeout(() => setAiCopiedId(null), 2500);
+    }
+  };
+
+  const AI_SUGGESTIONS = [
+    "Quem mais pontuou nas cidades onde o Rafael Saraiva teve votos?",
+    "Felipe Becari vs Delegado Bruno Lima: quem teve mais votos?",
+    "Qual a diferença entre a votação na Capital e no Estado todo de SP?",
+    "Por que a soma dos federais dá mais votos do que o Rafael teve?",
+    "Como foi o desempenho de Nina Passadore (4407) na dobradinha?",
+    "Em quantas cidades Becari e Paiol tiveram votos equivalentes?",
+    "Qual foi a votação dos candidatos da causa animal em Indaiatuba e Campinas?",
+    "Qual a zona eleitoral de maior votação de Rafael Saraiva na Capital?"
+  ];
+
+  const renderAiMarkdown = (content: string) => {
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    let tableRows: string[] = [];
+    let inTable = false;
+
+    const parseCells = (row: string) =>
+      row.split('|').map(c => c.trim()).filter((_, i, arr) => i > 0 && i < arr.length - 1);
+
+    const formatInlineMarkdown = (str: string): React.ReactNode => {
+      const parts = str.split(/(\*\*.*?\*\*)/g);
+      return parts.map((part, idx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={idx} className="font-black text-purple-950">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <code key={idx} className="px-1.5 py-0.5 rounded bg-purple-100 font-mono text-[11px] text-purple-900">{part.slice(1, -1)}</code>;
+        }
+        return part;
+      });
+    };
+
+    const flushTable = (keyPrefix: number) => {
+      if (tableRows.length === 0) return null;
+      const headerRow = tableRows[0];
+      const dataRows = tableRows.slice(1).filter(r => !r.includes('---'));
+      const headers = parseCells(headerRow);
+
+      const tableNode = (
+        <div key={`table-${keyPrefix}`} className="overflow-x-auto my-3 border border-purple-200/80 rounded-xl shadow-2xs">
+          <table className="w-full text-left text-xs border-collapse">
+            {headers.length > 0 && (
+              <thead className="bg-purple-100/60 border-b border-purple-200 text-purple-950 font-black uppercase text-[10px]">
+                <tr>
+                  {headers.map((h, i) => (
+                    <th key={i} className="py-2.5 px-3 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+            )}
+            <tbody className="divide-y divide-purple-100/60 bg-white">
+              {dataRows.map((r, rIdx) => {
+                const cells = parseCells(r);
+                return (
+                  <tr key={rIdx} className="hover:bg-purple-50/40 transition-colors">
+                    {cells.map((c, cIdx) => (
+                      <td key={cIdx} className="py-2 px-3 text-gray-800 font-medium">
+                        {formatInlineMarkdown(c)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+      tableRows = [];
+      inTable = false;
+      return tableNode;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        inTable = true;
+        tableRows.push(trimmed);
+        continue;
+      } else if (inTable) {
+        const tableElem = flushTable(i);
+        if (tableElem) elements.push(tableElem);
+      }
+
+      if (!trimmed) {
+        elements.push(<div key={`sp-${i}`} className="h-1.5" />);
+        continue;
+      }
+
+      if (trimmed.startsWith('### ')) {
+        elements.push(
+          <h4 key={`h3-${i}`} className="text-sm font-black text-purple-950 uppercase tracking-tight mt-3 mb-1">
+            {formatInlineMarkdown(trimmed.replace('### ', ''))}
+          </h4>
+        );
+      } else if (trimmed.startsWith('## ')) {
+        elements.push(
+          <h3 key={`h2-${i}`} className="text-base font-black text-purple-950 uppercase tracking-tight mt-4 mb-1">
+            {formatInlineMarkdown(trimmed.replace('## ', ''))}
+          </h3>
+        );
+      } else if (trimmed.startsWith('---')) {
+        elements.push(<hr key={`hr-${i}`} className="border-t border-purple-100 my-2.5" />);
+      } else if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+        elements.push(
+          <div key={`li-${i}`} className="flex items-start gap-2 text-xs text-gray-700 leading-relaxed pl-2 my-0.5">
+            <span className="text-purple-600 font-black mt-0.5">•</span>
+            <div className="flex-1">{formatInlineMarkdown(trimmed.replace(/^(\*|-)\s+/, ''))}</div>
+          </div>
+        );
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        const num = trimmed.match(/^(\d+)\.\s/)?.[1] || '•';
+        elements.push(
+          <div key={`num-${i}`} className="flex items-start gap-2 text-xs text-gray-700 leading-relaxed pl-2 my-1">
+            <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-900 font-black text-[10px] font-mono mt-0.5">{num}</span>
+            <div className="flex-1">{formatInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ''))}</div>
+          </div>
+        );
+      } else {
+        elements.push(
+          <p key={`p-${i}`} className="text-xs text-gray-700 leading-relaxed my-1">
+            {formatInlineMarkdown(line)}
+          </p>
+        );
+      }
+    }
+
+    if (inTable && tableRows.length > 0) {
+      const tableElem = flushTable(lines.length);
+      if (tableElem) elements.push(tableElem);
+    }
+
+    return elements;
   };
 
   return (
@@ -1505,6 +2090,60 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
             </div>
           </div>
 
+          {/* BARRA RÁPIDA DE PERGUNTA À IA ELEITORAL */}
+          <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 rounded-2xl p-3.5 sm:p-4 text-white shadow-md flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border border-purple-500/20">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/25 text-purple-300 flex items-center justify-center font-bold flex-shrink-0 border border-purple-400/30">
+                <Sparkles className="w-4 h-4 text-purple-300" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black uppercase tracking-wider text-purple-200 flex items-center gap-1.5">
+                  <span>IA Eleitoral SP 2026</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-bold">Online</span>
+                </div>
+                <div className="text-[11px] text-gray-300 truncate">
+                  Pergunte qualquer coisa sobre os 645 municípios, 26.683 urnas ou cruzamentos
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-1 max-w-xl">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-purple-300/70 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Ex: Quem mais pontuou nas cidades de Rafael? Qual escola Becari liderou?..."
+                  value={aiQuery}
+                  onChange={(e) => setAiQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAskAi();
+                    }
+                  }}
+                  className="w-full pl-9 pr-3 py-2 bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-purple-300/30 focus:border-purple-400 rounded-xl text-xs text-white placeholder-gray-300 outline-none transition-all font-medium"
+                />
+              </div>
+              <button
+                onClick={() => handleAskAi()}
+                disabled={aiLoading || !aiQuery.trim()}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+              >
+                {aiLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Varrendo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Perguntar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* NAVEGAÇÃO DE SUB-ABAS TERRITORIAIS */}
           <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-2">
             {[
@@ -1515,10 +2154,12 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
               { id: 'secoes' as SubTabV2, label: 'Seções Eleitorais (26.683)', icon: Vote },
               { id: 'candidatos' as SubTabV2, label: 'Cadastro de Candidatos (58)', icon: Users },
               { id: 'cruzamentos' as SubTabV2, label: 'Cruzamento Federal x Estadual', icon: ArrowUpDown },
+              { id: 'ia' as SubTabV2, label: 'Assistente IA Eleitoral', icon: Sparkles },
               { id: 'metodologia' as SubTabV2, label: 'Metodologia & Regras', icon: BookOpen },
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const isAiTab = tab.id === 'ia';
               return (
                 <button
                   key={tab.id}
@@ -1528,19 +2169,26 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                   }}
                   className={`px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer ${
                     isActive
-                      ? 'bg-dark text-white shadow-md'
+                      ? isAiTab
+                        ? 'bg-purple-700 text-white shadow-md ring-2 ring-purple-400/40'
+                        : 'bg-dark text-white shadow-md'
+                      : isAiTab
+                      ? 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200 font-black'
                       : 'bg-white text-gray-600 hover:text-dark hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-amber-400' : 'text-gray-400'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? isAiTab ? 'text-amber-300' : 'text-amber-400' : isAiTab ? 'text-purple-600' : 'text-gray-400'}`} />
                   <span>{tab.label}</span>
+                  {isAiTab && !isActive && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-200 text-purple-900 font-black">NOVO</span>
+                  )}
                 </button>
               );
             })}
           </div>
 
           {/* BARRA DE BUSCA E ORDENAÇÃO */}
-          {activeTab !== 'metodologia' && activeTab !== 'candidatos' && activeTab !== 'cruzamentos' && (
+          {activeTab !== 'metodologia' && activeTab !== 'candidatos' && activeTab !== 'cruzamentos' && activeTab !== 'ia' && (
             <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -2412,8 +3060,8 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                 <div
                   onClick={() => {
                     setCrossPreset('becari_paiol');
-                    setCrossEstadualId('250002545145'); // Dr. Edson da Paiol
-                    setCrossFederalId('250002544326'); // Felipe Becari
+                    setCrossEstadualIds(['250002545145']); // Dr. Edson da Paiol
+                    setCrossFederalIds(['250002544326']); // Felipe Becari
                     setCrossViewMode('tabela_territorial');
                     setCrossFilterMode('equivalentes');
                   }}
@@ -2479,8 +3127,8 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                 <div
                   onClick={() => {
                     setCrossPreset('rafael_becari');
-                    setCrossEstadualId('250002533758'); // Rafael Saraiva
-                    setCrossFederalId('250002544326'); // Felipe Becari
+                    setCrossEstadualIds(['250002533758']); // Rafael Saraiva
+                    setCrossFederalIds(['250002544326']); // Felipe Becari
                     setCrossViewMode('tabela_territorial');
                     setCrossFilterMode('ambos_positivos');
                   }}
@@ -2544,7 +3192,8 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                 <div
                   onClick={() => {
                     setCrossPreset('rafael_federal');
-                    setCrossEstadualId('250002533758'); // Rafael Saraiva
+                    setCrossEstadualIds(['250002533758']); // Rafael Saraiva
+                    setCrossCoSortBy(card3Scope);
                     setCrossViewMode('ranking_covotacao');
                   }}
                   className={`p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
@@ -2570,34 +3219,114 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                     <p className="text-xs text-gray-600 leading-relaxed">
                       Ranking dos deputados federais mais votados nas mesmas urnas e municípios onde <strong>Rafael Saraiva (44077)</strong> obteve votos.
                     </p>
+
+                    {/* Seletor de Escopo do Card (Estado vs Capital) */}
+                    <div className="flex items-center gap-1 bg-purple-100/70 p-1 rounded-xl mt-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          setCard3Scope('estado');
+                          setCrossCoSortBy('estado');
+                        }}
+                        className={`flex-1 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          card3Scope === 'estado'
+                            ? 'bg-purple-700 text-white shadow-xs'
+                            : 'text-purple-900 hover:bg-purple-200/50'
+                        }`}
+                      >
+                        Estado SP (630 Cidades)
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCard3Scope('capital');
+                          setCrossCoSortBy('capital');
+                        }}
+                        className={`flex-1 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          card3Scope === 'capital'
+                            ? 'bg-purple-700 text-white shadow-xs'
+                            : 'text-purple-900 hover:bg-purple-200/50'
+                        }`}
+                      >
+                        Capital (16.878 Urnas)
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-gray-200/70 space-y-1.5 text-xs">
-                    <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1 text-[11px]">
-                      <div className="flex items-center justify-between font-bold text-dark">
-                        <span>1º Profa. Luciene Cavalcante:</span>
-                        <span className="font-mono font-black text-purple-950">53.542 votos Capital</span>
+                  <div className="mt-3 pt-3 border-t border-gray-200/70 space-y-1.5 text-xs">
+                    {card3Scope === 'estado' ? (
+                      /* DADOS ESTADO TODO DE SÃO PAULO */
+                      <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1 text-[11px]">
+                        <div className="text-[10px] font-black text-purple-900 uppercase tracking-wider mb-1 flex items-center justify-between">
+                          <span>Estado de SP (630 Cidades com Rafael)</span>
+                          <span className="text-gray-400 font-normal">105.174 votos Rafael</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-dark">
+                          <span>1º Profa. Luciene Cavalcante:</span>
+                          <span className="font-mono font-black text-purple-950">253.457 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-dark">
+                          <span>2º Delegado Bruno Lima:</span>
+                          <span className="font-mono font-black text-emerald-800">217.814 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-dark">
+                          <span>3º Felipe Becari:</span>
+                          <span className="font-mono font-black text-purple-950">162.852 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>4º Alencar Santana:</span>
+                          <span className="font-mono">160.150 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>5º Edinho Silva:</span>
+                          <span className="font-mono">115.261 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>6º Nilto Tatto:</span>
+                          <span className="font-mono">114.029 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-emerald-900 font-semibold text-[10px]">
+                          <span>Bruno Ganem (destaque Interior):</span>
+                          <span className="font-mono font-bold">64.181 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-500 pt-1 border-t border-gray-100 text-[10px]">
+                          <span>Nina Passadore (mesmo partido 4407):</span>
+                          <span className="font-mono font-bold text-dark">26.288 votos</span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between font-bold text-dark">
-                        <span>2º Delegado Bruno Lima:</span>
-                        <span className="font-mono font-black text-purple-950">49.609 votos Capital</span>
+                    ) : (
+                      /* DADOS CAPITAL DE SÃO PAULO */
+                      <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1 text-[11px]">
+                        <div className="text-[10px] font-black text-purple-900 uppercase tracking-wider mb-1 flex items-center justify-between">
+                          <span>Capital (16.878 Seções com Rafael)</span>
+                          <span className="text-gray-400 font-normal">32.407 votos Rafael</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-dark">
+                          <span>1º Profa. Luciene Cavalcante:</span>
+                          <span className="font-mono font-black text-purple-950">53.542 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-dark">
+                          <span>2º Delegado Bruno Lima:</span>
+                          <span className="font-mono font-black text-purple-950">49.609 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-dark">
+                          <span>3º Felipe Becari:</span>
+                          <span className="font-mono font-black text-purple-950">42.053 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>4º Nilto Tatto:</span>
+                          <span className="font-mono">32.089 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>5º Nabil Bonduki:</span>
+                          <span className="font-mono">22.713 votos</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-500 pt-1 border-t border-gray-100 text-[10px]">
+                          <span>Nina Passadore (mesmo partido 4407):</span>
+                          <span className="font-mono font-bold text-dark">6.564 votos</span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between font-bold text-dark">
-                        <span>3º Felipe Becari:</span>
-                        <span className="font-mono font-black text-purple-950">42.053 votos Capital</span>
-                      </div>
-                      <div className="flex items-center justify-between text-gray-600">
-                        <span>4º Nilto Tatto:</span>
-                        <span className="font-mono">32.089 votos</span>
-                      </div>
-                      <div className="flex items-center justify-between text-gray-600">
-                        <span>5º Nabil Bonduki:</span>
-                        <span className="font-mono">22.713 votos</span>
-                      </div>
-                      <div className="flex items-center justify-between text-gray-500 pt-1 border-t border-gray-100 text-[10px]">
-                        <span>Nina Passadore (mesmo partido 4407):</span>
-                        <span className="font-mono font-bold text-dark">6.564 votos</span>
-                      </div>
+                    )}
+                    <div className="text-[10px] text-purple-700 font-bold text-center pt-1">
+                      🔍 Clique para ver a tabela completa de 30 federais e o guia explicativo
                     </div>
                   </div>
                 </div>
@@ -2637,51 +3366,233 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                   </div>
                 </div>
 
-                {/* Seletores de Candidatos */}
+                {/* Seletores de Candidatos (Suporte a Seleção Múltipla) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                  <div>
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-blue-900 mb-1 flex items-center gap-1">
-                      <Vote className="w-3.5 h-3.5 text-blue-600" />
-                      Candidato(a) Estadual (28)
-                    </label>
-                    <select
-                      value={crossEstadualId}
-                      onChange={(e) => {
-                        setCrossEstadualId(e.target.value);
-                        setCrossPreset('custom');
-                        setCrossPage(1);
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl font-bold text-dark outline-none focus:border-primary"
+                  {/* Seletor Múltiplo Estadual */}
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1">
+                        <Vote className="w-3.5 h-3.5 text-blue-600" />
+                        Candidato(a) Estadual ({crossEstadualIds.length})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsEstadualPickerOpen(!isEstadualPickerOpen)}
+                        className="text-[10px] font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+                      >
+                        {isEstadualPickerOpen ? 'Fechar' : 'Alterar Seleção'}
+                      </button>
+                    </div>
+
+                    {/* Badges Bar */}
+                    <div
+                      onClick={() => setIsEstadualPickerOpen(!isEstadualPickerOpen)}
+                      className="p-2 bg-white border border-gray-200 rounded-xl font-bold text-dark cursor-pointer flex flex-wrap items-center gap-1.5 min-h-[42px] hover:border-blue-400 transition-colors"
                     >
-                      {candidatosEstaduais.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.numero} - {c.nome_urna} ({c.partido}) [{formatNumber(c.votos_validos_SP || 0)} votos]
-                        </option>
+                      {crossEstadualCands.map(c => (
+                        <span
+                          key={c.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg text-xs font-bold"
+                        >
+                          <span>{c.numero} - {c.nome_urna}</span>
+                          {crossEstadualIds.length > 1 && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCrossEstadualIds(prev => prev.filter(x => x !== String(c.id)));
+                                setCrossPreset('custom');
+                                setCrossPage(1);
+                              }}
+                              className="hover:text-red-600 font-extrabold cursor-pointer ml-0.5"
+                              title="Remover candidato"
+                            >
+                              ✕
+                            </span>
+                          )}
+                        </span>
                       ))}
-                    </select>
+                      <span className="text-[11px] font-semibold text-gray-400 ml-auto flex items-center gap-1">
+                        + Selecionar
+                      </span>
+                    </div>
+
+                    {/* Multi-select Dropdown Popover */}
+                    {isEstadualPickerOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl z-30 p-3 space-y-2 max-h-80 overflow-y-auto">
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="text"
+                            placeholder="Buscar candidato estadual..."
+                            value={estadualSearch}
+                            onChange={(e) => setEstadualSearch(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCrossEstadualIds(candidatosEstaduais.map(c => String(c.id)));
+                              setCrossPreset('custom');
+                              setCrossPage(1);
+                            }}
+                            className="text-[10px] font-bold text-blue-600 whitespace-nowrap hover:underline"
+                          >
+                            Todos
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {candidatosEstaduais
+                            .filter(c => !estadualSearch || `${c.numero} ${c.nome_urna} ${c.partido}`.toLowerCase().includes(estadualSearch.toLowerCase()))
+                            .map(c => {
+                              const isChecked = crossEstadualIds.includes(String(c.id));
+                              return (
+                                <label
+                                  key={c.id}
+                                  className={`flex items-center gap-2 p-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                                    isChecked ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50 text-gray-700'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      setCrossEstadualIds(prev => {
+                                        if (prev.includes(String(c.id))) {
+                                          if (prev.length === 1) return prev;
+                                          return prev.filter(x => x !== String(c.id));
+                                        }
+                                        return [...prev, String(c.id)];
+                                      });
+                                      setCrossPreset('custom');
+                                      setCrossPage(1);
+                                    }}
+                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="flex-1 truncate">
+                                    {c.numero} - {c.nome_urna} ({c.partido})
+                                  </span>
+                                  <span className="text-[10px] font-mono text-gray-400">
+                                    {formatNumber(c.votos_validos_SP || 0)} votos
+                                  </span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Seletor Múltiplo Federal */}
                   {crossViewMode === 'tabela_territorial' && (
-                    <div>
-                      <label className="block text-[11px] font-black uppercase tracking-wider text-purple-900 mb-1 flex items-center gap-1">
-                        <Vote className="w-3.5 h-3.5 text-purple-600" />
-                        Candidato(a) Federal (30)
-                      </label>
-                      <select
-                        value={crossFederalId}
-                        onChange={(e) => {
-                          setCrossFederalId(e.target.value);
-                          setCrossPreset('custom');
-                          setCrossPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl font-bold text-dark outline-none focus:border-purple-600"
+                    <div className="relative">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1">
+                          <Vote className="w-3.5 h-3.5 text-purple-600" />
+                          Candidato(a) Federal ({crossFederalIds.length})
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsFederalPickerOpen(!isFederalPickerOpen)}
+                          className="text-[10px] font-bold text-purple-700 hover:text-purple-900 underline cursor-pointer"
+                        >
+                          {isFederalPickerOpen ? 'Fechar' : 'Alterar Seleção'}
+                        </button>
+                      </div>
+
+                      {/* Badges Bar */}
+                      <div
+                        onClick={() => setIsFederalPickerOpen(!isFederalPickerOpen)}
+                        className="p-2 bg-white border border-gray-200 rounded-xl font-bold text-dark cursor-pointer flex flex-wrap items-center gap-1.5 min-h-[42px] hover:border-purple-400 transition-colors"
                       >
-                        {candidatosFederais.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.numero} - {c.nome_urna} ({c.partido}) [{formatNumber(c.votos_validos_SP || 0)} votos]
-                          </option>
+                        {crossFederalCands.map(c => (
+                          <span
+                            key={c.id}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 border border-purple-200 text-purple-900 rounded-lg text-xs font-bold"
+                          >
+                            <span>{c.numero} - {c.nome_urna}</span>
+                            {crossFederalIds.length > 1 && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCrossFederalIds(prev => prev.filter(x => x !== String(c.id)));
+                                  setCrossPreset('custom');
+                                  setCrossPage(1);
+                                }}
+                                className="hover:text-red-600 font-extrabold cursor-pointer ml-0.5"
+                                title="Remover candidato"
+                              >
+                                ✕
+                              </span>
+                            )}
+                          </span>
                         ))}
-                      </select>
+                        <span className="text-[11px] font-semibold text-gray-400 ml-auto flex items-center gap-1">
+                          + Selecionar
+                        </span>
+                      </div>
+
+                      {/* Multi-select Dropdown Popover */}
+                      {isFederalPickerOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl z-30 p-3 space-y-2 max-h-80 overflow-y-auto">
+                          <div className="flex items-center justify-between gap-2">
+                            <input
+                              type="text"
+                              placeholder="Buscar candidato federal..."
+                              value={federalSearch}
+                              onChange={(e) => setFederalSearch(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCrossFederalIds(candidatosFederais.map(c => String(c.id)));
+                                setCrossPreset('custom');
+                                setCrossPage(1);
+                              }}
+                              className="text-[10px] font-bold text-purple-600 whitespace-nowrap hover:underline"
+                            >
+                              Todos
+                            </button>
+                          </div>
+                          <div className="space-y-1">
+                            {candidatosFederais
+                              .filter(c => !federalSearch || `${c.numero} ${c.nome_urna} ${c.partido}`.toLowerCase().includes(federalSearch.toLowerCase()))
+                              .map(c => {
+                                const isChecked = crossFederalIds.includes(String(c.id));
+                                return (
+                                  <label
+                                    key={c.id}
+                                    className={`flex items-center gap-2 p-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                                      isChecked ? 'bg-purple-50 text-purple-900' : 'hover:bg-gray-50 text-gray-700'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        setCrossFederalIds(prev => {
+                                          if (prev.includes(String(c.id))) {
+                                            if (prev.length === 1) return prev;
+                                            return prev.filter(x => x !== String(c.id));
+                                          }
+                                          return [...prev, String(c.id)];
+                                        });
+                                        setCrossPreset('custom');
+                                        setCrossPage(1);
+                                      }}
+                                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                    />
+                                    <span className="flex-1 truncate">
+                                      {c.numero} - {c.nome_urna} ({c.partido})
+                                    </span>
+                                    <span className="text-[10px] font-mono text-gray-400">
+                                      {formatNumber(c.votos_validos_SP || 0)} votos
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2694,7 +3605,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                         <select
                           value={crossLevel}
                           onChange={(e) => { setCrossLevel(e.target.value as any); setCrossPage(1); }}
-                          className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-dark outline-none"
+                          className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-dark outline-none h-[42px]"
                         >
                           <option value="municipios">Municípios (645)</option>
                           <option value="secoes">Seções Capital (26.683)</option>
@@ -2702,7 +3613,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                         <select
                           value={crossFilterMode}
                           onChange={(e) => { setCrossFilterMode(e.target.value as any); setCrossPage(1); }}
-                          className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-dark outline-none text-[11px]"
+                          className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-dark outline-none text-[11px] h-[42px]"
                         >
                           <option value="todos">Todos</option>
                           <option value="equivalentes">Exatamente Iguais</option>
@@ -2718,7 +3629,11 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                   <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-3">
                       <span className="text-gray-500">
-                        Votos Totais: <strong className="text-blue-900">{crossEstadualCand?.nome_urna}: {formatNumber(crossComparisonStats.totalEstadual)}</strong> x <strong className="text-purple-900">{crossFederalCand?.nome_urna}: {formatNumber(crossComparisonStats.totalFederal)}</strong>
+                        Votos Totais: <strong className="text-blue-900">
+                          {crossEstadualCands.map(c => c.nome_urna).join(' + ') || 'Estadual'}: {formatNumber(crossComparisonStats.totalEstadual)}
+                        </strong> x <strong className="text-purple-900">
+                          {crossFederalCands.map(c => c.nome_urna).join(' + ') || 'Federal'}: {formatNumber(crossComparisonStats.totalFederal)}
+                        </strong>
                       </span>
                     </div>
                     <div className="relative">
@@ -2773,13 +3688,12 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                             if (crossFilterMode === 'proximos' && !row.isClose) return false;
                             if (crossFilterMode === 'ambos_positivos' && !row.isBoth) return false;
                             if (crossSearchTerm.trim()) {
-                              const q = crossSearchTerm.toLowerCase();
                               if (crossLevel === 'municipios') {
                                 const mRow = row as any;
-                                if (!mRow.nome?.toLowerCase().includes(q) && !String(mRow.codigo).includes(q)) return false;
+                                if (!matchesSearchTerm([mRow.nome, mRow.codigo], crossSearchTerm)) return false;
                               } else {
                                 const sRow = row as any;
-                                if (!sRow.secao?.includes(q) && !sRow.zona?.includes(q) && !sRow.localNome?.toLowerCase().includes(q)) return false;
+                                if (!matchesSearchTerm([sRow.secao, sRow.zona, sRow.localNome], crossSearchTerm)) return false;
                               }
                             }
                             return true;
@@ -2887,82 +3801,518 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
 
               {/* MODO 2: RANKING DE CO-VOTAÇÃO FEDERAL */}
               {crossViewMode === 'ranking_covotacao' && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden space-y-4 p-5">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 text-xs">
-                    <div>
-                      <h4 className="font-black text-dark text-sm uppercase">
-                        Votos para Deputado Federal nas Urnas de {crossEstadualCand?.nome_urna} ({crossEstadualCand?.numero} - {crossEstadualCand?.partido})
-                      </h4>
-                      <p className="text-gray-500 mt-0.5">
-                        Apuração da co-presença de votos nas seções eleitorais da Capital e municípios onde o candidato estadual pontuou.
-                      </p>
+                <div className="space-y-6">
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden space-y-5 p-5 sm:p-6">
+                    
+                    {/* Header do Ranking */}
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-purple-100 text-purple-900">
+                            Co-ocorrência Eleitoral
+                          </span>
+                          <span className="text-xs text-gray-400 font-bold">•</span>
+                          <span className="text-xs font-bold text-gray-500">Eleições Gerais SP 2026</span>
+                        </div>
+                        <h4 className="font-black text-dark text-lg sm:text-xl uppercase tracking-tight">
+                          Quem votou em {crossEstadualCand?.nome_urna} ({crossEstadualCand?.numero} - {crossEstadualCand?.partido}) votou em quem para Federal?
+                        </h4>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
+                          Apuração oficial dos deputados federais mais votados nos mesmos colégios eleitorais onde o candidato estadual pontuou.
+                        </p>
+                      </div>
+
+                      {/* Alternador de Ordenação / Escopo Principal */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+                        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                          <button
+                            onClick={() => setCrossCoSortBy('estado')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              crossCoSortBy === 'estado'
+                                ? 'bg-purple-700 text-white shadow-xs'
+                                : 'text-gray-600 hover:text-dark'
+                            }`}
+                          >
+                            <Building2 className="w-3.5 h-3.5" />
+                            <span>Estado Todo de SP (630 Cidades)</span>
+                          </button>
+                          <button
+                            onClick={() => setCrossCoSortBy('capital')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              crossCoSortBy === 'capital'
+                                ? 'bg-purple-700 text-white shadow-xs'
+                                : 'text-gray-600 hover:text-dark'
+                            }`}
+                          >
+                            <MapPin className="w-3.5 h-3.5" />
+                            <span>Capital (16.878 Urnas)</span>
+                          </button>
+                        </div>
+
+                        {/* Filtro de Critério */}
+                        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                          <button
+                            onClick={() => setCrossCoCriterion('todos')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              crossCoCriterion === 'todos'
+                                ? 'bg-white text-dark shadow-xs'
+                                : 'text-gray-500 hover:text-dark'
+                            }`}
+                          >
+                            Todos (30)
+                          </button>
+                          <button
+                            onClick={() => setCrossCoCriterion('atuacao')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              crossCoCriterion === 'atuacao'
+                                ? 'bg-emerald-700 text-white shadow-xs'
+                                : 'text-gray-500 hover:text-dark'
+                            }`}
+                          >
+                            Atuação Direta (11)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Cards de Resumo Territorial do Candidato Estadual */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      <div className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-200/80 space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Votação Estadual do Candidato</span>
+                        <div className="text-lg font-black font-mono text-purple-950">
+                          {formatNumber(coVotingSummary.totalEstadualVotosEstado)} votos
+                        </div>
+                        <div className="text-[11px] text-purple-800">
+                          Em <strong>{coVotingSummary.munCountWithEstadual}</strong> dos 645 municípios paulistas (97,7%)
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Votação na Capital do Candidato</span>
+                        <div className="text-lg font-black font-mono text-blue-950">
+                          {formatNumber(coVotingSummary.totalEstadualVotosCapital)} votos
+                        </div>
+                        <div className="text-[11px] text-blue-800">
+                          Em <strong>{coVotingSummary.secoesCountWithEstadual.toLocaleString('pt-BR')}</strong> de 26.683 urnas (63,3%)
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Líder Causa Animal no Estado</span>
+                        <div className="text-lg font-black text-emerald-950 truncate">
+                          Delegado Bruno Lima
+                        </div>
+                        <div className="text-[11px] text-emerald-800 font-mono font-bold">
+                          217.814 votos nos municípios de Rafael
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Dobrada Mesmo Partido (União 4407)</span>
+                        <div className="text-lg font-black text-amber-950 truncate">
+                          Nina Passadore
+                        </div>
+                        <div className="text-[11px] text-amber-800">
+                          <strong>26.288</strong> Estado • <strong>6.564</strong> Capital
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tabela do Ranking de Co-votação */}
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-black uppercase text-[10px] tracking-wider">
+                          <tr>
+                            <th className="py-3 px-3 w-12 text-center">#</th>
+                            <th className="py-3 px-4">Candidato(a) Federal</th>
+                            <th className="py-3 px-3">Número</th>
+                            <th className="py-3 px-3">Partido</th>
+                            <th className={`py-3 px-4 text-right cursor-pointer transition-colors ${crossCoSortBy === 'estado' ? 'bg-purple-100/70 text-purple-950 font-black' : 'text-gray-600 hover:text-dark'}`}
+                              onClick={() => setCrossCoSortBy('estado')}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Votos no Estado Todo (630 Cidades)</span>
+                                {crossCoSortBy === 'estado' && <span className="text-[10px]">▼</span>}
+                              </div>
+                            </th>
+                            <th className={`py-3 px-4 text-right cursor-pointer transition-colors ${crossCoSortBy === 'capital' ? 'bg-purple-100/70 text-purple-950 font-black' : 'text-gray-600 hover:text-dark'}`}
+                              onClick={() => setCrossCoSortBy('capital')}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Votos na Capital (16.878 Urnas)</span>
+                                {crossCoSortBy === 'capital' && <span className="text-[10px]">▼</span>}
+                              </div>
+                            </th>
+                            <th className="py-3 px-4">Critério da Causa Animal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 font-medium">
+                          {coVotingStats.map((item, idx) => {
+                            const critLabel = getCandidateCriterionLabel(item.candidato);
+                            const critType = getCandidateCriterion(item.candidato);
+                            const isBecari = item.candidato.id === '250002544326';
+                            const isBrunoLima = item.candidato.numero === '2011';
+                            const isNina = item.candidato.numero === '4407';
+
+                            return (
+                              <tr
+                                key={item.candidato.id}
+                                className={`hover:bg-purple-50/30 transition-colors ${
+                                  idx === 0 ? 'bg-amber-50/40 font-bold' : idx < 3 ? 'bg-purple-50/20' : ''
+                                } ${isNina ? 'bg-blue-50/30' : ''}`}
+                              >
+                                <td className="py-3 px-3 text-center text-gray-400 font-mono text-[11px] font-bold">
+                                  {idx + 1}º
+                                </td>
+                                <td className="py-3 px-4 font-black text-dark">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span>{item.candidato.nome_urna}</span>
+                                    {idx === 0 && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-400 text-slate-950 font-black">
+                                        1º GERAL
+                                      </span>
+                                    )}
+                                    {isBrunoLima && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-600 text-white font-black">
+                                        1º CAUSA ANIMAL SP
+                                      </span>
+                                    )}
+                                    {isBecari && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-600 text-white font-black">
+                                        BECARI
+                                      </span>
+                                    )}
+                                    {isNina && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-blue-600 text-white font-black">
+                                        DOBRADA 4407
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 font-mono font-bold text-gray-700">{item.candidato.numero}</td>
+                                <td className="py-3 px-3 font-bold text-gray-500">{item.candidato.partido}</td>
+                                
+                                {/* Coluna Votos Estado */}
+                                <td className={`py-3 px-4 text-right font-black font-mono text-sm ${crossCoSortBy === 'estado' ? 'bg-purple-50/60 text-purple-950' : 'text-gray-900'}`}>
+                                  {formatNumber(item.votosEstadoNasCidadesDoEstadual)}
+                                </td>
+
+                                {/* Coluna Votos Capital */}
+                                <td className={`py-3 px-4 text-right font-black font-mono text-sm ${crossCoSortBy === 'capital' ? 'bg-purple-50/60 text-purple-950' : 'text-gray-700'}`}>
+                                  {formatNumber(item.votosCapitalNasUrnasDoEstadual)}
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
+                                    critType === 'adesao'
+                                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                      : critType === 'urna'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  }`}>
+                                    {critLabel}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-black uppercase text-[10px] tracking-wider">
-                        <tr>
-                          <th className="py-3 px-3 w-14">#</th>
-                          <th className="py-3 px-4">Candidato Federal</th>
-                          <th className="py-3 px-3">Número</th>
-                          <th className="py-3 px-3">Partido</th>
-                          <th className="py-3 px-4 text-right">Votos nas Urnas da Capital</th>
-                          <th className="py-3 px-4 text-right">Votos nas Cidades do Estado</th>
-                          <th className="py-3 px-4">Critério da Causa Animal</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 font-medium">
-                        {coVotingStats.map((item, idx) => {
-                          const critLabel = getCandidateCriterionLabel(item.candidato);
-                          const critType = getCandidateCriterion(item.candidato);
-                          const isBecari = item.candidato.id === '250002544326';
-                          return (
-                            <tr
-                              key={item.candidato.id}
-                              className={`hover:bg-purple-50/30 transition-colors ${idx < 3 ? 'bg-purple-50/20 font-bold' : ''} ${isBecari ? 'ring-1 ring-amber-300 bg-amber-50/30' : ''}`}
-                            >
-                              <td className="py-3 px-3 text-gray-400 font-mono text-[11px]">{idx + 1}</td>
-                              <td className="py-3 px-4 font-black text-dark flex items-center gap-2">
-                                <span>{item.candidato.nome_urna}</span>
-                                {idx === 0 && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-400 text-slate-950 font-black">
-                                    1º MAIS VOTADO
-                                  </span>
-                                )}
-                                {isBecari && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-600 text-white font-black">
-                                    BECARI
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 px-3 font-mono font-bold text-gray-700">{item.candidato.numero}</td>
-                              <td className="py-3 px-3 font-bold text-gray-500">{item.candidato.partido}</td>
-                              <td className="py-3 px-4 text-right font-black font-mono text-purple-950 text-sm">
-                                {formatNumber(item.votosCapitalNasUrnasDoEstadual)}
-                              </td>
-                              <td className="py-3 px-4 text-right font-black font-mono text-dark text-sm">
-                                {formatNumber(item.votosEstadoNasCidadesDoEstadual)}
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  critType === 'adesao'
-                                    ? 'bg-indigo-50 text-indigo-700'
-                                    : critType === 'urna'
-                                    ? 'bg-amber-50 text-amber-700'
-                                    : 'bg-emerald-50 text-emerald-700'
-                                }`}>
-                                  {critLabel}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  {/* BLOCO DIDÁTICO EXPLICATIVO: COMO INTERPRETAR CORRETAMENTE ESTA RELAÇÃO */}
+                  <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-purple-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+                    <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold">
+                        <FileText className="w-5 h-5 text-purple-300" />
+                      </div>
+                      <div>
+                        <h4 className="text-base sm:text-lg font-black uppercase tracking-tight text-white">
+                          Guia Didático e Regras Técnicas do TSE: Como Interpretar Esta Relação
+                        </h4>
+                        <p className="text-xs text-purple-200/80">
+                          Entenda por que esses números se comportam dessa forma e o que a legislação eleitoral brasileira permite afirmar com rigor científico.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed">
+                      
+                      {/* TÓPICO 1: POR QUE A SOMA SUPERA OS VOTOS DE RAFAEL */}
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                        <div className="flex items-center gap-2 text-amber-300 font-black text-xs uppercase tracking-wide">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                          <span>1. Por que a soma dá mais votos do que o Rafael teve?</span>
+                        </div>
+                        <p className="text-gray-300">
+                          A urna eletrônica brasileira é <strong>100% sigilosa por determinação constitucional (Art. 14 da CF/88)</strong>. O TSE não vincula o comprovante individual de voto para Deputado Estadual com o voto para Deputado Federal emitido pelo mesmo cidadão.
+                        </p>
+                        <p className="text-gray-300">
+                          Em cada urna da Capital votam de 300 a 400 eleitores, e em cada município votam dezenas ou centenas de milhares. Quando selecionamos as <strong>16.878 urnas da Capital</strong> ou os <strong>630 municípios de SP</strong> onde Rafael teve votos, contabilizamos <strong>TODOS os votos que os federais receberam nessas urnas/cidades inteiras</strong>. Por isso, a soma dos federais ultrapassa com folga a votação isolada de Rafael.
+                        </p>
+                      </div>
+
+                      {/* TÓPICO 2: O QUE É O MAIS CORRETO AFIRMAR */}
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                        <div className="flex items-center gap-2 text-emerald-300 font-black text-xs uppercase tracking-wide">
+                          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                          <span>2. O que é o mais correto afirmar cientificamente?</span>
+                        </div>
+                        <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-emerald-200 font-semibold">
+                          &quot;Ranking dos deputados federais mais votados nos mesmos colégios eleitorais (urnas na Capital e municípios no Estado) onde Rafael Saraiva obteve votos.&quot;
+                        </div>
+                        <p className="text-gray-300">
+                          Trata-se de uma análise de <strong>co-presença territorial e afinidade geográfica</strong>: mostra em quais regiões, zonas e colégios eleitorais o eleitorado de Rafael Saraiva conviveu e dividiu o espaço de votação com as grandes candidaturas federais.
+                        </p>
+                      </div>
+
+                      {/* TÓPICO 3: CAPITAL X ESTADO TODO */}
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                        <div className="flex items-center gap-2 text-blue-300 font-black text-xs uppercase tracking-wide">
+                          <Building2 className="w-4 h-4 flex-shrink-0" />
+                          <span>3. Diferença entre a Capital e o Estado Todo de SP</span>
+                        </div>
+                        <p className="text-gray-300">
+                          Na <strong>Capital</strong> (16.878 urnas), a disputa na causa animal foi muito parelha: Bruno Lima (49.609) e Felipe Becari (42.053).
+                        </p>
+                        <p className="text-gray-300">
+                          No <strong>Estado Todo</strong> (630 municípios), <strong>Delegado Bruno Lima assume ampla liderança</strong> com <strong>217.814 votos</strong> (55 mil votos de vantagem sobre Becari, com 162.852 votos), impulsionado pela Grande SP e Interior. Além disso, <strong>Bruno Ganem</strong> salta para <strong>64.181 votos</strong> impulsionado pelo Interior (especialmente Indaiatuba e região de Campinas).
+                        </p>
+                      </div>
+
+                      {/* TÓPICO 4: CRITÉRIOS DE INCLUSÃO (ATUAÇÃO X ADESÃO) */}
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                        <div className="flex items-center gap-2 text-purple-300 font-black text-xs uppercase tracking-wide">
+                          <Users className="w-4 h-4 flex-shrink-0" />
+                          <span>4. Por que Profa. Luciene, Alencar e Nilto lideram o geral?</span>
+                        </div>
+                        <p className="text-gray-300">
+                          Parlamentares de grandes legendas de massa (PSOL, PT) possuem forte voto partidário orgânico e assinaram formalmente a <em>Pauta Animalista 2026</em>.
+                        </p>
+                        <p className="text-gray-300">
+                          Já nomes como Delegado Bruno Lima, Felipe Becari, Bruno Ganem, Richard Selvagem e Nina Passadore têm como bandeira principal a <strong>Atuação/Campanha Animal Documentada</strong>. Use o botão de filtro <em>&quot;Atuação Direta (11)&quot;</em> no topo para analisar exclusivamente o nicho focado na causa.
+                        </p>
+                      </div>
+
+                    </div>
+
+                    {/* DOBRADA DE PARTIDO: NINA PASSADORE (4407) */}
+                    <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-300">Dobradinha Partidária (União Brasil 44077 + 4407)</span>
+                        <div className="font-bold text-white">
+                          Nina Passadore obteve 6.564 votos na Capital e 26.288 votos no Estado nos mesmos colégios de Rafael Saraiva.
+                        </div>
+                        <p className="text-blue-200/70 text-[11px]">
+                          Representa o eleitorado que votou na dobrada oficial de chapa pura partidária do União Brasil.
+                        </p>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-mono font-black text-sm whitespace-nowrap">
+                        26.288 votos SP
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               )}
+
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------------- */}
+          {/* ABA: ASSISTENTE DE IA ELEITORAL (Perguntas em Linguagem Natural) */}
+          {/* ------------------------------------------------------------------- */}
+          {activeTab === 'ia' && (
+            <div className="space-y-6 max-w-5xl mx-auto">
+              
+              {/* Header da Aba IA */}
+              <div className="bg-gradient-to-br from-purple-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl space-y-4 border border-purple-500/20 relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative z-10">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/30 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                        Inteligência Artificial Eleitoral
+                      </span>
+                      <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        645 Cidades • 26.683 Urnas Conectadas
+                      </span>
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white mt-1">
+                      Pergunte aos Dados Eleitorais de São Paulo
+                    </h3>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setAiHistory([
+                        {
+                          id: 'default-welcome',
+                          question: 'Como funciona o Assistente de IA Eleitoral?',
+                          answer: `Olá! Eu sou o **Assistente de Inteligência Artificial** especializado nos dados eleitorais oficiais de São Paulo (Causa Animal e Candidaturas Monitoradas).\n\nVocê pode me fazer qualquer pergunta sobre:\n- **Votações e Desempenho Territorial:** votos em municípios, zonas da Capital, bairros, locais de votação e seções eleitorais.\n- **Cruzamento Federal x Estadual:** co-votação nas mesmas urnas e cidades, equivalência de votos e dobradinhas.\n- **Liderança por Região:** quem foi o 1º colocado em cada cidade, zona ou escola.\n- **Regras Oficiais do TSE:** sigilo constitucional do voto (Art. 14 da CF/88), por que a soma das urnas supera os votos individuais e distinção de critérios.\n\nExperimente clicar em uma das **perguntas sugeridas abaixo** ou digite sua própria dúvida!`,
+                          timestamp: 'Início'
+                        }
+                      ]);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold text-gray-200 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Limpar Histórico</span>
+                  </button>
+                </div>
+
+                <p className="text-xs sm:text-sm text-purple-200/90 leading-relaxed max-w-4xl relative z-10">
+                  Faça perguntas em português comum sobre votos, comparações entre candidatos, desempenho territorial na Capital ou no Interior e regras eleitorais. A IA varre o banco com 645 municípios, 26.683 seções e cruza os dados em tempo real.
+                </p>
+
+                {/* Chips de Perguntas Rápidas */}
+                <div className="pt-2 relative z-10 space-y-2">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-purple-300 flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5" />
+                    Perguntas Sugeridas (clique para testar):
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {AI_SUGGESTIONS.map((sug, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleAskAi(sug)}
+                        disabled={aiLoading}
+                        className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 hover:border-purple-300 border border-white/15 text-left text-xs font-semibold text-white transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        💡 {sug}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* FEED DO CHAT / HISTÓRICO DE PERGUNTAS */}
+              <div className="space-y-4">
+                {aiHistory.map((item) => (
+                  <div key={item.id} className="space-y-3">
+                    
+                    {/* Pergunta do Usuário */}
+                    <div className="flex items-start justify-end gap-3">
+                      <div className="bg-slate-900 text-white p-4 rounded-2xl rounded-tr-xs max-w-2xl shadow-sm space-y-1">
+                        <div className="flex items-center justify-between gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-wider border-b border-white/10 pb-1">
+                          <span>Sua Pergunta</span>
+                          <span>{item.timestamp}</span>
+                        </div>
+                        <div className="font-bold text-xs sm:text-sm pt-0.5 leading-snug">
+                          {item.question}
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs flex-shrink-0 shadow-xs">
+                        VC
+                      </div>
+                    </div>
+
+                    {/* Resposta da IA */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-purple-700 text-white flex items-center justify-center font-black text-xs flex-shrink-0 shadow-xs border border-purple-400/40">
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                      </div>
+                      <div className="bg-white border border-purple-200/80 rounded-2xl rounded-tl-xs p-5 sm:p-6 shadow-sm flex-1 space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                              Analista Eleitoral IA
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-mono">• Dados Oficiais TSE</span>
+                          </div>
+                          {item.answer && (
+                            <button
+                              onClick={() => copyAiAnswer(item.id, item.answer)}
+                              className="px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[11px] font-bold text-gray-700 transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              {aiCopiedId === item.id ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-700 font-black">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="w-3 h-3 text-gray-500" />
+                                  <span>Copiar</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Conteúdo da Resposta Formatada */}
+                        <div className="text-gray-800 text-xs sm:text-sm leading-relaxed">
+                          {item.answer ? (
+                            renderAiMarkdown(item.answer)
+                          ) : (
+                            <div className="flex items-center gap-3 py-4 text-purple-900 text-xs font-bold animate-pulse">
+                              <RefreshCw className="w-4 h-4 animate-spin text-purple-600" />
+                              <span>Varrendo dados dos 645 municípios e 26.683 urnas para responder...</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ))}
+
+                {/* Loading state indicator if query in flight and no entry yet */}
+                {aiLoading && aiHistory[aiHistory.length - 1]?.answer !== '' && (
+                  <div className="p-4 bg-purple-50/70 rounded-2xl border border-purple-200 flex items-center gap-3 text-xs text-purple-950 font-bold animate-pulse">
+                    <RefreshCw className="w-4 h-4 animate-spin text-purple-700" />
+                    <span>Varrendo dados dos 645 municípios paulistas e 26.683 urnas...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* BARRA DE ENTRADA DE PERGUNTA (FIXA OU INLINE NO RODAPÉ) */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 shadow-md space-y-3 sticky bottom-4 z-20">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    Faça uma nova pergunta à IA
+                  </span>
+                  <span className="text-gray-400 text-[11px]">Pressione Enter para enviar</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Ex: Em qual cidade o Rafael teve mais de 500 votos? Quantos votos Ganem teve em Indaiatuba?..."
+                      value={aiQuery}
+                      onChange={(e) => setAiQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAskAi();
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100/80 focus:bg-white border border-gray-200 focus:border-purple-600 rounded-xl text-xs sm:text-sm font-medium text-dark outline-none transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleAskAi()}
+                    disabled={aiLoading || !aiQuery.trim()}
+                    className="px-5 py-3 rounded-xl bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white font-black text-xs sm:text-sm transition-all shadow-sm flex items-center gap-2 cursor-pointer flex-shrink-0"
+                  >
+                    {aiLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Varrendo...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>Enviar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
 
             </div>
           )}
