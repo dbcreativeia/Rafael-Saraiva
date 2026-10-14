@@ -38,6 +38,7 @@ import {
   Legend
 } from 'recharts';
 import { CruzamentoLeadsVotos } from './CruzamentoLeadsVotos';
+import { CausaAnimalV2Tab } from './CausaAnimalV2Tab';
 
 export interface ElectoralResultsJSON {
   versao?: number;
@@ -95,6 +96,7 @@ interface Props {
 }
 
 export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => {
+  const [activeDataset, setActiveDataset] = useState<'causa_animal_v2' | 'resultados_gerais_v1'>('causa_animal_v2');
   const [data, setData] = useState<ElectoralResultsJSON | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isServerSynced, setIsServerSynced] = useState<boolean>(false);
@@ -635,27 +637,61 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
     XLSX.writeFile(workbook, `Resultados_Eleitorais_2026_${activeBase}.xlsx`);
   };
 
-  if (loading && !data) {
-    return (
-      <div className="bg-white rounded-3xl p-12 border border-gray-200/80 shadow-xs flex flex-col items-center justify-center min-h-[350px]">
-        <RefreshCw className="w-10 h-10 text-amber-500 animate-spin mb-4" />
-        <p className="text-sm font-black uppercase tracking-wider text-gray-700">Carregando dados eleitorais...</p>
-        <p className="text-xs text-gray-400 mt-1">Conectando ao armazenamento persistente do servidor</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       
-      {/* Hidden File Input */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileUpload}
-        accept=".json,application/json"
-        className="hidden"
-      />
+      {/* Seletor de Base de Dados Eleitorais 2026 */}
+      <div className="bg-white p-2 sm:p-2.5 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 flex-1">
+          <button
+            onClick={() => setActiveDataset('causa_animal_v2')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeDataset === 'causa_animal_v2'
+                ? 'bg-[#102b31] text-white shadow-md'
+                : 'text-gray-600 hover:text-dark hover:bg-gray-100'
+            }`}
+          >
+            <span>🐾 Causa Animal SP 2026 (v2)</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-400 text-slate-950 font-black">
+              NOVO
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveDataset('resultados_gerais_v1')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeDataset === 'resultados_gerais_v1'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'text-gray-600 hover:text-dark hover:bg-gray-100'
+            }`}
+          >
+            <span>📊 Resultados Gerais 2026 (v1)</span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-gray-500 font-bold px-3 py-1 bg-gray-50 rounded-xl hidden md:block">
+          Dataset Ativo: <span className="font-mono text-dark">{activeDataset === 'causa_animal_v2' ? 'causa_animal_SP_2026_v2' : 'resultados_eleitorais_v1'}</span>
+        </div>
+      </div>
+
+      {activeDataset === 'causa_animal_v2' ? (
+        <CausaAnimalV2Tab refreshTrigger={refreshTrigger} />
+      ) : loading && !data ? (
+        <div className="bg-white rounded-3xl p-12 border border-gray-200/80 shadow-xs flex flex-col items-center justify-center min-h-[350px]">
+          <RefreshCw className="w-10 h-10 text-amber-500 animate-spin mb-4" />
+          <p className="text-sm font-black uppercase tracking-wider text-gray-700">Carregando dados eleitorais...</p>
+          <p className="text-xs text-gray-400 mt-1">Conectando ao armazenamento persistente do servidor</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".json,application/json"
+            className="hidden"
+          />
 
       {/* Top Banner & Actions Header */}
       <div className="bg-white rounded-3xl p-5 sm:p-7 border border-gray-200/80 shadow-xs">
@@ -1778,6 +1814,8 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
           )}
 
         </>
+      )}
+        </div>
       )}
 
     </div>
