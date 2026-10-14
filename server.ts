@@ -97,6 +97,96 @@ async function startServer() {
     }
   }
 
+  // Persistent partitioned disk storage for Causa Animal SP 2026 v2 dataset
+  const CAUSA_ANIMAL_DIR = path.join(process.cwd(), 'data', 'causa_animal_v2');
+  if (!fs.existsSync(CAUSA_ANIMAL_DIR)) {
+    try {
+      fs.mkdirSync(CAUSA_ANIMAL_DIR, { recursive: true });
+    } catch (e) {
+      console.error("Error creating CAUSA_ANIMAL_DIR:", e);
+    }
+  }
+
+  let causaAnimalMeta: any = null;
+  let causaAnimalReceipt: any = null;
+  let causaAnimalBases: Record<string, any[]> = {
+    municipios: [],
+    zonas: [],
+    locais: [],
+    bairros: [],
+    secoes: []
+  };
+  let causaAnimalFull: any = null;
+
+  try {
+    const metaPath = path.join(CAUSA_ANIMAL_DIR, 'meta.json');
+    if (fs.existsSync(metaPath)) {
+      const metaContent = fs.readFileSync(metaPath, 'utf-8');
+      causaAnimalMeta = JSON.parse(metaContent);
+      causaAnimalReceipt = causaAnimalMeta.receipt || null;
+      for (const b of ['municipios', 'zonas', 'locais', 'bairros', 'secoes']) {
+        const bp = path.join(CAUSA_ANIMAL_DIR, `${b}.json`);
+        if (fs.existsSync(bp)) {
+          causaAnimalBases[b] = JSON.parse(fs.readFileSync(bp, 'utf-8'));
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error loading causa_animal_v2 dataset from disk at boot:", e);
+  }
+
+  function saveCausaAnimalToDisk(dataset: any, receipt: any) {
+    try {
+      if (!fs.existsSync(CAUSA_ANIMAL_DIR)) {
+        fs.mkdirSync(CAUSA_ANIMAL_DIR, { recursive: true });
+      }
+
+      const meta = {
+        versao: dataset.versao,
+        dataset_id: dataset.dataset_id,
+        somente_amostra_de_estrutura: dataset.somente_amostra_de_estrutura,
+        metadados: dataset.metadados || {},
+        candidatos: dataset.candidatos || [],
+        ordem_candidatos_por_cargo: dataset.ordem_candidatos_por_cargo || {},
+        indices_por_universo: dataset.indices_por_universo || {},
+        receipt: receipt,
+        importedAt: new Date().toISOString()
+      };
+
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'meta.json'), JSON.stringify(meta, null, 2), 'utf-8');
+
+      const bases = dataset.bases || {};
+      const mun = bases.municipios?.registros || [];
+      const zon = bases.zonas?.registros || [];
+      const bai = bases.bairros?.registros || [];
+      const loc = bases.locais?.registros || [];
+      const sec = bases.secoes?.registros || [];
+
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'municipios.json'), JSON.stringify(mun), 'utf-8');
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'zonas.json'), JSON.stringify(zon), 'utf-8');
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'bairros.json'), JSON.stringify(bai), 'utf-8');
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'locais.json'), JSON.stringify(loc), 'utf-8');
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'secoes.json'), JSON.stringify(sec), 'utf-8');
+      fs.writeFileSync(path.join(CAUSA_ANIMAL_DIR, 'full.json'), JSON.stringify(dataset), 'utf-8');
+
+      causaAnimalMeta = meta;
+      causaAnimalReceipt = receipt;
+      causaAnimalBases = {
+        municipios: mun,
+        zonas: zon,
+        locais: loc,
+        bairros: bai,
+        secoes: sec
+      };
+      causaAnimalFull = dataset;
+
+      return true;
+    } catch (e) {
+      console.error("Error saving causa_animal_v2 dataset to disk:", e);
+      return false;
+    }
+  }
+
   let db: any = null;
   // Initialize DB in the background without blocking server startup
   getDbConnection().then(connection => {
@@ -169,6 +259,179 @@ async function startServer() {
       return res.json({ success: true, message: "Dados eleitorais removidos do servidor com sucesso." });
     } catch (e: any) {
       return res.status(500).json({ error: "Erro ao limpar dados eleitorais: " + e.message });
+    }
+  });
+
+  // ==========================================
+  // Rotas Causa Animal SP 2026 (versão 2)
+  // Dataset: causa_animal_SP_2026_v2
+  // ==========================================
+
+  app.get('/api/causa-animal/status', (req, res) => {
+    return res.json({
+      success: true,
+      hasData: !!causaAnimalMeta,
+      isPersistent: true,
+      dataset_id: 'causa_animal_SP_2026_v2',
+      versao: 2,
+      importedAt: causaAnimalMeta?.importedAt || null,
+      receipt: causaAnimalReceipt || causaAnimalMeta?.receipt || null,
+      counts: {
+        municipios: causaAnimalBases.municipios?.length || 0,
+        zonas: causaAnimalBases.zonas?.length || 0,
+        locais: causaAnimalBases.locais?.length || 0,
+        bairros: causaAnimalBases.bairros?.length || 0,
+        secoes: causaAnimalBases.secoes?.length || 0,
+        candidatos: causaAnimalMeta?.candidatos?.length || 0
+      }
+    });
+  });
+
+  app.get('/api/causa-animal/meta', (req, res) => {
+    if (!causaAnimalMeta) {
+      return res.status(404).json({ error: "Base causa_animal_SP_2026_v2 ainda não importada no servidor." });
+    }
+    return res.json(causaAnimalMeta);
+  });
+
+  app.get('/api/causa-animal/bases/:baseName', (req, res) => {
+    const baseName = req.params.baseName;
+    if (!causaAnimalBases[baseName]) {
+      return res.status(404).json({ error: `Coleção territorial '${baseName}' não encontrada.` });
+    }
+    return res.json({
+      success: true,
+      base: baseName,
+      total: causaAnimalBases[baseName].length,
+      registros: causaAnimalBases[baseName]
+    });
+  });
+
+  app.get('/api/causa-animal/secoes', (req, res) => {
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const pageSize = Math.min(500, Math.max(10, parseInt(req.query.pageSize as string, 10) || 50));
+    const zona = req.query.zona ? String(req.query.zona).trim() : '';
+    const local_id = req.query.local_id ? String(req.query.local_id).trim() : '';
+    const search = req.query.search ? String(req.query.search).toLowerCase().trim() : '';
+
+    let list = causaAnimalBases.secoes || [];
+    if (zona) {
+      const padded = zona.padStart(4, '0');
+      list = list.filter(s => String(s.zona).padStart(4, '0') === padded);
+    }
+    if (local_id) {
+      list = list.filter(s => s.local_id === local_id);
+    }
+    if (search) {
+      list = list.filter(s =>
+        (s.secao && String(s.secao).includes(search)) ||
+        (s.local_id && String(s.local_id).toLowerCase().includes(search)) ||
+        (s.zona && String(s.zona).includes(search))
+      );
+    }
+
+    const total = list.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const start = (page - 1) * pageSize;
+    const paginated = list.slice(start, start + pageSize);
+
+    return res.json({
+      success: true,
+      page,
+      pageSize,
+      total,
+      totalPages,
+      registros: paginated
+    });
+  });
+
+  app.get('/api/causa-animal/full', (req, res) => {
+    if (causaAnimalFull) {
+      return res.json(causaAnimalFull);
+    }
+    const fullPath = path.join(CAUSA_ANIMAL_DIR, 'full.json');
+    if (fs.existsSync(fullPath)) {
+      return res.sendFile(fullPath);
+    }
+    if (causaAnimalMeta) {
+      return res.json({
+        versao: causaAnimalMeta.versao,
+        dataset_id: causaAnimalMeta.dataset_id,
+        somente_amostra_de_estrutura: false,
+        metadados: causaAnimalMeta.metadados,
+        candidatos: causaAnimalMeta.candidatos,
+        ordem_candidatos_por_cargo: causaAnimalMeta.ordem_candidatos_por_cargo,
+        indices_por_universo: causaAnimalMeta.indices_por_universo,
+        bases: {
+          municipios: { registros: causaAnimalBases.municipios || [] },
+          zonas: { registros: causaAnimalBases.zonas || [] },
+          bairros: { registros: causaAnimalBases.bairros || [] },
+          locais: { registros: causaAnimalBases.locais || [] },
+          secoes: { registros: causaAnimalBases.secoes || [] }
+        }
+      });
+    }
+    return res.status(404).json({ error: "Base causa_animal_SP_2026_v2 não encontrada no servidor." });
+  });
+
+  app.post('/api/causa-animal/import', (req, res) => {
+    try {
+      const payload = req.body.dataset || req.body;
+      const receipt = req.body.receipt || null;
+
+      if (!payload || typeof payload !== 'object' || !payload.bases) {
+        return res.status(400).json({ error: "Formato de arquivo inválido. Estrutura 'bases' não encontrada." });
+      }
+
+      if (payload.somente_amostra_de_estrutura === true) {
+        return res.status(400).json({
+          error: "Arquivo de amostra rejeitado: 'somente_amostra_de_estrutura' é true. Importe o arquivo completo da base oficial."
+        });
+      }
+
+      if (payload.dataset_id !== 'causa_animal_SP_2026_v2') {
+        return res.status(400).json({
+          error: `Identificador incompatível: esperado 'causa_animal_SP_2026_v2', recebido '${payload.dataset_id}'.`
+        });
+      }
+
+      const saved = saveCausaAnimalToDisk(payload, receipt);
+      return res.json({
+        success: true,
+        isPersistent: saved,
+        dataset_id: 'causa_animal_SP_2026_v2',
+        versao: 2,
+        counts: {
+          municipios: payload.bases?.municipios?.registros?.length || 0,
+          zonas: payload.bases?.zonas?.registros?.length || 0,
+          locais: payload.bases?.locais?.registros?.length || 0,
+          bairros: payload.bases?.bairros?.registros?.length || 0,
+          secoes: payload.bases?.secoes?.registros?.length || 0
+        },
+        message: "Base causa_animal_SP_2026_v2 persistida com sucesso no servidor e disponibilizada para todos os visitantes."
+      });
+    } catch (err: any) {
+      console.error("Erro ao importar base causa_animal_v2 no servidor:", err);
+      return res.status(500).json({ error: "Falha ao processar arquivo no servidor: " + err.message });
+    }
+  });
+
+  app.delete('/api/causa-animal/clear', (req, res) => {
+    try {
+      causaAnimalMeta = null;
+      causaAnimalReceipt = null;
+      causaAnimalFull = null;
+      causaAnimalBases = { municipios: [], zonas: [], locais: [], bairros: [], secoes: [] };
+
+      if (fs.existsSync(CAUSA_ANIMAL_DIR)) {
+        const files = fs.readdirSync(CAUSA_ANIMAL_DIR);
+        for (const file of files) {
+          fs.unlinkSync(path.join(CAUSA_ANIMAL_DIR, file));
+        }
+      }
+      return res.json({ success: true, message: "Base causa_animal_SP_2026_v2 removida do servidor com sucesso." });
+    } catch (err: any) {
+      return res.status(500).json({ error: "Erro ao limpar base causa animal: " + err.message });
     }
   });
 
