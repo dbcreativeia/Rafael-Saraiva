@@ -802,6 +802,25 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         const pctRafael = vTotalCausa > 0 ? (vRafael / vTotalCausa) : 0;
         const potencialNew = Math.max(0, vTotalCausa - vRafael);
 
+        // Identificar Nina Passadore (mesmo partido União Brasil 4407)
+        let vNina = 0;
+        const ninaCand = candidatosList.find(c =>
+          c.cargo === 'deputado_federal' && (
+            c.id === 'nina_passadore' ||
+            String(c.id).toLowerCase().includes('nina') ||
+            (c.nome && c.nome.toLowerCase().includes('nina passadore')) ||
+            (c.nome_urna && c.nome_urna.toLowerCase().includes('nina passadore')) ||
+            c.numero === '4407' ||
+            String(c.numero) === '4407'
+          )
+        );
+        if (ninaCand) {
+          const ninaIdx = ordFed.indexOf(ninaCand.id);
+          if (ninaIdx >= 0) {
+            vNina = fedVec[ninaIdx] || 0;
+          }
+        }
+
         // Identificar o candidato concorrente da causa com mais votos no município (excluindo Rafael Saraiva)
         let bestCompetitorCand: Candidate | null = null;
         let maxCompetitorVotes = 0;
@@ -830,11 +849,24 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         const compVotos = maxCompetitorVotes;
         const compPct = vTotalCausa > 0 ? (compVotos / vTotalCausa) : 0;
 
+        const isNina = Boolean(
+          bestCompetitorCand && (
+            bestCompetitorCand.id === 'nina_passadore' ||
+            String(bestCompetitorCand.id).toLowerCase().includes('nina') ||
+            (bestCompetitorCand.nome && bestCompetitorCand.nome.toLowerCase().includes('nina passadore')) ||
+            (bestCompetitorCand.nome_urna && bestCompetitorCand.nome_urna.toLowerCase().includes('nina passadore')) ||
+            bestCompetitorCand.numero === '4407' ||
+            String(bestCompetitorCand.numero) === '4407'
+          )
+        );
+
         let estrategiaCapitacao = '';
-        if (compCargo === 'deputado_federal') {
-          estrategiaCapitacao = `Propor dobrada estadual com Rafael Saraiva (44077) aos eleitores que votaram em ${compNome} no Federal (${formatNumber(compVotos)} votos).`;
+        if (isNina) {
+          estrategiaCapitacao = `Dobrada Oficial de Partido (União Brasil 44077 + 4407): Nina Passadore é do mesmo partido de Rafael Saraiva. Estratégia de chapa pura partidária para unificar e expandir os ${formatNumber(compVotos)} votos da causa com material conjunto e campanhas casadas.`;
+        } else if (compCargo === 'deputado_federal') {
+          estrategiaCapitacao = `Captura direta do eleitor da causa (Sem dobrada): Como ${compNome} é de outro partido, não cabe nem faz sentido propor dobrada partidária. A estratégia é a absorção direta desses ${formatNumber(compVotos)} eleitores da causa animal comunicando os projetos estaduais de Rafael Saraiva via mídias geolocalizadas e presença na ponta.`;
         } else {
-          estrategiaCapitacao = `Diferenciação estadual direta contra ${compNome} (${formatNumber(compVotos)} votos) com entrega de castramóvel e emendas a ONGs locais.`;
+          estrategiaCapitacao = `Desidratação de concorrente estadual: Disputar diretamente a base de ${compNome} (${formatNumber(compVotos)} votos) com entregas visíveis no município (castramóvel, fiscalização de maus-tratos e recursos para protetores locais).`;
         }
 
         let regiao: 'capital' | 'rmc' | 'grande_sp' | 'litoral' | 'vale' | 'noroeste' | 'sorocaba' | 'outras' = 'outras';
@@ -849,18 +881,21 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         let justificativa = '';
         let acao = '';
 
-        if (nomeMun === 'CAMPINAS' || nomeMun === 'PIRACICABA' || nomeMun === 'LIMEIRA' || nomeMun === 'AMERICANA') {
-          justificativa = `Considerando EXCLUSIVAMENTE os votos dos candidatos da causa animal, Campinas soma ${formatNumber(vTotalCausa)} votos na pauta pet. Maior atração: ${compNome} com ${formatNumber(compVotos)} votos. Rafael tem ${formatNumber(vRafael)} votos, oferecendo +${formatNumber(potencialNew)} votos de teto direto para migração.`;
+        if (nomeMun === 'SÃO PAULO') {
+          justificativa = `Principal polo da causa animal no Estado com ${formatNumber(vTotalCausa)} votos no segmento pet. Rafael Saraiva já possui ${formatNumber(vRafael)} votos conquistados. Dobrada oficial de mesmo partido com Nina Passadore (União Brasil 4407: ${formatNumber(vNina)} votos). Para os eleitores que votaram em deputados federais de outros partidos (Delegado Bruno Lima e Felipe Becari), a estratégia é captação direta na ponta sem intermediários partidários, abrindo um teto de expansão de +${formatNumber(potencialNew)} votos.`;
+          acao = 'Dobrada Oficial União Brasil (44077 + 4407) + Mutirões periféricos e presença direta em feiras e ONGs';
+        } else if (nomeMun === 'CAMPINAS' || nomeMun === 'PIRACICABA' || nomeMun === 'LIMEIRA' || nomeMun === 'AMERICANA') {
+          justificativa = `Considerando EXCLUSIVAMENTE os votos dos candidatos da causa animal, Campinas soma ${formatNumber(vTotalCausa)} votos na pauta pet. Maior concentração: ${compNome} com ${formatNumber(compVotos)} votos. Rafael tem ${formatNumber(vRafael)} votos, oferecendo +${formatNumber(potencialNew)} votos de teto direto para migração na ponta.`;
           acao = 'Parceria com ONGs locais + Envio de Castramóvel e ração';
         } else if (nomeMun === 'GUARULHOS' || nomeMun === 'OSASCO' || nomeMun === 'SANTO ANDRÉ' || nomeMun === 'SÃO BERNARDO DO CAMPO') {
-          justificativa = `A soma dos candidatos da causa no município atinge ${formatNumber(vTotalCausa)} votos. Líder a atrair: ${compNome} (${formatNumber(compVotos)} v). Espaço de crescimento de +${formatNumber(potencialNew)} votos na dobrada federal.`;
-          acao = 'Mobilização de rua + Encontros georreferenciados nos bairros';
+          justificativa = `A soma dos candidatos da causa no município atinge ${formatNumber(vTotalCausa)} votos. Líder da pauta: ${compNome} (${formatNumber(compVotos)} v de outro partido). Espaço de conquista de +${formatNumber(potencialNew)} votos capturando diretamente o eleitor da causa para o voto estadual de Rafael Saraiva.`;
+          acao = 'Mobilização direta de rua + Tráfego georreferenciado nos bairros';
         } else if (nomeMun === 'SANTOS' || nomeMun === 'PRAIA GRANDE' || nomeMun === 'ITANHAÉM' || nomeMun === 'SÃO VICENTE') {
-          justificativa = `Polo litorâneo onde os candidatos da causa animal somam ${formatNumber(vTotalCausa)} votos (líder ${compNome} com ${formatNumber(compVotos)} v). Margem de conquista de +${formatNumber(potencialNew)} votos de eleitores pet.`;
+          justificativa = `Polo litorâneo onde os candidatos da causa animal somam ${formatNumber(vTotalCausa)} votos (líder ${compNome} com ${formatNumber(compVotos)} v). Margem de conquista de +${formatNumber(potencialNew)} votos de eleitores pet sem intermediação partidária.`;
           acao = 'Mutirão de Castração de Verão + Articulação com protetores locais';
         } else if (nomeMun === 'SÃO JOSÉ DOS CAMPOS' || nomeMun === 'TAUBATÉ') {
-          justificativa = `Candidatos da causa animal somam ${formatNumber(vTotalCausa)} votos no município. Principal alvo: ${compNome} (${formatNumber(compVotos)} v). Oportunidade de atrair +${formatNumber(potencialNew)} eleitores fiéis à pauta.`;
-          acao = 'Dobrada estratégica com vereadores defensores da pauta';
+          justificativa = `Candidatos da causa animal somam ${formatNumber(vTotalCausa)} votos no município. Principal concentração: ${compNome} (${formatNumber(compVotos)} v). Oportunidade de atrair +${formatNumber(potencialNew)} eleitores fiéis à pauta através da entrega do mandato.`;
+          acao = 'Articulação direta com protetores independentes e feiras pet';
         } else if (nomeMun === 'RIBEIRÃO PRETO' || nomeMun === 'SÃO JOSÉ DO RIO PRETO' || nomeMun === 'FRANCA') {
           justificativa = `Os candidatos da causa animal consolidam ${formatNumber(vTotalCausa)} votos na cidade (concorrente líder: ${compNome} com ${formatNumber(compVotos)} v). Espaço para captação de +${formatNumber(potencialNew)} votos.`;
           acao = 'Destinação de emendas parlamentares em ração e medicamentos';
@@ -876,6 +911,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           municipio: m.municipio || m.nome,
           regiao,
           vRafael,
+          vNina,
           vTotalCausa,
           potencialNew,
           pctRafael,
@@ -884,6 +920,8 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
             cargo: compCargo,
             votos: compVotos,
             pct: compPct,
+            isMesmoPartido: isNina,
+            partido: isNina ? 'União Brasil' : 'Outro Partido',
             estrategiaCapitacao
           },
           justificativa,
@@ -895,9 +933,30 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
     // Lista fallback considerando estritamente a soma dos candidatos da causa animal
     return [
       {
+        municipio: 'São Paulo',
+        regiao: 'capital' as const,
+        vRafael: 32407,
+        vNina: 6564,
+        vTotalCausa: 185000,
+        potencialNew: 152593,
+        pctRafael: 0.175,
+        candidatoAlvo: {
+          nome: 'Nina Passadore',
+          cargo: 'deputado_federal' as const,
+          votos: 6564,
+          pct: 0.035,
+          isMesmoPartido: true,
+          partido: 'União Brasil',
+          estrategiaCapitacao: 'Dobrada Oficial de Partido (União Brasil 44077 + 4407): Nina Passadore é do mesmo partido de Rafael Saraiva. Dobrada oficial de chapa pura partidária para unificar os votos da causa. Para os federais de outros partidos (Delegado Bruno Lima com 49,6k e Felipe Becari com 42k), a estratégia é captura direta do eleitorado pet na ponta, sem dobrada partidária.'
+        },
+        justificativa: 'Maior colégio eleitoral da causa animal no Estado (185.000 votos no nicho pet). Rafael obteve 32.407 votos. A única dobrada viável e oficial é com Nina Passadore (4407 - União Brasil), com 6.564 votos na Capital. Para os federais de outros partidos, o foco é a captura direta dos eleitores da causa animal, com teto de expansão de +152.593 votos.',
+        acao: 'Campanha casada da Dobrada Oficial União Brasil (44077 + 4407) + Presença intensiva nas periferias e fiscalização de maus-tratos'
+      },
+      {
         municipio: 'Campinas',
         regiao: 'rmc' as const,
         vRafael: 4120,
+        vNina: 890,
         vTotalCausa: 18450,
         potencialNew: 14330,
         pctRafael: 0.223,
@@ -906,7 +965,9 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_estadual' as const,
           votos: 8920,
           pct: 0.483,
-          estrategiaCapitacao: 'Capturar eleitorado estadual do Bruno Ganem (8.920 votos) com apoio a abrigos e envio de castramóvel para ONGs locais.'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Desidratação de concorrente estadual: Bruno Ganem é concorrente estadual de outro partido. Disputar diretamente a base com envio de castramóvel para ONGs locais e suporte de ração.'
         },
         justificativa: 'Soma exclusiva dos candidatos da causa animal. A pauta pet soma 18.450 votos no município. Maior alvo a atrair: Bruno Ganem (8.920 v). Rafael tem 4.120 votos, deixando 14.330 votos para expansão.',
         acao: 'Parceria com ONGs + Mutirões de Castramóvel e recursos para ração'
@@ -915,6 +976,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         municipio: 'Guarulhos',
         regiao: 'grande_sp' as const,
         vRafael: 3890,
+        vNina: 780,
         vTotalCausa: 15800,
         potencialNew: 11910,
         pctRafael: 0.246,
@@ -923,15 +985,18 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 6840,
           pct: 0.432,
-          estrategiaCapitacao: 'Consolidar dobrada estadual com Rafael Saraiva (44077) junto ao eleitorado federal do Delegado Bruno Lima (6.840 votos).'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Como Delegado Bruno Lima é de outro partido, não cabe nem faz sentido propor dobrada. A tática é absorver diretamente esses 6.840 eleitores da causa na cidade com campanhas de resgate e castração.'
         },
-        justificativa: 'Soma dos candidatos ativistas da causa na cidade. Teto animalista de 15.800 votos. Concorrente líder a atrair: Delegado Bruno Lima (6.840 v). Excelente histórico de co-votação.',
-        acao: 'Dobradinhas com lideranças de bairro e panfletagem georreferenciada'
+        justificativa: 'Soma dos candidatos ativistas da causa na cidade. Teto animalista de 15.800 votos. Concorrente líder: Delegado Bruno Lima (6.840 v de outro partido — sem dobrada). Foco em absorver diretamente esses eleitores para o mandato estadual.',
+        acao: 'Ações de rua nos bairros + Tráfego pago geolocalizado para eleitores pet'
       },
       {
         municipio: 'Santos',
         regiao: 'litoral' as const,
         vRafael: 2450,
+        vNina: 520,
         vTotalCausa: 11200,
         potencialNew: 8750,
         pctRafael: 0.218,
@@ -940,15 +1005,18 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 4950,
           pct: 0.441,
-          estrategiaCapitacao: 'Promover dobrada oficial com Rafael Saraiva ao eleitorado federal de Felipe Becari (4.950 votos).'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Felipe Becari é de outro partido, inviabilizando dobrada oficial. A estratégia é posicionar Rafael Saraiva como a única voz estadual ativa da causa na Baixada Santista para absorver esses 4.950 eleitores.'
         },
-        justificativa: 'Votação restrita dos candidatos da causa animal soma 11.200 votos. Maior alvo: Felipe Becari (4.950 v). Rafael possui 2.450 votos, com margem de 8.750 votos de eleitores pet.',
-        acao: 'Clínica Pet / Castramóvel em parceria com vereadores da pauta'
+        justificativa: 'Votação restrita dos candidatos da causa animal soma 11.200 votos. Maior alvo: Felipe Becari (4.950 v de outro partido). Rafael possui 2.450 votos, com margem de 8.750 votos de eleitores pet para migração direta na ponta.',
+        acao: 'Mutirão de Castração no Litoral + Articulação com protetores locais'
       },
       {
         municipio: 'Osasco',
         regiao: 'grande_sp' as const,
         vRafael: 2890,
+        vNina: 640,
         vTotalCausa: 10900,
         potencialNew: 8010,
         pctRafael: 0.265,
@@ -957,15 +1025,18 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 4820,
           pct: 0.442,
-          estrategiaCapitacao: 'Fechar dobrada estadual com Rafael Saraiva aproveitando os 4.820 votos federais do Delegado Bruno Lima.'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Bruno Lima pertence a outro partido. A estratégia é absorver os 4.820 votos do eleitorado pet na ponta, estabelecendo Rafael Saraiva como o deputado estadual presente no município.'
         },
-        justificativa: 'Candidatos da causa animal somam 10.900 votos no município (líder: Delegado Bruno Lima com 4.820 v). Rafael possui 2.890 votos fixados e pode buscar os 8.010 votos restantes.',
-        acao: 'Iniciativas de unidades veterinárias móveis e eventos pet'
+        justificativa: 'Candidatos da causa animal somam 10.900 votos no município (líder: Delegado Bruno Lima com 4.820 v de outro partido). Rafael possui 2.890 votos fixados e pode absorver os 8.010 votos restantes.',
+        acao: 'Iniciativas de unidades veterinárias móveis e suporte a protetores de animais'
       },
       {
         municipio: 'São José dos Campos',
         regiao: 'vale' as const,
         vRafael: 1980,
+        vNina: 410,
         vTotalCausa: 9800,
         potencialNew: 7820,
         pctRafael: 0.202,
@@ -974,15 +1045,18 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 4210,
           pct: 0.429,
-          estrategiaCapitacao: 'Atrair eleitores do Vale do Paraíba que votaram em Delegado Bruno Lima em parceria com vereadores ativistas da causa.'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Sendo Bruno Lima de outro partido, a captação dos 4.210 eleitores pet no Vale do Paraíba se dará via canal direto com ONGs, feiras e protetores locais.'
         },
-        justificativa: 'Eleitorado exclusivo da causa pet soma 9.800 votos. Maior alvo: Delegado Bruno Lima (4.210 v). Votação atual dos outros candidatos oferece espaço de 7.820 novos votos.',
-        acao: 'Dobrada com vereadores animalistas + Presença em feiras de adoção'
+        justificativa: 'Eleitorado exclusivo da causa pet soma 9.800 votos. Maior alvo: Delegado Bruno Lima (4.210 v de outro partido). Sem acordo partidário, a atuação é direta na ponta para captar 7.820 novos votos.',
+        acao: 'Articulação direta com protetores independentes + Presença em feiras de adoção'
       },
       {
         municipio: 'Ribeirão Preto',
         regiao: 'noroeste' as const,
         vRafael: 2150,
+        vNina: 460,
         vTotalCausa: 9400,
         potencialNew: 7250,
         pctRafael: 0.228,
@@ -991,7 +1065,9 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_estadual' as const,
           votos: 3840,
           pct: 0.408,
-          estrategiaCapitacao: 'Oferecer suporte de ração e castração a abrigos independentes do Noroeste para migrar eleitores do Bruno Ganem (3.840 votos).'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Desidratação de concorrente estadual: Oferecer suporte de ração e castração a abrigos independentes do Noroeste para superar a votação estadual de Bruno Ganem (3.840 votos).'
         },
         justificativa: 'Soma dos candidatos da causa animal atinge 9.400 votos na capital do Noroeste (alvo: Bruno Ganem com 3.840 v). Espaço de crescimento de 7.250 votos entre protetores.',
         acao: 'Emendas parlamentares para castração, ração e vacinas'
@@ -1000,6 +1076,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         municipio: 'Sorocaba',
         regiao: 'sorocaba' as const,
         vRafael: 2310,
+        vNina: 490,
         vTotalCausa: 8900,
         potencialNew: 6590,
         pctRafael: 0.259,
@@ -1008,15 +1085,18 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 3910,
           pct: 0.439,
-          estrategiaCapitacao: 'Avançar com blitzes de vacinação e parcerias com protetores locais para dobrada estadual.'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Atrair os 3.910 eleitores da causa de Delegado Bruno Lima (outro partido) com mutirões de castração, vacinação e parcerias com protetores locais para o voto estadual.'
         },
-        justificativa: 'Candidatos da causa animal somam 8.900 votos em Sorocaba. Maior concorrente: Delegado Bruno Lima (3.910 v). Rafael possui 2.310 votos e pode avançar sobre 6.590 votos.',
-        acao: 'Articulação com protetores e vereadores animalistas locais'
+        justificativa: 'Candidatos da causa animal somam 8.900 votos em Sorocaba. Maior concentração: Delegado Bruno Lima (3.910 v de outro partido). Rafael possui 2.310 votos e pode avançar sobre 6.590 votos da causa.',
+        acao: 'Articulação direta com protetores e atendimento veterinário itinerante'
       },
       {
         municipio: 'Piracicaba',
         regiao: 'rmc' as const,
         vRafael: 1840,
+        vNina: 380,
         vTotalCausa: 8100,
         potencialNew: 6260,
         pctRafael: 0.227,
@@ -1025,7 +1105,9 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_estadual' as const,
           votos: 3420,
           pct: 0.422,
-          estrategiaCapitacao: 'Diferenciação política enviando unidade móvel veterinária e emendas para protetores da RMC para superar Bruno Ganem (3.420 v).'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Desidratação de concorrente estadual: Diferenciação política enviando unidade móvel veterinária e emendas para protetores da RMC para superar Bruno Ganem (3.420 v).'
         },
         justificativa: 'Votação acumulada dos candidatos da causa soma 8.100 votos (líder: Bruno Ganem com 3.420 v). Lacuna de representação estadual permite conquistar até 6.260 novos votos.',
         acao: 'Apoio a abrigos locais e mutirões comunitários de vacinação'
@@ -1034,6 +1116,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         municipio: 'Indaiatuba',
         regiao: 'rmc' as const,
         vRafael: 12850,
+        vNina: 1220,
         vTotalCausa: 14800,
         potencialNew: 1950,
         pctRafael: 0.868,
@@ -1042,6 +1125,8 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_estadual' as const,
           votos: 1120,
           pct: 0.075,
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
           estrategiaCapitacao: 'Manter cerco total sobre a base de Ganem (1.120 votos) garantindo hegemonia de 86,8% em Indaiatuba.'
         },
         justificativa: 'Bastião histórico: Rafael Saraiva concentra 12.850 dos 14.800 votos totais dos candidatos da causa no município (segundo colocado é Bruno Ganem com 1.120 v).',
@@ -1051,6 +1136,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         municipio: 'Praia Grande',
         regiao: 'litoral' as const,
         vRafael: 3120,
+        vNina: 610,
         vTotalCausa: 7100,
         potencialNew: 3980,
         pctRafael: 0.439,
@@ -1059,7 +1145,9 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 2150,
           pct: 0.302,
-          estrategiaCapitacao: 'Promover dobrada com federal e eventos de posse responsável no Litoral para capturar a base de Becari (2.150 v).'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Capturar eleitores da causa que votaram em Felipe Becari no Federal (2.150 v de outro partido) com campanhas de castração e fiscalização de maus-tratos no Litoral Sul.'
         },
         justificativa: 'Candidatos da causa animal somam 7.100 votos. Rafael detém 3.120 votos e tem potencial de absorver os 3.980 votos dos outros nomes da causa.',
         acao: 'Mutirões de castração e campanhas de posse responsável'
@@ -1068,6 +1156,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         municipio: 'Santo André',
         regiao: 'grande_sp' as const,
         vRafael: 2650,
+        vNina: 580,
         vTotalCausa: 9600,
         potencialNew: 6950,
         pctRafael: 0.276,
@@ -1076,15 +1165,18 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 4120,
           pct: 0.429,
-          estrategiaCapitacao: 'Articulação direta com protetores do ABC Paulista para fechar dobrada com o eleitorado de Bruno Lima (4.120 v).'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Articulação direta com protetores urbanos do ABC para absorver os 4.120 votos federais de Bruno Lima para a candidatura estadual de Rafael Saraiva.'
         },
         justificativa: 'Soma dos candidatos da causa no ABC soma 9.600 votos. Espaço de expansão de 6.950 votos de eleitores focados na pauta pet.',
-        acao: 'Aliança com protetores urbanos e emendas para feiras de adoção'
+        acao: 'Aliança com protetores independentes e emendas para feiras de adoção'
       },
       {
         municipio: 'São Bernardo do Campo',
         regiao: 'grande_sp' as const,
         vRafael: 2980,
+        vNina: 690,
         vTotalCausa: 11200,
         potencialNew: 8220,
         pctRafael: 0.266,
@@ -1093,10 +1185,12 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
           cargo: 'deputado_federal' as const,
           votos: 4890,
           pct: 0.436,
-          estrategiaCapitacao: 'Fechamento de dobrada com o candidato federal em prol de abrigos de animais para trazer os 4.890 votos de Bruno Lima.'
+          isMesmoPartido: false,
+          partido: 'Outro Partido',
+          estrategiaCapitacao: 'Captura direta do eleitor da causa (Sem dobrada): Conquistar os 4.890 eleitores de Bruno Lima apresentando as leis e fiscalizações de Rafael Saraiva como a referência estadual da causa no ABC.'
         },
-        justificativa: 'Candidatos da causa animal somam 11.200 votos (líder Bruno Lima com 4.890 v). Rafael tem 2.980 votos com margem de 8.220 votos para captação.',
-        acao: 'Apoio institucional e destinação de emendas para ração e vacinação'
+        justificativa: 'Candidatos da causa animal somam 11.200 votos (líder Bruno Lima com 4.890 v de outro partido). Rafael tem 2.980 votos com margem de 8.220 votos para captação direta.',
+        acao: 'Apoio institucional a abrigos e destinação de emendas para ração e vacinação'
       }
     ];
   }, [data, stratExcludeRegina, stratCandidateScope, rafaelCandidate]);
@@ -4490,7 +4584,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                         `${topCitiesText}\n\n` +
                         `--- RECOMENDAÇÕES TÁTICAS DE CAMPO ---\n` +
                         `1. RMC & Campinas: Envio de Castramóvel + Insumos de ração para ONGs parceiras.\n` +
-                        `2. Grande SP & ABC: Dobradinhas com lideranças locais e panfletagem nos bairros.\n` +
+                        `2. Grande SP & ABC: Ações diretas nos bairros com protetores locais, castramóvel e comunicação georreferenciada.\n` +
                         `3. Litoral: Mutirões de Castração de Verão e apoio a protetores em Santos e Praia Grande.\n` +
                         `4. Vale do Paraíba & Noroeste: Emendas parlamentares diretas em ração e medicamentos.\n`;
 
@@ -4619,66 +4713,102 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                         Top Cidades: Força da Causa Animal
                       </h4>
                       <p className="text-xs text-gray-500">
-                        Cidades com maior volume total de votos na pauta {stratExcludeRegina ? '(excluindo Regina Nunes)' : '(todas as candidaturas)'}
+                        Fatia exclusiva dos votos da causa animal — Mostra unicamente os votos da causa animal na cidade: fatia de Rafael Saraiva (União Brasil 44077), dobrada oficial com Nina Passadore (União Brasil 4407) e fatia dos demais candidatos da causa {stratExcludeRegina ? '(sem Regina Nunes)' : ''}
                       </p>
                     </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 font-black text-[10px] uppercase border border-blue-200">
-                      Total Causa x Rafael Saraiva
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 font-black text-[10px] uppercase border border-emerald-200">
+                      100% Nicho Causa Animal
                     </span>
                   </div>
 
-                  <div className="space-y-3 text-xs">
+                  <div className="space-y-3.5 text-xs">
                     {filteredStrategicCities.slice(0, 8).map((city, idx) => {
-                      const maxVal = Math.max(...filteredStrategicCities.map(c => c.vTotalCausa), 1);
-                      const pctCausaWidth = Math.min(100, Math.round((city.vTotalCausa / maxVal) * 100));
-                      const pctRafaelWidth = Math.min(100, Math.round((city.vRafael / city.vTotalCausa) * 100));
+                      const vTotalCausa = city.vTotalCausa || 1;
+                      const vRafael = city.vRafael || 0;
+                      const vNina = city.vNina || 0;
+                      const vOutros = Math.max(0, vTotalCausa - vRafael - vNina);
+
+                      const pctRafael = Math.min(1, Math.max(0, vRafael / vTotalCausa));
+                      const pctNina = Math.min(1, Math.max(0, vNina / vTotalCausa));
+                      const pctOutros = Math.min(1, Math.max(0, vOutros / vTotalCausa));
+
+                      const pctRafael100 = (pctRafael * 100).toFixed(1);
+                      const pctNina100 = (pctNina * 100).toFixed(1);
+                      const pctOutros100 = (pctOutros * 100).toFixed(1);
 
                       return (
-                        <div key={city.municipio} className="space-y-1 p-2.5 rounded-xl hover:bg-gray-50 transition-all border border-gray-100">
-                          <div className="flex items-center justify-between font-bold text-dark">
-                            <span className="flex items-center gap-1.5 font-black text-slate-900">
+                        <div key={city.municipio} className="space-y-1.5 p-3 rounded-xl hover:bg-gray-50/90 transition-all border border-gray-200 shadow-2xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 font-bold text-dark">
+                            <span className="flex items-center gap-1.5 font-black text-slate-900 text-sm">
                               <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-900 font-mono text-[10px] flex items-center justify-center font-black">
                                 {idx + 1}
                               </span>
                               {city.municipio}
+                              <span className="text-[10px] text-gray-400 font-normal uppercase">({city.regiao})</span>
                             </span>
-                            <div className="flex items-center gap-2 font-mono text-[11px]">
-                              <span className="text-blue-900 font-black" title="Total Causa Animal">
-                                {formatNumber(city.vTotalCausa)} votos
+                            <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                              <span className="text-blue-950 font-black bg-blue-50 px-2 py-0.5 rounded border border-blue-200" title="Universo Total da Causa Animal nesta Cidade (sem votos de fora da pauta pet)">
+                                100% Causa: {formatNumber(city.vTotalCausa)} votos
                               </span>
-                              <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200" title="Votos Rafael Saraiva">
-                                Rafael: {formatNumber(city.vRafael)} ({formatPct(city.pctRafael)})
+                              <span className="text-emerald-800 font-black bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300" title="Votos Conquistados por Rafael Saraiva">
+                                Rafael: {formatNumber(city.vRafael)} ({pctRafael100}%)
+                              </span>
+                              {vNina > 0 && (
+                                <span className="text-purple-800 font-black bg-purple-50 px-2 py-0.5 rounded border border-purple-300" title="Dobrada Nina Passadore (União Brasil 4407)">
+                                  Nina (4407): {formatNumber(vNina)} ({pctNina100}%)
+                                </span>
+                              )}
+                              <span className="text-indigo-900 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200" title="Fatia a Conquistar dos Candidatos de Outros Partidos">
+                                A Disputar: +{formatNumber(vOutros)} ({pctOutros100}%)
                               </span>
                             </div>
                           </div>
 
-                          {/* Barra Visual Composta */}
-                          <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden flex relative">
-                            {/* Barra Votos Rafael Saraiva */}
+                          {/* Barra Proporcional Exclusiva da Causa Animal (100% dos votos da causa no município) */}
+                          <div className="w-full bg-gray-100 rounded-xl h-6 overflow-hidden flex relative border border-gray-200 shadow-inner">
+                            {/* Fatia Rafael Saraiva (União Brasil 44077) */}
                             <div
-                              className="bg-emerald-500 h-full transition-all"
-                              style={{ width: `${pctCausaWidth * (city.pctRafael || 0)}%` }}
-                              title={`Rafael Saraiva: ${formatNumber(city.vRafael)} votos`}
-                            ></div>
-                            {/* Barra Outros Candidatos Causa Animal */}
+                              className="bg-emerald-500 hover:bg-emerald-600 h-full transition-all flex items-center justify-center text-[10px] text-white font-black font-mono overflow-hidden whitespace-nowrap px-1"
+                              style={{ width: `${Math.max(pctRafael * 100, pctRafael > 0 ? 3 : 0)}%` }}
+                              title={`Rafael Saraiva (União Brasil 44077): ${formatNumber(vRafael)} votos (${pctRafael100}% da causa animal)`}
+                            >
+                              {pctRafael >= 0.10 && `Rafael ${pctRafael100}%`}
+                            </div>
+                            {/* Fatia Nina Passadore (União Brasil 4407 - Dobrada Mesmo Partido) */}
+                            {vNina > 0 && (
+                              <div
+                                className="bg-purple-600 hover:bg-purple-700 h-full transition-all flex items-center justify-center text-[10px] text-white font-black font-mono overflow-hidden whitespace-nowrap px-1"
+                                style={{ width: `${Math.max(pctNina * 100, pctNina > 0 ? 3 : 0)}%` }}
+                                title={`Nina Passadore (Dobrada Oficial União Brasil 4407): ${formatNumber(vNina)} votos (${pctNina100}% da causa animal)`}
+                              >
+                                {pctNina >= 0.08 && `Nina ${pctNina100}%`}
+                              </div>
+                            )}
+                            {/* Fatia Demais Nomes da Causa (Outros Partidos a Conquistar) */}
                             <div
-                              className="bg-blue-300 h-full transition-all"
-                              style={{ width: `${pctCausaWidth * (1 - (city.pctRafael || 0))}%` }}
-                              title={`Outros Candidatos da Causa: ${formatNumber(city.potencialNew)} votos`}
-                            ></div>
+                              className="bg-indigo-600 hover:bg-indigo-700 h-full transition-all flex items-center justify-center text-[10px] text-white font-black font-mono overflow-hidden whitespace-nowrap px-1"
+                              style={{ width: `${Math.max(pctOutros * 100, pctOutros > 0 ? 3 : 0)}%` }}
+                              title={`Fatia em Disputa (Outros Partidos): ${formatNumber(vOutros)} votos (${pctOutros100}% da causa animal)`}
+                            >
+                              {pctOutros >= 0.10 && `Outros Partidos ${pctOutros100}%`}
+                            </div>
                           </div>
 
-                          <div className="flex justify-between text-[10px] text-gray-500 pt-0.5">
-                            <span>Espaço de Conquista: <strong className="text-amber-800 font-mono">+{formatNumber(city.potencialNew)} votos</strong></span>
-                            <span className="text-gray-400 capitalize">{city.regiao}</span>
+                          <div className="flex flex-wrap justify-between text-[10px] text-gray-500 pt-0.5 gap-1">
+                            <span>Rafael (União 44077): <strong className="text-emerald-800 font-mono font-black">{formatNumber(vRafael)} votos ({pctRafael100}%)</strong></span>
+                            {vNina > 0 && (
+                              <span>Dobrada Nina (União 4407): <strong className="text-purple-800 font-mono font-black">{formatNumber(vNina)} votos ({pctNina100}%)</strong></span>
+                            )}
+                            <span>Em Disputa (Outros Partidos): <strong className="text-indigo-900 font-mono font-black">+{formatNumber(vOutros)} votos ({pctOutros100}%)</strong></span>
                           </div>
                         </div>
                       );
                     })}
 
-                    <div className="pt-2 flex items-center justify-between text-[11px] text-gray-500 font-bold border-t border-gray-100">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Votos Rafael Saraiva</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-300 inline-block"></span> Potencial de Novos Votos</span>
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600 font-bold border-t border-gray-100">
+                      <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded bg-emerald-500 inline-block"></span> Rafael Saraiva (União Brasil 44077)</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded bg-purple-600 inline-block"></span> Nina Passadore (Dobrada União Brasil 4407)</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded bg-indigo-600 inline-block"></span> Fatia em Disputa (Outros Partidos)</span>
                     </div>
                   </div>
                 </div>
@@ -4730,7 +4860,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                           </span>
                         </div>
                         <p className="text-blue-900/80 text-[11px] leading-relaxed">
-                          <strong>Alta densidade demográfica.</strong> Cidades com forte presença de ONGs e protetores independentes urbanos. Oportunidade de aumentar a média por seção na dobrada federal.
+                          <strong>Alta densidade demográfica.</strong> Cidades com forte presença de ONGs e protetores independentes urbanos. Oportunidade de capturar eleitores da causa animal com ações de castração e fiscalização urbana.
                         </p>
                       </div>
 
@@ -4830,6 +4960,24 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                   </div>
                 </div>
 
+                {/* Diretriz Estratégica Realista: Sem Dobrada com Outros Partidos vs Dobrada Oficial com Nina Passadore */}
+                <div className="p-4 bg-purple-50/90 rounded-2xl border border-purple-200 text-xs text-purple-950 flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1.5">
+                    <div className="font-black text-purple-900 uppercase tracking-wide text-xs">
+                      Diretriz Estratégica Partidária (Aliança Realista):
+                    </div>
+                    <div className="text-purple-900/90 font-medium leading-relaxed space-y-1">
+                      <p>
+                        <strong>Deputados Federais de Outros Partidos:</strong> Como os deputados federais mais votados na causa animal pertencem a outros partidos (Delegado Bruno Lima, Felipe Becari, Profa. Luciene, etc.), <strong>não há viabilidade e não faz sentido propor dobrada ou aliança partidária</strong>. A estratégia do mandato consiste na <strong>captura direta do eleitorado da causa na ponta</strong> (ONGs, protetores independentes, mutirões de castração e mídia geolocalizada), ocupando o espaço estadual sem vínculo ou dependência desses parlamentares.
+                      </p>
+                      <p>
+                        <strong>Dobrada Oficial de Partido (União Brasil):</strong> A única dobrada federal real e alinhada partidariamente é com <strong>NINA PASSADORE (4407)</strong>, que é do mesmo partido de Rafael Saraiva (União Brasil 44077). Esta sim é a estratégia de chapa pura partidária para campanhas conjuntas, materiais casados e unificação dos votos da causa animal no Estado.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto border border-gray-200 rounded-xl">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-black uppercase text-[10px] tracking-wider">
@@ -4839,8 +4987,8 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                         <th className="py-3 px-3 text-right">Causa Animal {stratExcludeRegina ? '(Sem Regina)' : ''}</th>
                         <th className="py-3 px-3 text-right">% Share Rafael</th>
                         <th className="py-3 px-3 text-right">Potencial Conquista</th>
-                        <th className="py-3 px-4 bg-purple-50 text-purple-950 font-black">Candidato Alvo a Atrair Votos (Líder da Causa)</th>
-                        <th className="py-3 px-4">Estratégia de Captação & Ação Tática</th>
+                        <th className="py-3 px-4 bg-purple-50 text-purple-950 font-black">Cenário Federal / Concorrente da Causa</th>
+                        <th className="py-3 px-4">Estratégia de Captação Direta do Eleitorado</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 font-medium text-dark">
@@ -4866,16 +5014,30 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                           </td>
                           <td className="py-3.5 px-4 bg-purple-50/40 border-l border-r border-purple-100">
                             <div className="space-y-1">
-                              <div className="flex items-center gap-1.5 font-black text-purple-950 text-xs">
-                                <span className="w-2 h-2 rounded-full bg-purple-600 flex-shrink-0"></span>
+                              <div className="flex flex-wrap items-center gap-1.5 font-black text-purple-950 text-xs">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.candidatoAlvo.isMesmoPartido ? 'bg-blue-600' : 'bg-purple-600'}`}></span>
                                 <span>{c.candidatoAlvo.nome}</span>
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-200 text-purple-900 font-bold">
                                   {formatNumber(c.candidatoAlvo.votos)} v ({c.candidatoAlvo.cargo === 'deputado_federal' ? 'Federal' : 'Estadual'})
                                 </span>
+                                {c.candidatoAlvo.isMesmoPartido ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-600 text-white uppercase">
+                                    Mesmo Partido (União Brasil) • Dobrada Oficial
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 uppercase border border-amber-300">
+                                    Outro Partido • Sem Dobrada (Captura Direta)
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] text-purple-900/80 leading-snug">
                                 {c.candidatoAlvo.estrategiaCapitacao}
                               </p>
+                              {c.vNina > 0 && c.candidatoAlvo.nome !== 'Nina Passadore' && (
+                                <div className="text-[10px] font-semibold text-purple-700 bg-purple-100/60 px-2 py-0.5 rounded inline-block">
+                                  🐾 Dobrada Oficial Nina Passadore (União 4407): {formatNumber(c.vNina)} votos na cidade
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="py-3.5 px-4">
