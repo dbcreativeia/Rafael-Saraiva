@@ -3,6 +3,7 @@ import { Search, RefreshCw, Download, Trash2, Filter, Users, UserCheck, Copy, Ma
 import * as XLSX from 'xlsx';
 import { DailyGrowthChart } from '../DailyGrowthChart';
 import { CityDistributionMap } from '../CityDistributionMap';
+import { adminFetch } from '../../utils/adminAuth';
 
 interface ApoioTabProps {
   refreshTrigger?: number;
@@ -18,7 +19,7 @@ export const ApoioTab: React.FC<ApoioTabProps> = ({ refreshTrigger }) => {
   const fetchCitizens = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/popup-apoio?_t=${Date.now()}`, {
+      const res = await adminFetch(`/api/popup-apoio?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       });
@@ -38,7 +39,7 @@ export const ApoioTab: React.FC<ApoioTabProps> = ({ refreshTrigger }) => {
   const deleteCitizen = async (id: string) => {
     if (!window.confirm("Deseja realmente remover este cadastro de apoio?")) return;
     try {
-      await fetch('/api/popup-apoio/' + id, { method: 'DELETE' });
+      await adminFetch('/api/popup-apoio/' + id, { method: 'DELETE' });
       fetchCitizens();
     } catch (err) {
       console.warn("API request failed:", err);

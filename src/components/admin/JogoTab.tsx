@@ -3,6 +3,7 @@ import { Search, RefreshCw, Download, Trash2, Filter, Gamepad2, Trophy, Users, U
 import * as XLSX from 'xlsx';
 import { DailyGrowthChart } from '../DailyGrowthChart';
 import { CityDistributionMap } from '../CityDistributionMap';
+import { adminFetch } from '../../utils/adminAuth';
 
 interface JogoTabProps {
   refreshTrigger?: number;
@@ -20,7 +21,7 @@ export const JogoTab: React.FC<JogoTabProps> = ({ refreshTrigger }) => {
   const fetchJogoUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/jogo/users?_t=${Date.now()}`, {
+      const res = await adminFetch(`/api/jogo/users?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       });
@@ -40,7 +41,7 @@ export const JogoTab: React.FC<JogoTabProps> = ({ refreshTrigger }) => {
   const deleteJogoUser = async (id: string) => {
     if (!window.confirm("Deseja realmente remover este cadastro de jogador?")) return;
     try {
-      await fetch(`/api/jogo/users/${id}`, { method: 'DELETE' });
+      await adminFetch(`/api/jogo/users/${id}`, { method: 'DELETE' });
       fetchJogoUsers();
     } catch (err) {
       console.warn("API request failed:", err);

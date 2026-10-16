@@ -12,7 +12,8 @@ import {
   LogOut, 
   ShieldCheck,
   Users,
-  BarChart3
+  BarChart3,
+  Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -24,48 +25,107 @@ import { ProtocolosTab } from './admin/ProtocolosTab';
 import { CentralLeadsTab } from './admin/CentralLeadsTab';
 import { ResultadosEleitoraisTab } from './admin/ResultadosEleitoraisTab';
 import { ErrorBoundary } from './ErrorBoundary';
+import { 
+  getAdminToken, 
+  setAdminToken, 
+  clearAdminToken, 
+  setupAdminFetchInterceptor,
+  adminFetch 
+} from '../utils/adminAuth';
 
 export type AdminTab = 'LEADS' | 'RESULTADOS_ELEITORAIS' | 'APOIO' | 'MATERIAL' | 'MATERIAL_DOBRADA' | 'JOGO' | 'PROTOCOLOS';
 
 export const AdminDashboard: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('admin_authenticated') === 'true';
-    } catch {
-      return false;
-    }
+    return Boolean(getAdminToken());
   });
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('LEADS');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === 'castrar2026') {
-      setIsAuthenticated(true);
-      try {
-        sessionStorage.setItem('admin_authenticated', 'true');
-      } catch {}
-      setError('');
+  useEffect(() => {
+    setupAdminFetchInterceptor();
+
+    const token = getAdminToken();
+    if (token) {
+      adminFetch('/api/admin/verify')
+        .then(res => {
+          if (!res.ok) {
+            clearAdminToken();
+            setIsAuthenticated(false);
+          } else {
+            setIsAuthenticated(true);
+          }
+        })
+        .catch(() => {
+          // Mantém o estado atual se estiver com erro temporário de rede
+        });
     } else {
-      setError('Senha incorreta. Verifique e tente novamente.');
+      setIsAuthenticated(false);
+    }
+
+    const handleSessionExpired = () => {
+      clearAdminToken();
+      setIsAuthenticated(false);
+      setError('Sua sessão expirou por segurança. Faça login novamente.');
+    };
+
+    window.addEventListener('admin-session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('admin-session-expired', handleSessionExpired);
+    };
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password.trim()) {
+      setError('Por favor, informe a senha.');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.token) {
+        setAdminToken(data.token);
+        setIsAuthenticated(true);
+        setPassword('');
+        setError('');
+      } else {
+        setError(data.error || 'Senha incorreta. Verifique e tente novamente.');
+      }
+    } catch {
+      setError('Erro de conexão ao validar credenciais. Tente novamente.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
     try {
-      sessionStorage.removeItem('admin_authenticated');
+      await adminFetch('/api/admin/logout', { method: 'POST' });
     } catch {}
+    clearAdminToken();
+    setIsAuthenticated(false);
+    setPassword('');
   };
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
       // Dispara sincronização no backend com o banco MySQL
-      await fetch('/api/leads/refresh-cache', { method: 'POST' }).catch(() => {});
+      await adminFetch('/api/leads/refresh-cache', { method: 'POST' }).catch(() => {});
     } catch {
       // silencioso se desconectado
     }
@@ -76,7 +136,7 @@ export const AdminDashboard: React.FC = () => {
     const checkInterval = setInterval(async () => {
       attempts++;
       try {
-        const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
+        const res = await adminFetch(`/api/leads/summary?_t=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
           if (!data.isRefreshing || attempts > 60) {
@@ -142,9 +202,17 @@ export const AdminDashboard: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-primary hover:bg-blue-600 active:bg-blue-700 text-white font-bold py-3.5 rounded-xl uppercase tracking-wider text-sm transition-all shadow-md cursor-pointer"
+              disabled={isLoggingIn}
+              className="w-full bg-primary hover:bg-blue-600 active:bg-blue-700 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl uppercase tracking-wider text-sm transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
             >
-              Entrar no Painel
+              {isLoggingIn ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Autenticando...</span>
+                </>
+              ) : (
+                'Entrar no Painel'
+              )}
             </button>
           </form>
 

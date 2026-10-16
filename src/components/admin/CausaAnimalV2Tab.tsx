@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { adminFetch } from '../../utils/adminAuth';
 import {
   PawPrint,
   Vote,
@@ -48,7 +49,7 @@ import {
 } from '../../utils/causaAnimalStorage';
 import { matchesSearchTerm, scoreSearchMatch } from '../../utils/searchUtils';
 
-export type SubTabV2 = 'municipios' | 'zonas' | 'bairros' | 'locais' | 'secoes' | 'candidatos' | 'cruzamentos' | 'estrategia' | 'ia' | 'metodologia';
+export type SubTabV2 = 'municipios' | 'zonas' | 'bairros' | 'locais' | 'secoes' | 'candidatos' | 'cruzamentos' | 'estrategia' | 'metodologia';
 export type CargoType = 'deputado_estadual' | 'deputado_federal';
 export type UniverseType =
   | 'criterio_atuacao'
@@ -171,12 +172,12 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
     setLoading(true);
     let serverOk = false;
     try {
-      const res = await fetch(`/api/causa-animal/status?_t=${Date.now()}`);
+      const res = await adminFetch(`/api/causa-animal/status?_t=${Date.now()}`);
       if (res.ok) {
         const status = await res.json();
         if (status.hasData) {
           // Fetch full data from server
-          const dataRes = await fetch(`/api/causa-animal/full?_t=${Date.now()}`);
+          const dataRes = await adminFetch(`/api/causa-animal/full?_t=${Date.now()}`);
           if (dataRes.ok) {
             const serverData: CausaAnimalDatasetV2 = await dataRes.json();
             setData(serverData);
@@ -1133,7 +1134,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
     if (!overrideQuestion) {
       setAiQuery('');
     }
-    setActiveTab('ia');
+    // IA Eleitoral removida
 
     const tempId = 'msg-' + Date.now();
     const newEntry = {
@@ -1300,7 +1301,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         matchedZonas
       };
 
-      const res = await fetch('/api/causa-animal/ai-query', {
+      const res = await adminFetch('/api/causa-animal/ai-query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1403,7 +1404,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
         setImportProgress('Persistindo base oficial particionada no servidor...');
         let serverSaved = false;
         try {
-          const res = await fetch('/api/causa-animal/import', {
+          const res = await adminFetch('/api/causa-animal/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dataset: parsed, receipt: validationReceipt })
@@ -1458,7 +1459,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
       return;
     }
     try {
-      await fetch('/api/causa-animal/clear', { method: 'DELETE' });
+      await adminFetch('/api/causa-animal/clear', { method: 'DELETE' });
     } catch {}
     await clearCausaAnimalLocally();
     setData(null);
@@ -2478,60 +2479,6 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
             </div>
           </div>
 
-          {/* BARRA RÁPIDA DE PERGUNTA À IA ELEITORAL */}
-          <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 rounded-2xl p-3.5 sm:p-4 text-white shadow-md flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border border-purple-500/20">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/25 text-purple-300 flex items-center justify-center font-bold flex-shrink-0 border border-purple-400/30">
-                <Sparkles className="w-4 h-4 text-purple-300" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-black uppercase tracking-wider text-purple-200 flex items-center gap-1.5">
-                  <span>IA Eleitoral SP 2026</span>
-                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-bold">Online</span>
-                </div>
-                <div className="text-[11px] text-gray-300 truncate">
-                  Pergunte qualquer coisa sobre os 645 municípios, 26.683 urnas ou cruzamentos
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-1 max-w-xl">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-purple-300/70 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Ex: Quem mais pontuou nas cidades de Rafael? Qual escola Becari liderou?..."
-                  value={aiQuery}
-                  onChange={(e) => setAiQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAskAi();
-                    }
-                  }}
-                  className="w-full pl-9 pr-3 py-2 bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-purple-300/30 focus:border-purple-400 rounded-xl text-xs text-white placeholder-gray-300 outline-none transition-all font-medium"
-                />
-              </div>
-              <button
-                onClick={() => handleAskAi()}
-                disabled={aiLoading || !aiQuery.trim()}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer flex-shrink-0"
-              >
-                {aiLoading ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Varrendo...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Perguntar</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
           {/* NAVEGAÇÃO DE SUB-ABAS TERRITORIAIS */}
           <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-2">
             {[
@@ -2543,12 +2490,10 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
               { id: 'candidatos' as SubTabV2, label: 'Cadastro de Candidatos (58)', icon: Users },
               { id: 'cruzamentos' as SubTabV2, label: 'Cruzamento Federal x Estadual', icon: ArrowUpDown },
               { id: 'estrategia' as SubTabV2, label: 'Sugestão Estratégica & Expansão', icon: Target },
-              { id: 'ia' as SubTabV2, label: 'Assistente IA Eleitoral', icon: Sparkles },
               { id: 'metodologia' as SubTabV2, label: 'Metodologia & Regras', icon: BookOpen },
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
-              const isAiTab = tab.id === 'ia';
               return (
                 <button
                   key={tab.id}
@@ -2558,26 +2503,19 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
                   }}
                   className={`px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer ${
                     isActive
-                      ? isAiTab
-                        ? 'bg-purple-700 text-white shadow-md ring-2 ring-purple-400/40'
-                        : 'bg-dark text-white shadow-md'
-                      : isAiTab
-                      ? 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200 font-black'
+                      ? 'bg-dark text-white shadow-md'
                       : 'bg-white text-gray-600 hover:text-dark hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? isAiTab ? 'text-amber-300' : 'text-amber-400' : isAiTab ? 'text-purple-600' : 'text-gray-400'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-amber-400' : 'text-gray-400'}`} />
                   <span>{tab.label}</span>
-                  {isAiTab && !isActive && (
-                    <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-200 text-purple-900 font-black">NOVO</span>
-                  )}
                 </button>
               );
             })}
           </div>
 
           {/* BARRA DE BUSCA E ORDENAÇÃO */}
-          {activeTab !== 'metodologia' && activeTab !== 'candidatos' && activeTab !== 'cruzamentos' && activeTab !== 'ia' && (
+          {activeTab !== 'metodologia' && activeTab !== 'candidatos' && activeTab !== 'cruzamentos' && (
             <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -4955,202 +4893,7 @@ export const CausaAnimalV2Tab: React.FC<Props> = ({ refreshTrigger }) => {
             </div>
           )}
 
-          {/* ------------------------------------------------------------------- */}
-          {/* ABA: ASSISTENTE DE IA ELEITORAL (Perguntas em Linguagem Natural) */}
-          {/* ------------------------------------------------------------------- */}
-          {activeTab === 'ia' && (
-            <div className="space-y-6 max-w-5xl mx-auto">
-              
-              {/* Header da Aba IA */}
-              <div className="bg-gradient-to-br from-purple-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl space-y-4 border border-purple-500/20 relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative z-10">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/30 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                        Inteligência Artificial Eleitoral
-                      </span>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        645 Cidades • 26.683 Urnas Conectadas
-                      </span>
-                    </div>
-                    <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white mt-1">
-                      Pergunte aos Dados Eleitorais de São Paulo
-                    </h3>
-                  </div>
 
-                  <button
-                    onClick={() => {
-                      setAiHistory([
-                        {
-                          id: 'default-welcome',
-                          question: 'Como funciona o Assistente de IA Eleitoral?',
-                          answer: `Olá! Eu sou o **Assistente de Inteligência Artificial** especializado nos dados eleitorais oficiais de São Paulo (Causa Animal e Candidaturas Monitoradas).\n\nVocê pode me fazer qualquer pergunta sobre:\n- **Votações e Desempenho Territorial:** votos em municípios, zonas da Capital, bairros, locais de votação e seções eleitorais.\n- **Cruzamento Federal x Estadual:** co-votação nas mesmas urnas e cidades, equivalência de votos e dobradinhas.\n- **Liderança por Região:** quem foi o 1º colocado em cada cidade, zona ou escola.\n- **Regras Oficiais do TSE:** sigilo constitucional do voto (Art. 14 da CF/88), por que a soma das urnas supera os votos individuais e distinção de critérios.\n\nExperimente clicar em uma das **perguntas sugeridas abaixo** ou digite sua própria dúvida!`,
-                          timestamp: 'Início'
-                        }
-                      ]);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold text-gray-200 transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Limpar Histórico</span>
-                  </button>
-                </div>
-
-                <p className="text-xs sm:text-sm text-purple-200/90 leading-relaxed max-w-4xl relative z-10">
-                  Faça perguntas em português comum sobre votos, comparações entre candidatos, desempenho territorial na Capital ou no Interior e regras eleitorais. A IA varre o banco com 645 municípios, 26.683 seções e cruza os dados em tempo real.
-                </p>
-
-                {/* Chips de Perguntas Rápidas */}
-                <div className="pt-2 relative z-10 space-y-2">
-                  <div className="text-[11px] font-black uppercase tracking-wider text-purple-300 flex items-center gap-1">
-                    <Info className="w-3.5 h-3.5" />
-                    Perguntas Sugeridas (clique para testar):
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {AI_SUGGESTIONS.map((sug, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleAskAi(sug)}
-                        disabled={aiLoading}
-                        className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 hover:border-purple-300 border border-white/15 text-left text-xs font-semibold text-white transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        💡 {sug}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* FEED DO CHAT / HISTÓRICO DE PERGUNTAS */}
-              <div className="space-y-4">
-                {aiHistory.map((item) => (
-                  <div key={item.id} className="space-y-3">
-                    
-                    {/* Pergunta do Usuário */}
-                    <div className="flex items-start justify-end gap-3">
-                      <div className="bg-slate-900 text-white p-4 rounded-2xl rounded-tr-xs max-w-2xl shadow-sm space-y-1">
-                        <div className="flex items-center justify-between gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-wider border-b border-white/10 pb-1">
-                          <span>Sua Pergunta</span>
-                          <span>{item.timestamp}</span>
-                        </div>
-                        <div className="font-bold text-xs sm:text-sm pt-0.5 leading-snug">
-                          {item.question}
-                        </div>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs flex-shrink-0 shadow-xs">
-                        VC
-                      </div>
-                    </div>
-
-                    {/* Resposta da IA */}
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-700 text-white flex items-center justify-center font-black text-xs flex-shrink-0 shadow-xs border border-purple-400/40">
-                        <Sparkles className="w-4 h-4 text-amber-300" />
-                      </div>
-                      <div className="bg-white border border-purple-200/80 rounded-2xl rounded-tl-xs p-5 sm:p-6 shadow-sm flex-1 space-y-3">
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                              Analista Eleitoral IA
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-mono">• Dados Oficiais TSE</span>
-                          </div>
-                          {item.answer && (
-                            <button
-                              onClick={() => copyAiAnswer(item.id, item.answer)}
-                              className="px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[11px] font-bold text-gray-700 transition-all flex items-center gap-1 cursor-pointer"
-                            >
-                              {aiCopiedId === item.id ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-600" />
-                                  <span className="text-emerald-700 font-black">Copiado!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="w-3 h-3 text-gray-500" />
-                                  <span>Copiar</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Conteúdo da Resposta Formatada */}
-                        <div className="text-gray-800 text-xs sm:text-sm leading-relaxed">
-                          {item.answer ? (
-                            renderAiMarkdown(item.answer)
-                          ) : (
-                            <div className="flex items-center gap-3 py-4 text-purple-900 text-xs font-bold animate-pulse">
-                              <RefreshCw className="w-4 h-4 animate-spin text-purple-600" />
-                              <span>Varrendo dados dos 645 municípios e 26.683 urnas para responder...</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                ))}
-
-                {/* Loading state indicator if query in flight and no entry yet */}
-                {aiLoading && aiHistory[aiHistory.length - 1]?.answer !== '' && (
-                  <div className="p-4 bg-purple-50/70 rounded-2xl border border-purple-200 flex items-center gap-3 text-xs text-purple-950 font-bold animate-pulse">
-                    <RefreshCw className="w-4 h-4 animate-spin text-purple-700" />
-                    <span>Varrendo dados dos 645 municípios paulistas e 26.683 urnas...</span>
-                  </div>
-                )}
-              </div>
-
-              {/* BARRA DE ENTRADA DE PERGUNTA (FIXA OU INLINE NO RODAPÉ) */}
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 shadow-md space-y-3 sticky bottom-4 z-20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    Faça uma nova pergunta à IA
-                  </span>
-                  <span className="text-gray-400 text-[11px]">Pressione Enter para enviar</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      placeholder="Ex: Em qual cidade o Rafael teve mais de 500 votos? Quantos votos Ganem teve em Indaiatuba?..."
-                      value={aiQuery}
-                      onChange={(e) => setAiQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAskAi();
-                        }
-                      }}
-                      className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100/80 focus:bg-white border border-gray-200 focus:border-purple-600 rounded-xl text-xs sm:text-sm font-medium text-dark outline-none transition-all"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleAskAi()}
-                    disabled={aiLoading || !aiQuery.trim()}
-                    className="px-5 py-3 rounded-xl bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white font-black text-xs sm:text-sm transition-all shadow-sm flex items-center gap-2 cursor-pointer flex-shrink-0"
-                  >
-                    {aiLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Varrendo...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 text-amber-300" />
-                        <span>Enviar</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          )}
 
           {/* ------------------------------------------------------------------- */}
           {/* ABA 7: METODOLOGIA & REGRAS OFICIAIS DE LEITURA */}

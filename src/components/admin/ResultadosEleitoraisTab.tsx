@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { adminFetch } from '../../utils/adminAuth';
 import {
   UploadCloud,
   FileCheck2,
@@ -132,7 +133,7 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
   const fetchData = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const res = await fetch(`/api/eleicoes/resultados?_t=${Date.now()}`);
+      const res = await adminFetch(`/api/eleicoes/resultados?_t=${Date.now()}`);
       if (res.ok) {
         const json = await res.json();
         if (json.hasData && json.data) {
@@ -228,7 +229,7 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
         // Send to server to persist for all visitors
         let serverSaved = false;
         try {
-          const res = await fetch('/api/eleicoes/import', {
+          const res = await adminFetch('/api/eleicoes/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(parsed)
@@ -304,7 +305,7 @@ export const ResultadosEleitoraisTab: React.FC<Props> = ({ refreshTrigger }) => 
       return;
     }
     try {
-      await fetch('/api/eleicoes/clear', { method: 'DELETE' });
+      await adminFetch('/api/eleicoes/clear', { method: 'DELETE' });
     } catch (e) {
       console.warn("Clear error:", e);
     }

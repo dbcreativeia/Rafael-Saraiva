@@ -5,6 +5,7 @@ import { DailyGrowthChart } from '../DailyGrowthChart';
 import { CityDistributionMap } from '../CityDistributionMap';
 import { findDuplicates } from './duplicateUtils';
 import { DuplicateSection } from './DuplicateSection';
+import { adminFetch } from '../../utils/adminAuth';
 
 interface MaterialDobradaTabProps {
   refreshTrigger?: number;
@@ -20,7 +21,7 @@ export const MaterialDobradaTab: React.FC<MaterialDobradaTabProps> = ({ refreshT
   const fetchNinapassadore = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ninapassadore?_t=${Date.now()}`, {
+      const res = await adminFetch(`/api/ninapassadore?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       });
@@ -40,7 +41,7 @@ export const MaterialDobradaTab: React.FC<MaterialDobradaTabProps> = ({ refreshT
   const deleteNinapassadore = async (id: string) => {
     if (!window.confirm("Deseja realmente remover este pedido de dobrada?")) return;
     try {
-      await fetch('/api/ninapassadore/' + id, { method: 'DELETE' });
+      await adminFetch('/api/ninapassadore/' + id, { method: 'DELETE' });
       fetchNinapassadore();
     } catch (err) {
       console.warn("API request failed:", err);
@@ -49,18 +50,18 @@ export const MaterialDobradaTab: React.FC<MaterialDobradaTabProps> = ({ refreshT
 
   const deleteBatchNinapassadore = async (ids: string[]) => {
     try {
-      const res = await fetch('/api/ninapassadore/batch-delete', {
+      const res = await adminFetch('/api/ninapassadore/batch-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids })
       });
       if (!res.ok) {
-        await Promise.all(ids.map(id => fetch('/api/ninapassadore/' + id, { method: 'DELETE' })));
+        await Promise.all(ids.map(id => adminFetch('/api/ninapassadore/' + id, { method: 'DELETE' })));
       }
       await fetchNinapassadore();
     } catch (err) {
       console.warn("Batch delete failed, falling back to individual deletes:", err);
-      await Promise.all(ids.map(id => fetch('/api/ninapassadore/' + id, { method: 'DELETE' })));
+      await Promise.all(ids.map(id => adminFetch('/api/ninapassadore/' + id, { method: 'DELETE' })));
       await fetchNinapassadore();
     }
   };

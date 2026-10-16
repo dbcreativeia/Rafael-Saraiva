@@ -5,6 +5,7 @@ import { DailyGrowthChart } from '../DailyGrowthChart';
 import { CityDistributionMap } from '../CityDistributionMap';
 import { findDuplicates } from './duplicateUtils';
 import { DuplicateSection } from './DuplicateSection';
+import { adminFetch } from '../../utils/adminAuth';
 
 interface MaterialCampanhaTabProps {
   refreshTrigger?: number;
@@ -20,7 +21,7 @@ export const MaterialCampanhaTab: React.FC<MaterialCampanhaTabProps> = ({ refres
   const fetchMaterials = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/material?_t=${Date.now()}`, {
+      const res = await adminFetch(`/api/material?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       });
@@ -40,7 +41,7 @@ export const MaterialCampanhaTab: React.FC<MaterialCampanhaTabProps> = ({ refres
   const deleteMaterial = async (id: string) => {
     if (!window.confirm("Deseja realmente remover este pedido?")) return;
     try {
-      await fetch('/api/material/' + id, { method: 'DELETE' });
+      await adminFetch('/api/material/' + id, { method: 'DELETE' });
       fetchMaterials();
     } catch (err) {
       console.warn("API request failed:", err);
@@ -49,18 +50,18 @@ export const MaterialCampanhaTab: React.FC<MaterialCampanhaTabProps> = ({ refres
 
   const deleteBatchMaterial = async (ids: string[]) => {
     try {
-      const res = await fetch('/api/material/batch-delete', {
+      const res = await adminFetch('/api/material/batch-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids })
       });
       if (!res.ok) {
-        await Promise.all(ids.map(id => fetch('/api/material/' + id, { method: 'DELETE' })));
+        await Promise.all(ids.map(id => adminFetch('/api/material/' + id, { method: 'DELETE' })));
       }
       await fetchMaterials();
     } catch (err) {
       console.warn("API request failed:", err);
-      await Promise.all(ids.map(id => fetch('/api/material/' + id, { method: 'DELETE' })));
+      await Promise.all(ids.map(id => adminFetch('/api/material/' + id, { method: 'DELETE' })));
       await fetchMaterials();
     }
   };

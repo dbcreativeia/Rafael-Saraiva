@@ -1,6 +1,7 @@
 import { CityDistributionMap } from '../CityDistributionMap';
 import { spCitiesList, spCitiesCleanMap, spCitiesNormMap, fixMojibake, isSpCity, knownNonSpCities } from '../../data/spCities';
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { withAdminToken, adminFetch } from '../../utils/adminAuth';
 import {
   ShieldCheck, 
   Search, 
@@ -275,7 +276,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     try {
       // Connect to the stream which forces Cloud Run / production server to stay awake until cache is written
       setSummary(prev => ({ ...prev, isRefreshing: true, refreshMessage: "Conectando ao servidor..." }));
-      const eventSource = new EventSource('/api/leads/refresh-cache-stream');
+      const eventSource = new EventSource(withAdminToken('/api/leads/refresh-cache-stream'));
       
       eventSource.onmessage = (event) => {
         try {
@@ -301,14 +302,14 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       };
     } catch (e) {
       console.error(e);
-      fetch('/api/leads/refresh-cache', { method: 'POST' }).catch(() => {});
+      adminFetch('/api/leads/refresh-cache', { method: 'POST' }).catch(() => {});
       fetchSummary();
     }
   };
 
   const fetchSummary = async () => {
     try {
-      const res = await fetch(`/api/leads/summary?_t=${Date.now()}`);
+      const res = await adminFetch(`/api/leads/summary?_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data === 'object' && !data.error) {
@@ -348,7 +349,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
         sortField: sortField,
         sortOrder: sortOrder
       });
-      const res = await fetch(`/api/leads/paginated?${params.toString()}`);
+      const res = await adminFetch(`/api/leads/paginated?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setServerLeads(Array.isArray(data.leads) ? data.leads : []);
@@ -374,7 +375,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   const fetchPhysicalMaterials = async () => {
     try {
-      const res = await fetch(`/api/leads/physical-materials?adesivoFilter=${materialFilterAdesivo}&_t=${Date.now()}`);
+      const res = await adminFetch(`/api/leads/physical-materials?adesivoFilter=${materialFilterAdesivo}&_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setPhysicalMaterials(data.materials || []);
@@ -705,7 +706,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            const res = await fetch('/api/imported-leads/bulk', {
+            const res = await adminFetch('/api/imported-leads/bulk', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -837,7 +838,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
 
   const fetchImportedBases = async () => {
     try {
-      const res = await fetch('/api/imported-leads/campaigns');
+      const res = await adminFetch('/api/imported-leads/campaigns');
       if (res.ok) {
         const text = await res.text();
         try {
@@ -858,7 +859,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     setImportedBases(prev => prev.filter(b => b.campanha !== campaignName));
     setConfirmDeleteBase('');
     try {
-      const res = await fetch(`/api/imported-leads/campaign/${encodeURIComponent(campaignName)}`, {
+      const res = await adminFetch(`/api/imported-leads/campaign/${encodeURIComponent(campaignName)}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -878,7 +879,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
     if (!leadToDelete || !leadToDelete.id) return;
     setIsDeletingLead(true);
     try {
-      const res = await fetch(`/api/leads/${encodeURIComponent(leadToDelete.id)}`, {
+      const res = await adminFetch(`/api/leads/${encodeURIComponent(leadToDelete.id)}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -1268,7 +1269,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
   }, [activeView, materialFilterAdesivo]);
 
   const handleExportPhysicalMaterials = (format: 'xlsx' | 'csv' = 'xlsx') => {
-    window.location.href = `/api/leads/export-materials?adesivoFilter=${materialFilterAdesivo}&format=${format}`;
+    window.location.href = withAdminToken(`/api/leads/export-materials?adesivoFilter=${materialFilterAdesivo}&format=${format}`);
   };
 
   const exportMailMergeExcel = (customCampaigns?: string[]) => {
@@ -1291,7 +1292,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       addressOnly: 'true',
       format: 'csv'
     });
-    window.location.href = `/api/leads/export?${params.toString()}`;
+    window.location.href = withAdminToken(`/api/leads/export?${params.toString()}`);
   };
 
   // Export Unified List to Excel (.xlsx) / CSV using high-speed server stream with Smart Score and Geofilters
@@ -1362,7 +1363,7 @@ export const CentralLeadsTab: React.FC<CentralLeadsTabProps> = ({ refreshTrigger
       params.set('addressOnly', 'true');
     }
 
-    window.location.href = `/api/leads/export?${params.toString()}`;
+    window.location.href = withAdminToken(`/api/leads/export?${params.toString()}`);
   };
 
 

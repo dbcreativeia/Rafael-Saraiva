@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, RefreshCw, Download, Trash2, Filter, CheckCircle2, FileSignature, Users, Database, Eye, EyeOff, MapPin } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { adminFetch } from '../../utils/adminAuth';
 
 interface ProtocolosTabProps {
   refreshTrigger?: number;
@@ -36,9 +37,9 @@ export const ProtocolosTab: React.FC<ProtocolosTabProps> = ({ refreshTrigger }) 
     try {
       const t = Date.now();
       const [response, citizensResponse, petitionsResponse] = await Promise.all([
-        fetch(`/api/cities?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
-        fetch(`/api/citizens?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
-        fetch(`/api/petitions?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+        adminFetch(`/api/cities?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+        adminFetch(`/api/citizens?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+        adminFetch(`/api/petitions?_t=${t}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
       ]);
       const result = await response.json();
       const citizensResult = await citizensResponse.json();
@@ -59,7 +60,7 @@ export const ProtocolosTab: React.FC<ProtocolosTabProps> = ({ refreshTrigger }) 
 
   const toggleDisplay = async (id: string) => {
     try {
-      await fetch(`/api/protocols/${id}/toggle-active`, { method: 'PUT' });
+      await adminFetch(`/api/protocols/${id}/toggle-active`, { method: 'PUT' });
       fetchData();
     } catch (err) {
       console.warn("API request failed:", err);
@@ -69,9 +70,9 @@ export const ProtocolosTab: React.FC<ProtocolosTabProps> = ({ refreshTrigger }) 
   const deleteRecord = async (type: 'protocol' | 'citizen' | 'petition', id: string) => {
     if (!window.confirm("Deseja realmente excluir este registro?")) return;
     try {
-      if (type === 'protocol') await fetch(`/api/protocols/${id}`, { method: 'DELETE' });
-      else if (type === 'citizen') await fetch(`/api/citizens/${id}`, { method: 'DELETE' });
-      else if (type === 'petition') await fetch(`/api/petitions/${id}`, { method: 'DELETE' });
+      if (type === 'protocol') await adminFetch(`/api/protocols/${id}`, { method: 'DELETE' });
+      else if (type === 'citizen') await adminFetch(`/api/citizens/${id}`, { method: 'DELETE' });
+      else if (type === 'petition') await adminFetch(`/api/petitions/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (err) {
       console.warn("API request failed:", err);

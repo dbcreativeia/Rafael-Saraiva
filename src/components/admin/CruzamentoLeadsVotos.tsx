@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { adminFetch } from '../../utils/adminAuth';
 import {
   Flame,
   TrendingUp,
@@ -69,7 +70,7 @@ export const CruzamentoLeadsVotos: React.FC<Props> = ({ electoralData }) => {
       const url = selectedCampaign && selectedCampaign !== 'ALL'
         ? `/api/eleicoes/leads-breakdown?campaign=${encodeURIComponent(selectedCampaign)}&_t=${Date.now()}`
         : `/api/eleicoes/leads-breakdown?_t=${Date.now()}`;
-      const res = await fetch(url);
+      const res = await adminFetch(url);
       if (res.ok) {
         const json = await res.json();
         setLeadsBreakdown(json);
