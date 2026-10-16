@@ -454,7 +454,7 @@ async function startServer() {
   });
 
   app.get('/api/causa-animal/bases/:baseName', requireAdminAuth, (req, res) => {
-    const baseName = req.params.baseName;
+    const baseName = String(req.params.baseName);
     if (!causaAnimalBases[baseName]) {
       return res.status(404).json({ error: `Coleção territorial '${baseName}' não encontrada.` });
     }
@@ -1919,7 +1919,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   app.delete('/api/imported-leads/campaign/:campaignName', requireAdminAuth, async (req, res) => {
-    const campaignName = req.params.campaignName;
+    const campaignName = String(req.params.campaignName || '');
     if (!campaignName) {
       return res.status(400).json({ error: "Nome de campanha inválido" });
     }
@@ -2035,7 +2035,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
 
   // Exclusão definitiva de lead de todo o banco de dados e servidor
   app.delete('/api/leads/:id', requireAdminAuth, async (req, res) => {
-    const leadId = req.params.id;
+    const leadId = String(req.params.id || '');
     if (!leadId) {
       return res.status(400).json({ error: "ID do lead é obrigatório" });
     }
