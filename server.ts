@@ -4,6 +4,10 @@ import express from "express";
 import compression from "compression";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
+import dotenv from "dotenv";
+dotenv.config();
+
 import { getDbConnection } from "./db.js";
 import {
   leadsConsolidator,
@@ -32,6 +36,160 @@ async function startServer() {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     next();
+  });
+
+  // --- SEGURANÇA E AUTENTICAÇÃO ADMINISTRATIVA (BLINDAGEM LGPD) ---
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'castrar2026';
+  const SERVER_AUTH_SECRET = process.env.ADMIN_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+  const activeAdminTokens = new Map<string, { createdAt: number; expiresAt: number }>();
+  const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+  // Limpeza periódica de tokens expirados
+  setInterval(() => {
+    const now = Date.now();
+    for (const [token, data] of activeAdminTokens.entries()) {
+      if (data.expiresAt < now) {
+        activeAdminTokens.delete(token);
+      }
+    }
+    for (const [ip, attempt] of loginAttempts.entries()) {
+      if (attempt.lockedUntil > 0 && attempt.lockedUntil < now) {
+        loginAttempts.delete(ip);
+      }
+    }
+  }, 10 * 60 * 1000);
+
+  function verifyAdminPassword(candidate: string): boolean {
+    if (typeof candidate !== 'string') return false;
+    const candBuf = Buffer.from(candidate);
+    const expBuf = Buffer.from(ADMIN_PASSWORD);
+    if (candBuf.length !== expBuf.length) {
+      crypto.timingSafeEqual(candBuf, candBuf);
+      return false;
+    }
+    return crypto.timingSafeEqual(candBuf, expBuf);
+  }
+
+  function generateAdminToken(): string {
+    const raw = crypto.randomBytes(32).toString('hex');
+    const timestamp = Date.now();
+    const signature = crypto.createHmac('sha256', SERVER_AUTH_SECRET)
+      .update(`${raw}:${timestamp}`)
+      .digest('hex');
+    const token = `${raw}.${timestamp}.${signature}`;
+    activeAdminTokens.set(token, {
+      createdAt: timestamp,
+      expiresAt: timestamp + 24 * 60 * 60 * 1000 // 24 horas
+    });
+    return token;
+  }
+
+  function isValidAdminToken(token?: string | null): boolean {
+    if (!token || typeof token !== 'string') return false;
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const [raw, timestampStr, sig] = parts;
+    const timestamp = parseInt(timestampStr, 10);
+    if (isNaN(timestamp)) return false;
+    if (Date.now() - timestamp > 24 * 60 * 60 * 1000) {
+      activeAdminTokens.delete(token);
+      return false;
+    }
+    const expectedSig = crypto.createHmac('sha256', SERVER_AUTH_SECRET)
+      .update(`${raw}:${timestamp}`)
+      .digest('hex');
+    const sigBuf = Buffer.from(sig);
+    const expSigBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expSigBuf.length || !crypto.timingSafeEqual(sigBuf, expSigBuf)) {
+      return false;
+    }
+    return true;
+  }
+
+  function requireAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    } else if (req.query.token && typeof req.query.token === 'string') {
+      token = req.query.token.trim();
+    }
+
+    if (!isValidAdminToken(token)) {
+      return res.status(401).json({
+        error: 'Acesso restrito. Faça login administrativo.',
+        code: 'UNAUTHORIZED'
+      });
+    }
+    next();
+  }
+
+  // Rotas de autenticação administrativa
+  app.post('/api/admin/login', (req, res) => {
+    const clientIp = (req.ip || req.headers['x-forwarded-for'] || 'unknown') as string;
+    const now = Date.now();
+    const attempt = loginAttempts.get(clientIp);
+
+    if (attempt && attempt.lockedUntil > now) {
+      const remainingSeconds = Math.ceil((attempt.lockedUntil - now) / 1000);
+      return res.status(429).json({
+        error: `Muitas tentativas incorretas. Tente novamente em ${remainingSeconds} segundos.`,
+        code: 'RATE_LIMITED'
+      });
+    }
+
+    const { password } = req.body || {};
+    if (!verifyAdminPassword(password)) {
+      const currentFails = (attempt ? attempt.count : 0) + 1;
+      const isLocked = currentFails >= 5;
+      loginAttempts.set(clientIp, {
+        count: currentFails,
+        lockedUntil: isLocked ? now + 10 * 60 * 1000 : 0
+      });
+      return res.status(401).json({
+        error: isLocked 
+          ? 'Muitas tentativas incorretas. Acesso bloqueado temporariamente por 10 minutos.' 
+          : 'Senha incorreta. Verifique e tente novamente.',
+        code: 'INVALID_CREDENTIALS'
+      });
+    }
+
+    loginAttempts.delete(clientIp);
+    const token = generateAdminToken();
+    return res.json({
+      success: true,
+      token,
+      expiresIn: 86400
+    });
+  });
+
+  app.get('/api/admin/verify', (req, res) => {
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    } else if (req.query.token && typeof req.query.token === 'string') {
+      token = req.query.token.trim();
+    }
+
+    if (isValidAdminToken(token)) {
+      return res.json({ authenticated: true });
+    }
+    return res.status(401).json({ authenticated: false, error: 'Sessão inválida ou expirada.' });
+  });
+
+  app.post('/api/admin/logout', (req, res) => {
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    } else if (req.query.token && typeof req.query.token === 'string') {
+      token = req.query.token.trim();
+    }
+    if (token) {
+      activeAdminTokens.delete(token);
+    }
+    return res.json({ success: true });
   });
 
   // In-memory data store for cities and protocols (fallback)
@@ -199,7 +357,7 @@ async function startServer() {
   const ninapassadoreData: any[] = [];
 
   // Rotas de Resultados Eleitorais 2026 (Persistência compartilhada)
-  app.get('/api/eleicoes/resultados', (req, res) => {
+  app.get('/api/eleicoes/resultados', requireAdminAuth, (req, res) => {
     return res.json({
       success: true,
       hasData: !!electoralResultsData,
@@ -209,7 +367,7 @@ async function startServer() {
     });
   });
 
-  app.get('/api/eleicoes/leads-breakdown', async (req, res) => {
+  app.get('/api/eleicoes/leads-breakdown', requireAdminAuth, async (req, res) => {
     try {
       const campaign = req.query.campaign ? String(req.query.campaign) : undefined;
       const breakdown = await getLeadsGeoBreakdown(campaign);
@@ -220,7 +378,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/eleicoes/import', (req, res) => {
+  app.post('/api/eleicoes/import', requireAdminAuth, (req, res) => {
     try {
       const payload = req.body;
       if (!payload || typeof payload !== 'object' || !payload.bases) {
@@ -250,7 +408,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/eleicoes/clear', (req, res) => {
+  app.delete('/api/eleicoes/clear', requireAdminAuth, (req, res) => {
     try {
       electoralResultsData = null;
       electoralResultsLastUpdated = null;
@@ -268,7 +426,7 @@ async function startServer() {
   // Dataset: causa_animal_SP_2026_v2
   // ==========================================
 
-  app.get('/api/causa-animal/status', (req, res) => {
+  app.get('/api/causa-animal/status', requireAdminAuth, (req, res) => {
     return res.json({
       success: true,
       hasData: !!causaAnimalMeta,
@@ -288,14 +446,14 @@ async function startServer() {
     });
   });
 
-  app.get('/api/causa-animal/meta', (req, res) => {
+  app.get('/api/causa-animal/meta', requireAdminAuth, (req, res) => {
     if (!causaAnimalMeta) {
       return res.status(404).json({ error: "Base causa_animal_SP_2026_v2 ainda não importada no servidor." });
     }
     return res.json(causaAnimalMeta);
   });
 
-  app.get('/api/causa-animal/bases/:baseName', (req, res) => {
+  app.get('/api/causa-animal/bases/:baseName', requireAdminAuth, (req, res) => {
     const baseName = req.params.baseName;
     if (!causaAnimalBases[baseName]) {
       return res.status(404).json({ error: `Coleção territorial '${baseName}' não encontrada.` });
@@ -308,7 +466,7 @@ async function startServer() {
     });
   });
 
-  app.get('/api/causa-animal/secoes', (req, res) => {
+  app.get('/api/causa-animal/secoes', requireAdminAuth, (req, res) => {
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const pageSize = Math.min(500, Math.max(10, parseInt(req.query.pageSize as string, 10) || 50));
     const zona = req.query.zona ? String(req.query.zona).trim() : '';
@@ -346,7 +504,7 @@ async function startServer() {
     });
   });
 
-  app.get('/api/causa-animal/full', (req, res) => {
+  app.get('/api/causa-animal/full', requireAdminAuth, (req, res) => {
     if (causaAnimalFull) {
       return res.json(causaAnimalFull);
     }
@@ -375,7 +533,7 @@ async function startServer() {
     return res.status(404).json({ error: "Base causa_animal_SP_2026_v2 não encontrada no servidor." });
   });
 
-  app.post('/api/causa-animal/import', (req, res) => {
+  app.post('/api/causa-animal/import', requireAdminAuth, (req, res) => {
     try {
       const payload = req.body.dataset || req.body;
       const receipt = req.body.receipt || null;
@@ -417,7 +575,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/causa-animal/clear', (req, res) => {
+  app.delete('/api/causa-animal/clear', requireAdminAuth, (req, res) => {
     try {
       causaAnimalMeta = null;
       causaAnimalReceipt = null;
@@ -437,7 +595,7 @@ async function startServer() {
   });
 
   // IA Eleitoral: Varrer dados e responder perguntas analíticas
-  app.post('/api/causa-animal/ai-query', async (req, res) => {
+  app.post('/api/causa-animal/ai-query', requireAdminAuth, async (req, res) => {
     try {
       const { question, contextData, conversationHistory } = req.body;
       if (!question || typeof question !== 'string' || !question.trim()) {
@@ -978,7 +1136,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.get('/api/material', async (req, res) => {
+  app.get('/api/material', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM material_campaign ORDER BY createdAt DESC');
@@ -1041,7 +1199,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data });
   });
 
-  app.delete('/api/material/:id', async (req, res) => {
+  app.delete('/api/material/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1056,7 +1214,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true });
   });
 
-  app.post('/api/material/batch-delete', async (req, res) => {
+  app.post('/api/material/batch-delete', requireAdminAuth, async (req, res) => {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "Nenhum ID fornecido" });
@@ -1079,7 +1237,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, count: ids.length });
   });
 
-  app.get('/api/ninapassadore', async (req, res) => {
+  app.get('/api/ninapassadore', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM ninapassadore_campaign ORDER BY createdAt DESC');
@@ -1141,7 +1299,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data });
   });
 
-  app.delete('/api/ninapassadore/:id', async (req, res) => {
+  app.delete('/api/ninapassadore/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1156,7 +1314,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true });
   });
 
-  app.post('/api/ninapassadore/batch-delete', async (req, res) => {
+  app.post('/api/ninapassadore/batch-delete', requireAdminAuth, async (req, res) => {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "Nenhum ID fornecido" });
@@ -1181,7 +1339,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
 
   // API routing for petitions
 
-  app.get('/api/petitions', async (req, res) => {
+  app.get('/api/petitions', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM petitions ORDER BY createdAt DESC');
@@ -1234,7 +1392,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data });
   });
 
-  app.delete('/api/petitions/:id', async (req, res) => {
+  app.delete('/api/petitions/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1250,7 +1408,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // API routing for contra-maus-tratos
-  app.get('/api/contra-maus-tratos', async (req, res) => {
+  app.get('/api/contra-maus-tratos', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM contra_maus_tratos ORDER BY createdAt DESC');
@@ -1301,7 +1459,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data });
   });
 
-  app.delete('/api/contra-maus-tratos/:id', async (req, res) => {
+  app.delete('/api/contra-maus-tratos/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1317,7 +1475,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // API routing for citizens
-  app.get('/api/citizens', async (req, res) => {
+  app.get('/api/citizens', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM citizens ORDER BY createdAt DESC');
@@ -1384,7 +1542,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data });
   });
 
-  app.delete('/api/citizens/:id', async (req, res) => {
+  app.delete('/api/citizens/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1400,7 +1558,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // API routing for popup-apoio (Pop-up de Apoio da Capital SP)
-  app.get('/api/popup-apoio', async (req, res) => {
+  app.get('/api/popup-apoio', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM popup_apoio ORDER BY createdAt DESC');
@@ -1475,7 +1633,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data });
   });
 
-  app.delete('/api/popup-apoio/:id', async (req, res) => {
+  app.delete('/api/popup-apoio/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1527,7 +1685,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   }
 
   // API routing for imported-leads (Uploads de bases CSV)
-  app.get('/api/imported-leads', async (req, res) => {
+  app.get('/api/imported-leads', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query('SELECT * FROM imported_leads ORDER BY createdAt DESC');
@@ -1541,7 +1699,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
 
   let importRefreshTimer: NodeJS.Timeout | null = null;
 
-  app.post('/api/imported-leads/bulk', async (req, res) => {
+  app.post('/api/imported-leads/bulk', requireAdminAuth, async (req, res) => {
     const { leads, campanha, updateMode = 'merge', isFirstBatch = false } = req.body;
     if (!Array.isArray(leads) || leads.length === 0) {
       return res.status(400).json({ error: "Nenhum lead fornecido para importação." });
@@ -1750,7 +1908,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
 
   const deletingCampaigns = new Set<string>();
 
-  app.get('/api/imported-leads/campaigns', async (req, res) => {
+  app.get('/api/imported-leads/campaigns', requireAdminAuth, async (req, res) => {
     try {
       const db = await getDbConnection();
       const [rows] = await db.query('SELECT campaign_name as campanha, COUNT(*) as count, MAX(created_at) as lastImport FROM crm_actions GROUP BY campaign_name ORDER BY lastImport DESC');
@@ -1760,7 +1918,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.delete('/api/imported-leads/campaign/:campaignName', async (req, res) => {
+  app.delete('/api/imported-leads/campaign/:campaignName', requireAdminAuth, async (req, res) => {
     const campaignName = req.params.campaignName;
     if (!campaignName) {
       return res.status(400).json({ error: "Nome de campanha inválido" });
@@ -1827,7 +1985,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     return res.json({ success: true });
   });
 
-  app.delete('/api/imported-leads/:id', async (req, res) => {
+  app.delete('/api/imported-leads/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -1846,7 +2004,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // High-performance Consolidated Leads Endpoints
-  app.get('/api/leads/summary', async (req, res) => {
+  app.get('/api/leads/summary', requireAdminAuth, async (req, res) => {
     try {
       const summary = await getCrmSummary();
       return res.json(summary);
@@ -1856,7 +2014,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.get('/api/leads/paginated', async (req, res) => {
+  app.get('/api/leads/paginated', requireAdminAuth, async (req, res) => {
     try {
       const result = await getCrmPaginated(req.query);
       return res.json(result);
@@ -1876,7 +2034,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // Exclusão definitiva de lead de todo o banco de dados e servidor
-  app.delete('/api/leads/:id', async (req, res) => {
+  app.delete('/api/leads/:id', requireAdminAuth, async (req, res) => {
     const leadId = req.params.id;
     if (!leadId) {
       return res.status(400).json({ error: "ID do lead é obrigatório" });
@@ -1908,7 +2066,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.get('/api/leads/physical-materials', async (req, res) => {
+  app.get('/api/leads/physical-materials', requireAdminAuth, async (req, res) => {
     try {
       const result = await leadsConsolidator.getPhysicalMaterials((req.query.adesivoFilter as any) || 'ALL');
       return res.json(result);
@@ -1918,7 +2076,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.get('/api/leads/export', async (req, res) => {
+  app.get('/api/leads/export', requireAdminAuth, async (req, res) => {
     try {
       let format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
       const maxLimit = parseInt(String(req.query.limit || '0'), 10);
@@ -1962,7 +2120,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.get('/api/leads/export-materials', async (req, res) => {
+  app.get('/api/leads/export-materials', requireAdminAuth, async (req, res) => {
     try {
       const adesivoFilter = (req.query.adesivoFilter as any) || 'ALL';
       const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
@@ -1991,7 +2149,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // Keep-alive progress stream that forces Cloud Run to stay awake with 100% CPU priority until cache write completes
-  app.get('/api/leads/refresh-cache-stream', (req, res) => {
+  app.get('/api/leads/refresh-cache-stream', requireAdminAuth, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -2031,7 +2189,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     });
   });
 
-  app.post('/api/leads/refresh-cache', async (req, res) => {
+  app.post('/api/leads/refresh-cache', requireAdminAuth, async (req, res) => {
     try {
       // Trigger refresh
       leadsConsolidator.refreshFromDatabase().catch(console.error);
@@ -2042,7 +2200,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
   });
 
   // Legacy Consolidated Leads Endpoint (optimizado)
-  app.get('/api/leads/consolidated', async (req, res) => {
+  app.get('/api/leads/consolidated', requireAdminAuth, async (req, res) => {
     try {
       // Returns high-performance summary & page 1 to prevent client crashes
       const summary = leadsConsolidator.getSummary();
@@ -2118,7 +2276,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     return res.status(500).json({ error: "DB offline" });
   });
 
-  app.get('/api/jogo/users', async (req, res) => {
+  app.get('/api/jogo/users', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [rows] = await db.query(`
@@ -2137,7 +2295,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     return res.json([]);
   });
 
-  app.delete('/api/jogo/users/:id', async (req, res) => {
+  app.delete('/api/jogo/users/:id', requireAdminAuth, async (req, res) => {
     if (db) {
       try {
         const [users] = await db.query('SELECT usuario FROM jogo_users WHERE id = ?', [req.params.id]);
@@ -2302,7 +2460,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ success: true, data: newProtocol });
   });
 
-  app.put('/api/protocols/:id/toggle-active', async (req, res) => {
+  app.put('/api/protocols/:id/toggle-active', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     
     if (db) {
@@ -2331,7 +2489,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     }
   });
 
-  app.delete('/api/protocols/:id', async (req, res) => {
+  app.delete('/api/protocols/:id', requireAdminAuth, async (req, res) => {
     const id = req.params.id;
     if (db) {
       try {
@@ -2351,7 +2509,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     res.json({ status: "ok" });
   });
 
-  app.get("/api/debug-db", (req, res) => {
+  app.get("/api/debug-db", requireAdminAuth, (req, res) => {
     res.json({
       dbHost: process.env.DB_HOST || "not set",
       dbUser: process.env.DB_USER || "not set",
@@ -2429,7 +2587,7 @@ REGRAS DE OURO DA ANÁLISE ELEITORAL:
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
-        server: { middlewareMode: true },
+        server: { middlewareMode: true, hmr: false },
         appType: "custom",
       });
       app.use(vite.middlewares);
