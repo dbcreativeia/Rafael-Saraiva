@@ -14,6 +14,8 @@ import {
   Dog,
   Syringe,
   Vote,
+  Calendar,
+  ExternalLink,
   X,
   ChevronLeft,
   ChevronRight,
@@ -245,13 +247,76 @@ export const MandatoInfo = () => {
           id="edital-animal"
           className="mb-20 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center"
         >
-          <div className="lg:col-span-5 order-2 lg:order-1 rounded-[2rem] overflow-hidden shadow-lg border border-blue-100/50">
-            <img
-              src="https://lh3.googleusercontent.com/d/1vZ0xElWX43g5sjjeNVu83Ht8WCQHK77Q"
-              alt="Edital Animal em ação"
-              className="w-full h-auto block"
-              referrerPolicy="no-referrer"
-            />
+          <div className="lg:col-span-5 order-2 lg:order-1">
+            <div className="rounded-[2rem] overflow-hidden shadow-lg border border-blue-100/50">
+              <img
+                src="https://lh3.googleusercontent.com/d/1vZ0xElWX43g5sjjeNVu83Ht8WCQHK77Q"
+                alt="Edital Animal em ação"
+                className="w-full h-auto block"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+
+            {/* Mobile: Abaixo da foto no mobile */}
+            <div className="block lg:hidden mt-6">
+              <div className="bg-gradient-to-br from-yellow-50/95 via-amber-50/60 to-white border-2 border-[#FFDE02] rounded-2xl p-6 shadow-lg shadow-yellow-500/10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#FFDE02]/25 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none" />
+
+                {/* Badge Inscrições Abertas */}
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFDE02]/40 border border-[#FFDE02] text-gray-950 text-xs font-black uppercase tracking-wider mb-4 shadow-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span>INSCRIÇÕES ABERTAS</span>
+                </div>
+
+                {/* Título & Subtítulo */}
+                <h5 className="text-2xl font-black text-dark uppercase tracking-tight font-display mb-1.5">
+                  EDITAL ANIMAL 4.0
+                </h5>
+                <p className="text-sm font-black text-amber-800 leading-snug mb-4">
+                  O dinheiro público decidido pelo público e entregue para quem trabalha de verdade pela causa animal
+                </p>
+
+                {/* Texto Explicativo */}
+                <div className="space-y-2.5 text-xs text-gray-700 leading-relaxed mb-5">
+                  <p>
+                    O <strong>Edital Animal SP</strong> foi criado pelo deputado <strong>Rafael Saraiva</strong> para fazer os recursos chegarem a quem está todos os dias na linha de frente da proteção animal.
+                  </p>
+                  <p>
+                    As ONGs se inscrevem, apresentam seu trabalho e participam de uma votação popular.
+                  </p>
+                  <p>
+                    Quem decide quais projetos serão apoiados é a própria população.
+                  </p>
+                  <p className="font-bold text-gray-900">
+                    O poder do seu voto também decide para onde o dinheiro público vai
+                  </p>
+                </div>
+
+                {/* Datas e Participação */}
+                <div className="bg-white/95 border border-yellow-300 rounded-xl p-3.5 mb-5 flex items-center gap-3 shadow-xs">
+                  <Calendar className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div className="text-xs text-gray-800">
+                    <span className="font-black text-amber-900 block">De 19 a 29 de outubro de 2026</span>
+                    <span className="text-gray-700">Se a sua ONG atua na proteção animal no Estado de São Paulo, participe.</span>
+                  </div>
+                </div>
+
+                {/* Botão com cor #FFDE02 predominante */}
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-[#FFDE02] via-[#FACC15] to-[#EAB308] rounded-2xl blur opacity-60 group-hover:opacity-90 transition duration-500"></div>
+                  <a
+                    href="https://editalanimalsp-voto.com.br/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative w-full inline-flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-[#FFDE02] via-[#FDD835] to-[#FBC02D] text-gray-950 font-black text-base uppercase tracking-wider shadow-xl shadow-yellow-500/20 hover:shadow-2xl hover:shadow-yellow-500/35 hover:-translate-y-0.5 active:translate-y-0 transition-all border-2 border-yellow-200/80 text-center cursor-pointer"
+                  >
+                    <Vote className="w-6 h-6 shrink-0 text-gray-950 group-hover:scale-110 transition-transform" />
+                    <span>EDITAL ANIMAL 4.0</span>
+                    <ExternalLink className="w-5 h-5 shrink-0 text-gray-950" />
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="lg:col-span-7 order-1 lg:order-2 flex flex-col justify-center">
@@ -298,6 +363,67 @@ export const MandatoInfo = () => {
                   <br />
                   Impactados
                 </p>
+              </div>
+            </div>
+
+            {/* Desktop: Abaixo dos números no desktop */}
+            <div className="hidden lg:block mt-8">
+              <div className="bg-gradient-to-br from-yellow-50/95 via-amber-50/60 to-white border-2 border-[#FFDE02] rounded-3xl p-7 shadow-lg shadow-yellow-500/10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-36 h-36 bg-[#FFDE02]/25 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none" />
+
+                {/* Badge Inscrições Abertas */}
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FFDE02]/40 border border-[#FFDE02] text-gray-950 text-xs font-black uppercase tracking-wider mb-4 shadow-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span>INSCRIÇÕES ABERTAS</span>
+                </div>
+
+                {/* Título & Subtítulo */}
+                <h5 className="text-2xl lg:text-3xl font-black text-dark uppercase tracking-tight font-display mb-1.5">
+                  EDITAL ANIMAL 4.0
+                </h5>
+                <p className="text-base font-black text-amber-800 leading-snug mb-4">
+                  O dinheiro público decidido pelo público e entregue para quem trabalha de verdade pela causa animal
+                </p>
+
+                {/* Texto Explicativo */}
+                <div className="space-y-2.5 text-sm text-gray-700 leading-relaxed mb-5">
+                  <p>
+                    O <strong>Edital Animal SP</strong> foi criado pelo deputado <strong>Rafael Saraiva</strong> para fazer os recursos chegarem a quem está todos os dias na linha de frente da proteção animal.
+                  </p>
+                  <p>
+                    As ONGs se inscrevem, apresentam seu trabalho e participam de uma votação popular.
+                  </p>
+                  <p>
+                    Quem decide quais projetos serão apoiados é a própria população.
+                  </p>
+                  <p className="font-bold text-gray-900">
+                    O poder do seu voto também decide para onde o dinheiro público vai
+                  </p>
+                </div>
+
+                {/* Datas e Participação */}
+                <div className="bg-white/95 border border-yellow-300 rounded-xl p-3.5 mb-6 flex items-center gap-3 shadow-xs">
+                  <Calendar className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div className="text-sm text-gray-800">
+                    <span className="font-black text-amber-900 block">De 19 a 29 de outubro de 2026</span>
+                    <span className="text-gray-700">Se a sua ONG atua na proteção animal no Estado de São Paulo, participe.</span>
+                  </div>
+                </div>
+
+                {/* Botão com cor #FFDE02 predominante */}
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-[#FFDE02] via-[#FACC15] to-[#EAB308] rounded-2xl blur opacity-60 group-hover:opacity-90 transition duration-500"></div>
+                  <a
+                    href="https://editalanimalsp-voto.com.br/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative w-full inline-flex items-center justify-center gap-3 px-6 py-4.5 rounded-2xl bg-gradient-to-r from-[#FFDE02] via-[#FDD835] to-[#FBC02D] text-gray-950 font-black text-lg uppercase tracking-wider shadow-xl shadow-yellow-500/20 hover:shadow-2xl hover:shadow-yellow-500/35 hover:-translate-y-0.5 active:translate-y-0 transition-all border-2 border-yellow-200/80 text-center cursor-pointer"
+                  >
+                    <Vote className="w-6 h-6 shrink-0 text-gray-950 group-hover:scale-110 transition-transform" />
+                    <span>EDITAL ANIMAL 4.0</span>
+                    <ExternalLink className="w-5 h-5 shrink-0 text-gray-950" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>

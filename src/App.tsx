@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
-import { Gamepad2, BookOpen } from 'lucide-react';
+import { Gamepad2, BookOpen, Vote } from 'lucide-react';
 
 import { WHATSAPP_NUMBER, WHATSAPP_MESSAGE } from './constants';
 import { MandatoInfo } from './components/MandatoInfo';
@@ -156,6 +156,22 @@ function LandingPage() {
               className="flex flex-col gap-6 md:gap-8 w-full max-w-md lg:max-w-lg relative z-20"
             >
               
+
+              {/* Botão Edital Animal 4.0 */}
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-[#FFDE02] via-[#FACC15] to-[#EAB308] rounded-2xl blur opacity-60 group-hover:opacity-90 transition duration-500"></div>
+                <a
+                  href="https://editalanimalsp-voto.com.br/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative w-full bg-gradient-to-r from-[#FFDE02] via-[#FDD835] to-[#FBC02D] text-gray-950 font-black py-4 md:py-5 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all transform hover:-translate-y-1 shadow-2xl border-2 border-yellow-200/80 text-center cursor-pointer"
+                >
+                  <div className="flex items-center justify-center gap-3 text-lg md:text-xl uppercase tracking-wider font-black">
+                    <Vote className="w-6 h-6 md:w-7 md:h-7 shrink-0 text-gray-950" />
+                    <span>EDITAL ANIMAL 4.0</span>
+                  </div>
+                </a>
+              </div>
 
               {/* Botão Jogo */}
               <div className="relative group">
